@@ -695,6 +695,17 @@ async function trainer(f, modus) {
 function fotoWaehlen(ziel, weiter) {
   const mac = /Mac/.test(navigator.platform || navigator.userAgent);
   const tasten = mac ? '<kbd>⌘</kbd> + <kbd>Ctrl</kbd> + <kbd>⇧</kbd> + <kbd>4</kbd>, Bereich aufziehen' : '<kbd>Windows</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>, Bereich aufziehen';
+  // Handy/Tablet: kein Bildschirm-Teilen und keine Tastenkürzel – dort nur Bildschirmfoto aus der Galerie oder Kamera
+  const handy = !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) || (window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches);
+  if (handy) {
+    ziel.innerHTML = '<div class="karte foto-wahl"><b>Gut gefunden! Jetzt das Übungsfoto von der Stelle:</b>'
+      + '<div class="foto-weg"><label class="knopf">📷 Bildschirmfoto wählen<input type="file" accept="image/*" id="fw-datei" hidden></label><span class="grau">Am Handy: Bildschirmfoto vom Dokument machen (meist Ein/Aus + Leiser gleichzeitig), dann hier auswählen.</span></div>'
+      + '<div id="fw-status" class="grau"></div><button class="link" id="fw-ohne">Ohne Foto weiter</button></div>';
+    let fertigH = false; const endeH = (bild) => { if (fertigH) return; fertigH = true; weiter(bild); };
+    $('#fw-datei').onchange = async (e) => { const d = e.target.files[0]; if (d) endeH(await verkleinern(await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(d); }), 1600)); };
+    $('#fw-ohne').onclick = () => endeH(null);
+    return;
+  }
   ziel.innerHTML = '<div class="karte foto-wahl"><b>Gut gefunden! Jetzt das Übungsfoto von der Stelle:</b>'
     + '<div class="foto-weg"><button class="knopf" id="fw-countdown">⏱ Foto in 5 Sekunden</button><span class="grau">Klicken, dann sofort zum Dokument wechseln. Nach dem Piepton zurückkommen.</span></div>'
     + '<div class="foto-weg"><button class="knopf zweit" id="fw-einf">📋 Einfügen</button><span class="grau">Eigenes Bildschirmfoto: ' + tasten + ', dann hier <kbd>' + (mac ? '⌘' : 'Strg') + '</kbd> + <kbd>V</kbd> drücken.</span></div>'
