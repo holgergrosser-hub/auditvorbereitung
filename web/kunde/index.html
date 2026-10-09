@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--blau:#1F4E79;--blau2:#2E6DA4;--hell:#EEF4FA;--rand:#D5E1EC;--text:#1B2733;--grau:#5B6B7A;--gruen:#2B8A3E;--gelb:#E0A800;--rot:#C92A2A}
+:root{--f:#1F4E79;--f-hell:#EEF4FA;--blau:#1F4E79;--blau2:#2E6DA4;--hell:#EEF4FA;--rand:#D5E1EC;--text:#1B2733;--grau:#5B6B7A;--gruen:#2B8A3E;--gelb:#E0A800;--rot:#C92A2A}
 *{box-sizing:border-box}
 body{margin:0;font-family:"Public Sans",system-ui,sans-serif;color:var(--text);background:#F6F9FC;font-size:16px;line-height:1.5}
 header{background:var(--blau);color:#fff;padding:14px 16px}
@@ -27,17 +27,21 @@ select,button,textarea,input{font:inherit}
 select,input{padding:7px 9px;border:1px solid var(--rand);border-radius:8px;background:#fff;max-width:100%}
 nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid var(--rand);position:sticky;top:0;z-index:5}
 nav button{border:0;background:none;padding:8px 12px;border-radius:8px;color:var(--grau);font-weight:600;white-space:nowrap;cursor:pointer}
-nav button.an{background:var(--blau);color:#fff}
+nav button{display:inline-flex;align-items:center;gap:6px}
+nav .punkt{width:8px;height:8px;border-radius:50%;background:var(--f);flex:none}
+nav button.an{background:var(--f);color:#fff}nav button.an .punkt{background:#fff}
+#brot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:920px;margin:0 auto;padding:12px 16px 0;font-size:.92rem}
+.brot-gruppe{background:var(--f-hell);color:var(--f);font-weight:700;border-radius:99px;padding:1px 10px}
 nav .ok{color:var(--gruen)}nav button.an .ok{color:#B7F0C4}nav .zahl{font-weight:400;opacity:.8}
 main{max-width:920px;margin:0 auto;padding:16px}
-h2{color:var(--blau);margin:6px 0 10px;font-size:1.3rem}
-h3{margin:18px 0 8px;font-size:1.05rem;color:var(--blau)}
+h2{color:var(--f);margin:6px 0 10px;font-size:1.3rem}
+h3{margin:18px 0 8px;font-size:1.05rem;color:var(--f)}
 label{display:block;margin:6px 0}
 .zeile label{display:inline-block;margin:0}
 .karte{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px;margin:10px 0}
 .karte.gut{border-color:#9FD3B0;background:#F3FBF5}
-.knopf{display:inline-block;border:0;border-radius:8px;padding:9px 14px;background:var(--blau);color:#fff;font-weight:600;cursor:pointer;text-decoration:none}
-.knopf.zweit{background:#fff;color:var(--blau);border:1px solid var(--blau)}
+.knopf{display:inline-block;border:0;border-radius:8px;padding:9px 14px;background:var(--f);color:#fff;font-weight:600;cursor:pointer;text-decoration:none}
+.knopf.zweit{background:#fff;color:var(--f);border:1px solid var(--f)}
 .knopf.gruen{background:var(--gruen)}.knopf.rot{background:var(--rot)}.knopf.klein{padding:5px 10px;font-size:.9rem}
 .knopf:disabled{opacity:.5;cursor:default}
 .link{background:none;border:0;color:var(--blau2);text-decoration:underline;cursor:pointer;padding:0}
@@ -96,6 +100,38 @@ img.mini{max-width:160px;max-height:110px;border:1px solid var(--rand);border-ra
 .az-azubi{background:var(--hell);border-radius:10px 10px 10px 2px;padding:8px 10px;margin:8px 40px 4px 0}
 .az-chef{background:#E7F5EC;border-radius:10px 10px 2px 10px;padding:8px 10px;margin:4px 0 8px 40px}
 @media (max-width:640px){.bau{grid-template-columns:36px 1fr}.bau>:last-child{grid-column:1/-1}}
+/* Übersicht: Hero (Termin, Reife, nächster Schritt) + farbige Bereiche mit Kacheln */
+.hero{display:grid;grid-template-columns:1fr 1.1fr 1.2fr;gap:12px;margin:4px 0 8px}
+.hero-feld{background:#fff;border:1px solid var(--rand);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0;text-align:left;font:inherit;color:inherit}
+.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--grau);font-weight:700}
+.gross{font-size:2.6rem;font-weight:700;line-height:1.05;color:var(--blau);font-variant-numeric:tabular-nums}.gross small{font-size:1rem;font-weight:600;margin-left:4px;color:var(--grau)}
+.hero-reife{flex-direction:row;align-items:center;gap:12px}.ring{width:84px;height:84px;flex:none}
+.hero-weiter{cursor:pointer;background:var(--f);border-color:var(--f);color:#fff}.hero-weiter .eyebrow,.hero-weiter .grau{color:rgba(255,255,255,.85)}
+.hero-weiter:hover{filter:brightness(1.08)}.hero-weiter.fertig{background:#E7F5EC;border-color:#9FD3B0;color:var(--text);cursor:default}.hero-weiter.fertig .eyebrow{color:var(--grau)}
+.weiter-titel{font-size:1.25rem}
+.stufe-erkl summary,.reife-teile summary{cursor:pointer;color:var(--blau2);font-size:.9rem}.stufe-erkl p{margin:6px 0;font-size:.92rem}
+.reife-teile .teil{grid-template-columns:110px 1fr 40px;font-size:.85rem}
+.gruppen{display:flex;flex-wrap:wrap;gap:18px 26px;margin-top:18px}
+.gruppe{flex:0 1 calc(var(--n) * 196px + (var(--n) - 1) * 10px);min-width:0}
+.gruppe .kacheln{grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+main.breit{max-width:1080px}.hero-termin .link{align-self:flex-start;text-align:left}
+.gruppe-titel{display:flex;align-items:center;gap:8px;color:var(--f);margin:0 0 8px;font-size:1.05rem}.gruppe-titel.neutral{color:var(--text);margin-top:22px}
+.gruppe-nr{width:24px;height:24px;border-radius:50%;background:var(--f);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.kachel{position:relative;display:flex;flex-direction:column;gap:3px;text-align:left;font:inherit;color:var(--text);background:#fff;border:1px solid var(--rand);border-top:4px solid var(--f);border-radius:14px;padding:12px 14px 14px;cursor:pointer;min-width:0;transition:transform .12s,box-shadow .12s}
+.kachel:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,40,60,.12)}.kachel:focus-visible,.hero-weiter:focus-visible{outline:3px solid var(--f);outline-offset:2px}
+.kachel.fertig{background:var(--f-hell)}
+.k-icon{width:36px;height:36px;border-radius:10px;background:var(--f-hell);display:flex;align-items:center;justify-content:center;font-size:1.15rem;margin-bottom:4px}
+.k-titel{font-weight:700;color:var(--f);font-size:1.02rem}.k-ok{color:var(--gruen)}
+.k-text{font-size:.86rem;color:var(--grau);line-height:1.35}
+.k-status{font-size:.86rem;font-weight:600;margin-top:auto;padding-top:6px}
+.mini-balken{display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--rand);margin-top:4px}
+.mini-balken span{display:block;height:100%}.mini-balken .voll{background:var(--f)}.mini-balken .gruen{background:var(--gruen)}.mini-balken .gelb{background:var(--gelb)}.mini-balken .rot{background:var(--rot)}.mini-balken .offen{background:var(--rand)}
+details.aufklapp summary{cursor:pointer}details.aufklapp .karte{border:0;padding:0;margin:6px 0 0}
+@media (max-width:760px){.hero{grid-template-columns:1fr}.gruppe{flex-basis:100%}.gruppe .kacheln{grid-template-columns:1fr 1fr}}
+@media (max-width:340px){.gruppe .kacheln{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.kachel{transition:none}.kachel:hover{transform:none}}
+
 .stufen{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
 .stufe{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:12px;opacity:.75}
 .stufe.jetzt{opacity:1;border:2px solid var(--blau);background:var(--hell)}.jetzt-marke{color:var(--blau);font-weight:600;margin-top:4px}
@@ -125,6 +161,7 @@ table.spick a{color:var(--blau2)}@media print{table.spick a{color:inherit;text-d
   <label>Wer übt? <select id="sel-ma"></select></label>
 </div>
 <nav id="nav" hidden></nav>
+<div id="brot" class="kein-druck" hidden></div>
 <main id="main"><p class="grau">Einen Moment …</p></main>
 <div id="trainer"><div class="box" id="trainer-box"></div></div>
 <script src="../config.js"></script>

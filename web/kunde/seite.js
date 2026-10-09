@@ -71,7 +71,7 @@ async function start() {
   $('#wahl').hidden = false;
   $('#sel-audit').onchange = $('#sel-ma').onchange = () => { merken(); laden(); };
   if (st.demo) $('#modus').textContent = 'Demo – nichts wird gespeichert.';
-  else if (api.lokal) $('#modus').textContent = 'Wo wird gespeichert? Alle Eingaben bleiben hier im Browser auf diesem Gerät (immer denselben Laptop und Browser nutzen). ' + bn('nom') + ' sieht sie erst, wenn Sie „✉ An ' + bn('kurz') + ' senden“ klicken.';
+  else if (api.lokal) $('#modus').textContent = 'Ihre Eingaben bleiben auf diesem Gerät (immer denselben Laptop und Browser nutzen). ' + bn('nom') + ' sieht sie, wenn Sie oben rechts senden.';
   laden();
 }
 function merken() { try { localStorage.setItem('av_wahl', JSON.stringify({ audit: $('#sel-audit').value, ma: $('#sel-ma').value })); } catch (e) { /* egal */ } }
@@ -129,13 +129,65 @@ function tabs() {
   t.push(['tag', 'Audit-Tag'], ['danach', 'Nach dem Audit']);
   return t;
 }
+/* Bereiche mit eigener Farbe: Übersicht zuerst, dann ins Detail. Ampel-Farben (grün/gelb/rot) bleiben für den Stand reserviert. */
+const GRUPPEN = [
+  { id: 'einrichten', name: 'Einrichten', nr: '1', farbe: '#6741D9', hell: '#F3F0FF', keys: ['technik', 'fakten'] },
+  { id: 'ueben', name: 'Üben', nr: '2', farbe: '#0B7285', hell: '#E3FAFC', keys: ['fahrplan', 'fallen', 'lernen', 'spur', 'rundgang'] },
+  { id: 'audit', name: 'Audit-Tag', nr: '3', farbe: '#1F4E79', hell: '#E7F0FA', keys: ['tag', 'danach'] },
+  { id: 'finden', name: 'Nachschlagen', nr: '', farbe: '#D9480F', hell: '#FFF4E6', keys: ['finden'] }
+];
+const KACHEL = {
+  technik: ['💻', 'Technik-Check', 'Laptop, Chrome, Dokumente öffnen, Bildschirm teilen'],
+  fakten: ['✔️', 'Faktencheck', 'Stimmen Namen, Rollen und Zahlen in Ihren Dokumenten?'],
+  fahrplan: ['🧭', 'Fahrplan', 'Auditplan durchgehen und zu jeder Frage das Dokument zeigen'],
+  fallen: ['⚠️', 'Stolperfallen', 'Nachfragen, die aus Ihren eigenen Dokumenten kommen'],
+  lernen: ['🎓', 'Lernen', 'Abläufe erklären, Audit-Deutsch, Rollentausch'],
+  spur: ['📦', 'Beispielauftrag', 'Ein Auftrag von Anfrage bis Rechnung mit Belegen'],
+  rundgang: ['🧯', 'Rundgang', 'Prüfplaketten fotografieren – was ist fällig?'],
+  finden: ['🔎', 'Wo steht das?', 'In Ihren Dokumenten suchen – auch im Audit erlaubt'],
+  tag: ['📋', 'Spickzettel & Ablauf', 'So läuft Ihr Audit, alle Unterlagen als PDF'],
+  danach: ['📨', 'Nach dem Audit', 'Fragen festhalten und Ergebnis senden']
+};
+function gruppeVon(k) { return GRUPPEN.find(g => g.keys.indexOf(k) >= 0) || null; }
+function farbeSetzen(k) { const g = gruppeVon(k), r = document.documentElement.style; r.setProperty('--f', g ? g.farbe : '#1F4E79'); r.setProperty('--f-hell', g ? g.hell : '#EEF4FA'); }
+function brotkrume(k) {
+  const el = $('#brot'); if (!el) return; const g = gruppeVon(k);
+  if (!g || S.ruhe) { el.hidden = true; return; }
+  el.hidden = false; el.innerHTML = '<button class="link" id="brot-zurueck">‹ Übersicht</button><span class="brot-gruppe">' + esc(g.name) + '</span><span class="grau">›</span><b>' + esc((KACHEL[k] || [])[1] || '') + '</b>';
+  $('#brot-zurueck').onclick = () => zeige('heute');
+}
+function kachelStatus(k) {
+  const z = stand(), n = S.fragen.length;
+  if (k === 'technik') { const c = S.start.kunde.technik_check || {}, d = ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].filter(x => c[x]).length; return { text: d + ' von 4 erledigt', anteil: d / 4 }; }
+  if (k === 'fakten') { const f = S.start.faktencheck, d = f.filter(x => x.antwort).length, korr = f.filter(x => x.antwort === 'stimmt_nicht').length; return { text: f.length ? d + ' von ' + f.length + ' geprüft' + (korr ? ' · ' + korr + ' korrigiert' : '') : 'nichts zu prüfen', anteil: f.length ? d / f.length : 1 }; }
+  if (k === 'fahrplan') return { text: (n - z.offen) + ' von ' + n + ' geübt' + (z.rot ? ' · ' + z.rot + ' schwer' : ''), anteil: n ? (n - z.offen) / n : 0, ampel: z };
+  if (k === 'fallen') { const f = fallenFuerStufe(), d = f.filter(x => eintrag('falle', x.id)).length; return { text: d + ' von ' + f.length + ' durchgespielt', anteil: f.length ? d / f.length : 1 }; }
+  if (k === 'lernen') { const d = S.eintraege.filter(e => e.art === 'lernen' && /^azubi:/.test(e.schluessel)).length; return { text: d ? d + (d === 1 ? ' Ablauf' : ' Abläufe') + ' erklärt' : 'noch nicht begonnen', anteil: null }; }
+  if (k === 'spur') { const sp = L.spurPruefen(L.SPUR_STATIONEN.map(x => Object.assign({ k: x.k }, (eintrag('spur', x.k) || {}).daten || {})).filter(x => Object.keys(x).length > 1)); return { text: sp.fertig + ' von ' + sp.von + ' Stationen', anteil: sp.von ? sp.fertig / sp.von : 0 }; }
+  if (k === 'rundgang') { const it = S.start.rundgang || L.RUNDGANG_STANDARD, d = it.filter(x => eintrag('rundgang', x.k)).length; return { text: d + ' von ' + it.length + ' erfasst', anteil: it.length ? d / it.length : 0 }; }
+  if (k === 'finden') return { text: S.start.dokumente.length + ' Dokumente durchsuchbar', anteil: null };
+  if (k === 'tag') { const t = L.tageBis(S.audit.datum); return { text: t != null && t >= 0 ? (t === 0 ? 'heute!' : 'in ' + t + (t === 1 ? ' Tag' : ' Tagen')) : 'Spickzettel bereit', anteil: null }; }
+  if (k === 'danach') { const e = eintrag('rueckmeldung', 'audit'); return { text: e ? 'Rückmeldung gespeichert' : 'nach dem Audit ausfüllen', anteil: e ? 1 : null }; }
+  return { text: '', anteil: null };
+}
+function kachelHtml(k, g) {
+  const st = kachelStatus(k), ki = KACHEL[k] || ['', k, ''], fertig = st.anteil === 1;
+  const balken = st.ampel ? '<div class="mini-balken">' + ['gruen', 'gelb', 'rot', 'offen'].map(f => st.ampel[f] ? '<span class="' + f + '" style="flex:' + st.ampel[f] + '"></span>' : '').join('') + '</div>'
+    : st.anteil != null ? '<div class="mini-balken"><span class="voll" style="flex:' + st.anteil + '"></span><span class="offen" style="flex:' + (1 - st.anteil) + '"></span></div>' : '';
+  return '<button class="kachel' + (fertig ? ' fertig' : '') + '" data-k="' + k + '" style="--f:' + g.farbe + ';--f-hell:' + g.hell + '"><span class="k-icon" aria-hidden="true">' + ki[0] + '</span><span class="k-titel">' + esc(ki[1]) + (fertig ? ' <span class="k-ok">✓</span>' : '') + '</span>'
+    + '<span class="k-text">' + esc(ki[2]) + '</span><span class="k-status">' + esc(st.text) + '</span>' + balken + '</button>';
+}
+function reifeRing(r) {
+  const u = 2 * Math.PI * 34, farbe = r.stufe === 'bereit' ? 'var(--gruen)' : r.stufe === 'fast' ? 'var(--gelb)' : '#0B7285';
+  return '<svg viewBox="0 0 84 84" class="ring" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="var(--rand)" stroke-width="9"/><circle cx="42" cy="42" r="34" fill="none" stroke="' + farbe + '" stroke-width="9" stroke-linecap="' + (r.prozent ? 'round' : 'butt') + '" stroke-dasharray="' + (r.prozent ? u * r.prozent / 100 : 0).toFixed(1) + ' ' + u.toFixed(1) + '" transform="rotate(-90 42 42)"/><text x="42" y="48" text-anchor="middle" font-size="19" font-weight="700" fill="var(--text)">' + r.prozent + '%</text></svg>';
+}
 function zeichneNav() {
-  $('#nav').innerHTML = tabs().map(([k, t]) => '<button data-k="' + k + '" class="' + (S.ansicht === k ? 'an' : '') + '">' + t + '</button>').join('');
+  $('#nav').innerHTML = tabs().map(([k, t]) => { const g = gruppeVon(k); return '<button data-k="' + k + '" class="' + (S.ansicht === k ? 'an' : '') + '" style="--f:' + (g ? g.farbe : '#1B2733') + '">' + (g ? '<span class="punkt"></span>' : '') + t + '</button>'; }).join('');
   $('#nav').hidden = false;
   $$('#nav button').forEach(b => b.onclick = () => zeige(b.dataset.k));
 }
 const ANSICHT = {};
-function zeige(k) { S.ansicht = k; zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); }
+function zeige(k) { S.ansicht = k; farbeSetzen(k); $('#main').classList.toggle('breit', k === 'heute'); brotkrume(k); zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); }
 function brauchtMa(titel) { if (S.ma) return false; $('#main').innerHTML = '<h2>' + titel + '</h2><div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>'; return true; }
 
 /* ------------------------------------------------ Heute (Tageslektion, Aufgaben, Reife) */
@@ -143,31 +195,42 @@ ANSICHT.heute = () => {
   const r = reife(), z = stand();
   const lektion = S.ma ? L.tageslektion(S.fragen, S.antworten, 3) : [];
   const aufgaben = (S.start.aufgaben || []).filter(a => !a.bis_stufe || a.bis_stufe >= S.audit.stufe);
+  const offeneAufg = aufgaben.filter(a => { const e = eintrag('aufgabe', a.id); return !(e && e.daten.erledigt); }).length;
   const schritte = [];
-  if (!technikFertig()) schritte.push(['technik', 'Technik-Check erledigen (5 Minuten, am Laptop)']);
-  if (!faktenFertig()) schritte.push(['fakten', 'Faktencheck: ' + S.start.faktencheck.filter(f => !f.antwort).length + ' Angaben bestätigen']);
-  if (z.offen) schritte.push(['fahrplan', z.offen + (S.audit.stufe === 1 ? ' Punkte im Fahrplan noch nicht geübt' : ' Fragen noch nicht geübt')]);
-  const fo = fallenFuerStufe().filter(f => !eintrag('falle', f.id)).length; if (fo) schritte.push(['fallen', fo + ' Stolperfallen noch nicht durchgespielt']);
-  const audits = S.start.audits.slice().sort((a, b) => a.stufe - b.stufe);
-  $('#main').innerHTML = '<h2>Heute</h2>'
-    + (S.ma ? '' : '<div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>')
-    + '<div class="stufen">' + [1, 2].map(n => { const a = audits.find(x => x.stufe === n), st = L.STUFEN[n], t = a ? L.tageBis(a.datum) : null;
-      return '<div class="stufe ' + (S.audit.stufe === n ? 'jetzt' : '') + '"><div class="zeile" style="justify-content:space-between"><b>' + esc(st.titel) + '</b><span class="chip">' + (a && a.datum ? kurzDatum(a.datum) + (t != null && t >= 0 ? ' · in ' + t + ' T.' : '') : 'Termin offen') + '</span></div>'
-        + '<div>' + esc(st.was) + '</div><div class="grau">' + esc(st.ueben) + '</div>' + (S.audit.stufe === n ? '<div class="jetzt-marke">← darauf bereiten Sie sich gerade vor</div>' : (a ? '<button class="link" data-stufe="' + a.id + '">zu Stufe ' + n + ' wechseln</button>' : '')) + '</div>'; }).join('') + '</div>'
-    + '<div class="karte"><div class="zeile" style="justify-content:space-between"><b>Ihre Prüfungsreife: ' + r.prozent + ' %</b><span class="grau">' + (r.stufe === 'bereit' ? 'Sie sind gut vorbereitet.' : r.stufe === 'fast' ? 'Fast geschafft.' : 'Jeden Tag ein bisschen – das reicht.') + '</span></div>'
-    + r.teile.map(t => '<div class="teil"><span>' + esc(t.name) + '</span><div class="balken"><span style="width:' + t.prozent + '%;background:var(--blau2)"></span></div><span class="grau">' + t.prozent + ' %</span></div>').join('') + '</div>'
-    + (lektion.length ? '<h3>Ihre 5 Minuten für heute</h3><div class="karte"><p>Drei Punkte – zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 120)) + (String(f.frage).length > 120 ? ' …' : '') + '</span></div>').join('') + '<p><button class="knopf" id="lektion">▶ Los geht’s</button></p></div>' : '')
-    + (schritte.length ? '<h3>Als Nächstes</h3><div class="karte">' + schritte.map(s => '<div class="zeile weiter" data-k="' + s[0] + '">→ ' + esc(s[1]) + '</div>').join('') + '</div>' : '')
-    + baustellenHtml()
-    + wegweiserHtml()
-    + sendenHtml()
-    + (aufgaben.length ? '<h3>Ihre Aufgaben</h3><div class="karte">' + aufgaben.map(a => { const e = eintrag('aufgabe', a.id); return '<label class="check"><input type="checkbox" data-a="' + esc(a.id) + '" ' + (e && e.daten.erledigt ? 'checked' : '') + '><span><b>' + esc(a.todo) + '</b><br><span class="grau">' + (a.bis_stufe ? 'bis Stufe ' + a.bis_stufe : '') + (a.verantwortlich ? ' · ' + esc(a.verantwortlich) : '') + (a.termin ? ' · bis ' + esc(a.termin) : '') + '</span></span></label>'; }).join('') + '</div>' : '');
+  if (!technikFertig()) schritte.push(['technik', 'Technik-Check erledigen', '5 Minuten, am Laptop']);
+  if (!faktenFertig()) schritte.push(['fakten', 'Faktencheck', S.start.faktencheck.filter(f => !f.antwort).length + ' Angaben bestätigen']);
+  if (z.offen) schritte.push(['fahrplan', S.audit.stufe === 1 ? 'Fahrplan üben' : 'Fragen üben', z.offen + ' Punkte noch nicht geübt']);
+  const fo = fallenFuerStufe().filter(f => !eintrag('falle', f.id)).length; if (fo) schritte.push(['fallen', 'Stolperfallen', fo + ' noch nicht durchgespielt']);
+  if (!schritte.length && lektion.length) schritte.push(['lektion', 'Ihre 5 Minuten für heute', 'drei Punkte wiederholen']);
+  const audits = S.start.audits.slice().sort((a, b) => a.stufe - b.stufe), a0 = S.audit, st = L.STUFEN[a0.stufe], t = L.tageBis(a0.datum);
+  const anderes = audits.find(x => x.id !== a0.id);
+  const n1 = schritte[0], g1 = n1 ? gruppeVon(n1[0]) : null;
+  const da = tabs().map(x => x[0]);
+  $('#main').innerHTML = (S.ma ? '' : '<div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>')
+    + '<section class="hero">'
+    + '<div class="hero-feld hero-termin"><span class="eyebrow">Stufe ' + a0.stufe + (a0.zertifizierer ? ' · ' + esc(a0.zertifizierer) : '') + '</span>'
+    + '<div class="gross">' + (t != null && t >= 0 ? (t === 0 ? 'Heute' : t + '<small>' + (t === 1 ? ' Tag' : ' Tage') + '</small>') : '–') + '</div>'
+    + '<div>' + (a0.datum ? esc(datumDe(a0.datum)) : 'Termin offen') + '</div>'
+    + '<details class="stufe-erkl"><summary>' + esc(st.titel) + '</summary><p>' + esc(st.was) + '</p><p class="grau">' + esc(st.ueben) + '</p></details>'
+    + (anderes ? '<button class="link" data-stufe="' + anderes.id + '">zu Stufe ' + anderes.stufe + (anderes.datum ? ' (' + kurzDatum(anderes.datum) + ')' : '') + ' wechseln</button>' : '') + '</div>'
+    + '<div class="hero-feld hero-reife">' + reifeRing(r) + '<div><span class="eyebrow">Prüfungsreife</span><div><b>' + (r.stufe === 'bereit' ? 'Gut vorbereitet' : r.stufe === 'fast' ? 'Fast geschafft' : 'Jeden Tag ein bisschen') + '</b></div>'
+    + '<details class="reife-teile"><summary>Woraus setzt sich das zusammen?</summary>' + r.teile.map(x => '<div class="teil"><span>' + esc(x.name) + '</span><div class="balken"><span style="width:' + x.prozent + '%;background:var(--blau2)"></span></div><span class="grau">' + x.prozent + ' %</span></div>').join('') + '</details></div></div>'
+    + (n1 ? '<button class="hero-feld hero-weiter" data-weiter="' + n1[0] + '" style="--f:' + (g1 ? g1.farbe : '#0B7285') + ';--f-hell:' + (g1 ? g1.hell : '#E3FAFC') + '"><span class="eyebrow">Als Nächstes</span><b class="weiter-titel">' + esc(n1[1]) + ' →</b><span>' + esc(n1[2]) + '</span>'
+      + (schritte.length > 1 ? '<span class="grau">danach: ' + schritte.slice(1, 3).map(x => esc(x[1])).join(', ') + '</span>' : '') + '</button>'
+      : '<div class="hero-feld hero-weiter fertig"><span class="eyebrow">Als Nächstes</span><b class="weiter-titel">Alles erledigt ✓</b><span>Wiederholen Sie täglich 5 Minuten.</span></div>')
+    + '</section>'
+    + '<div class="gruppen">' + GRUPPEN.map(g => { const ks = g.keys.filter(k => da.indexOf(k) >= 0); if (!ks.length) return '';
+      return '<section class="gruppe" style="--f:' + g.farbe + ';--f-hell:' + g.hell + ';--n:' + ks.length + '"><h3 class="gruppe-titel">' + (g.nr ? '<span class="gruppe-nr">' + g.nr + '</span>' : '') + esc(g.name) + '</h3><div class="kacheln">' + ks.map(k => kachelHtml(k, g)).join('') + '</div></section>'; }).join('') + '</div>'
+    + (lektion.length || offeneAufg || S.antworten.length ? '<h3 class="gruppe-titel neutral">Für heute</h3>' : '')
+    + (lektion.length ? '<div class="karte"><div class="zeile" style="justify-content:space-between"><b>Ihre 5 Minuten</b><button class="knopf klein" id="lektion" style="--f:#0B7285">▶ Los geht’s</button></div><p class="grau">Drei Punkte – zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 110)) + (String(f.frage).length > 110 ? ' …' : '') + '</span></div>').join('') + '</div>' : '')
+    + (S.ma && S.antworten.length ? '<details class="karte aufklapp"><summary><b>Ihre Baustellen</b> <span class="grau">– was noch hakt</span></summary>' + baustellenHtml().replace(/^<h3>[^<]*<\/h3>/, '') + '</details>' : '')
+    + (aufgaben.length ? '<details class="karte aufklapp"' + (offeneAufg ? ' open' : '') + '><summary><b>Ihre Aufgaben</b> <span class="chip ' + (offeneAufg ? 'bald' : 'ok') + '">' + (offeneAufg ? offeneAufg + ' offen' : 'alle erledigt') + '</span></summary>' + aufgaben.map(a => { const e = eintrag('aufgabe', a.id); return '<label class="check"><input type="checkbox" data-a="' + esc(a.id) + '" ' + (e && e.daten.erledigt ? 'checked' : '') + '><span><b>' + esc(a.todo) + '</b><br><span class="grau">' + (a.bis_stufe ? 'bis Stufe ' + a.bis_stufe : '') + (a.verantwortlich ? ' · ' + esc(a.verantwortlich) : '') + (a.termin ? ' · bis ' + esc(a.termin) : '') + '</span></span></label>'; }).join('') + '</details>' : '');
   const l = $('#lektion'); if (l) l.onclick = () => reihe(lektion.map(f => ({ art: 'frage', item: f, modus: ursachen()[f.id] })), 'Tageslektion');
+  $$('.kachel').forEach(x => x.onclick = () => zeige(x.dataset.k));
+  $$('[data-weiter]').forEach(x => x.onclick = () => { if (x.dataset.weiter === 'lektion') { const b = $('#lektion'); if (b) b.click(); } else zeige(x.dataset.weiter); });
   $$('[data-bau]').forEach(b => b.onclick = () => { const f = S.fragen.find(x => x.id === b.dataset.bau); reihe([{ art: 'frage', item: f, modus: b.dataset.modus || null }], null, false); });
   $$('[data-bu]').forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + b.dataset.bu, { ursache: b.dataset.u }); ANSICHT.heute(); });
-  $$('.weiter').forEach(x => x.onclick = () => zeige(x.dataset.k));
   $$('[data-stufe]').forEach(b => b.onclick = () => { $('#sel-audit').value = b.dataset.stufe; merken(); laden(); });
-  sendenKnopf();
   $$('[data-a]').forEach(c => c.onchange = async () => { await speichereEintrag('aufgabe', c.dataset.a, { erledigt: c.checked }, true); zeichneKopf(); });
 };
 
