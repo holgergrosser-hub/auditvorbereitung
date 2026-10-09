@@ -108,7 +108,7 @@ if (kopien.length) {
 }
 // Netlify-Formular "ergebnis": Netlify erkennt es beim Hochladen (Formularerkennung muss in Netlify eingeschaltet sein)
 fs.writeFileSync(path.join(ziel, 'formular.html'), '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Formular</title>'
-  + '<form name="ergebnis" method="POST" data-netlify="true" hidden><input name="kunde"><input name="mitarbeiter"><input name="stufe"><input name="zusammenfassung"><textarea name="daten"></textarea></form>');
+  + '<form name="ergebnis" method="POST" data-netlify="true" hidden><input name="kunde"><input name="mitarbeiter"><input name="stufe"><input name="zusammenfassung"><textarea name="nachricht"></textarea><textarea name="daten"></textarea></form>');
 fs.writeFileSync(path.join(ziel, '_headers'), '/*\n  X-Robots-Tag: noindex, nofollow\n  Referrer-Policy: no-referrer\n');
 fs.writeFileSync(path.join(ziel, 'index.html'), '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=kunde/">');
 fs.writeFileSync(path.join(ordner, 'befunde.json'), JSON.stringify({ widersprueche: befunde, seitenzahlen: seitenHinweise }, null, 1));

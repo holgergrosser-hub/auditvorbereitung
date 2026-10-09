@@ -107,7 +107,9 @@ function reife() {
 }
 function zeichneKopf() {
   const r = reife();
-  $('#reife').innerHTML = '<span class="reife ' + r.stufe + '" title="' + esc(r.teile.map(t => t.name + ' ' + t.prozent + ' %').join(' · ')) + '">Prüfungsreife ' + r.prozent + ' %</span>';
+  $('#reife').innerHTML = '<span class="reife ' + r.stufe + '" title="' + esc(r.teile.map(t => t.name + ' ' + t.prozent + ' %').join(' · ')) + '">Prüfungsreife ' + r.prozent + ' %</span>'
+    + (api.lokal && !S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an Ihren Berater schicken">✉ An Berater senden</button>' : '');
+  const ks = $('#kopf-senden'); if (ks) ks.onclick = sendenPanel;
   zeichneNav();
 }
 function technikFertig() { const c = S.start.kunde.technik_check || {}; return ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].every(k => c[k]); }
@@ -201,24 +203,42 @@ function wegweiserHtml() {
 function sendenHtml() {
   if (!api.lokal || S.start.demo) return '';
   const zuletzt = (() => { try { return localStorage.getItem('av_gesendet') || ''; } catch (e) { return ''; } })();
-  return '<h3>Ihr Stand an den Berater</h3><div class="karte"><p>Ihr Berater sieht Ihren Übungsstand erst, wenn Sie ihn senden. Gesendet wird nur Ihr Fortschritt (keine Fotos).</p><div class="zeile"><button class="knopf" id="senden">Stand jetzt an den Berater senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
+  return '<h3>Ihr Stand an den Berater</h3><div class="karte"><p>Ihr Berater sieht Ihren Übungsstand erst, wenn Sie ihn senden. Den Knopf <b>✉ An Berater senden</b> finden Sie jederzeit oben in der Kopfzeile – auch für Änderungswünsche an Ihren Dokumenten vor dem Audit.</p><div class="zeile"><button class="knopf" id="senden">Jetzt senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
 }
-function sendenKnopf() { const b = $('#senden'); if (b) b.onclick = () => senden(b); }
-async function senden(knopf) {
+function sendenKnopf() { const b = $('#senden'); if (b) b.onclick = sendenPanel; }
+/* Fenster zum Senden: Nachricht (z. B. Änderungswunsch vor dem Audit) + Übungsstand. Geht nur an den Berater, nie an Dritte. */
+function sendenPanel() {
+  const alt = $('#senden-panel'); if (alt) { alt.remove(); return; }
+  const d = document.createElement('div'); d.id = 'senden-panel'; d.className = 'karte senden-panel kein-druck';
+  d.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>An Ihren Berater senden</b><button class="link" id="sp-zu">schließen</button></div>'
+    + '<label for="sp-text">Nachricht (freiwillig) – z. B. „Bitte im Handbuch Kapitel 5 die Geschäftsführung korrigieren“ oder eine Frage vor dem Audit:</label>'
+    + '<textarea id="sp-text" rows="4" placeholder="Ihre Nachricht an den Berater"></textarea>'
+    + '<p class="grau">Mitgeschickt wird Ihr Übungsstand (ohne Fotos). Ihr Berater liest alles selbst, es geht keine Mail automatisch an andere.</p>'
+    + '<div class="zeile"><button class="knopf" id="sp-los">Senden</button><button class="knopf zweit" id="sp-datei">Stattdessen als Datei herunterladen</button></div>';
+  $('#main').prepend(d); window.scrollTo(0, 0); $('#sp-text').focus();
+  $('#sp-zu').onclick = () => d.remove();
+  $('#sp-datei').onclick = () => herunterladen();
+  $('#sp-los').onclick = async () => { const ok = await senden($('#sp-los'), $('#sp-text').value.trim()); if (ok) d.remove(); };
+}
+async function senden(knopf, nachricht) {
   const daten = api.export(); daten.nachweise = (daten.nachweise || []).map(n => Object.assign({}, n, { bild: '' }));
+  if (nachricht) daten.nachricht = nachricht;
   const r = reife(), z = stand();
-  const felder = { 'form-name': 'ergebnis', kunde: S.start.kunde.name, mitarbeiter: S.ma ? S.ma.name : '', stufe: String(S.audit.stufe),
-    zusammenfassung: 'Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen', daten: JSON.stringify(daten) };
+  const felder = { 'form-name': 'ergebnis', kunde: S.start.kunde.name, mitarbeiter: S.ma ? S.ma.name : '', stufe: String(S.audit.stufe), nachricht: nachricht || '',
+    zusammenfassung: (nachricht ? 'MIT NACHRICHT · ' : '') + 'Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen', daten: JSON.stringify(daten) };
+  const vorher = knopf ? knopf.textContent : '';
   if (knopf) { knopf.disabled = true; knopf.textContent = 'Sende …'; }
   try {
     const res = await fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(felder).toString() });
     if (!res.ok) throw new Error('Status ' + res.status);
     const jetzt = new Date().toLocaleString('de-DE'); try { localStorage.setItem('av_gesendet', jetzt); } catch (e) { /* */ }
     if ($('#senden-info')) $('#senden-info').textContent = '✓ Gesendet am ' + jetzt;
-    hinweisBox('Ihr Stand ist bei Ihrem Berater angekommen. Danke!', 'ok');
+    hinweisBox('Ist bei Ihrem Berater angekommen' + (nachricht ? ' – mit Ihrer Nachricht' : '') + '. Danke!', 'ok');
+    return true;
   } catch (e) {
-    hinweisBox('Senden hat nicht geklappt. Bitte unter „Nach dem Audit“ die Datei herunterladen und per E-Mail schicken.');
-  } finally { if (knopf) { knopf.disabled = false; knopf.textContent = 'Stand jetzt an den Berater senden'; } }
+    hinweisBox('Senden hat nicht geklappt. Bitte „Stattdessen als Datei herunterladen“ wählen und die Datei per E-Mail an Ihren Berater schicken.');
+    return false;
+  } finally { if (knopf) { knopf.disabled = false; knopf.textContent = vorher; } }
 }
 
 /* ------------------------------------------------ Technik-Check (P07) */

@@ -44,6 +44,7 @@ function zeichne() {
   $('#aus').innerHTML = ergebnisse.map(e => {
     const ein = (art) => (e.eintraege || []).filter(x => x.art === art);
     let html = '<h2>' + esc(e.kunde) + ' · exportiert ' + esc(String(e.exportiert).slice(0, 16).replace('T', ' ')) + '</h2>';
+    if (e.nachricht) html += '<div class="karte" style="border-left:4px solid #C2410C"><b>Nachricht vom Kunden</b><p style="white-space:pre-wrap">' + esc(e.nachricht) + '</p></div>';
     // Kennzahlen je Audit
     paket.audits.forEach(a => {
       const fr = paket.fragenJe[a.id] || [], an = (e.antworten || []).filter(x => x.audit_id === a.id);
