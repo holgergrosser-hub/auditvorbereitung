@@ -1,0 +1,350 @@
+{
+ "kunde": {
+  "name": "Beispiel Haustechnik GmbH (Testkunde)",
+  "ort": "Musterstadt",
+  "berater_name": "Holger Grosser",
+  "berater_email": "test@example.com",
+  "firma_laut_zertifizierer": "Beispiel Haustechnik GmbH"
+ },
+ "audits": [
+  {
+   "id": "s1",
+   "stufe": 1,
+   "datum": "2026-10-16",
+   "zertifizierer": "TÜV NORD CERT",
+   "auditor": "Test-Auditor",
+   "normen": "ISO 9001",
+   "auditor_level": "mittel",
+   "ruhemodus_tage": 1,
+   "planpunkte": [
+    {
+     "zeit": "09:00–09:15",
+     "thema": "Eröffnungsbesprechung",
+     "normkapitel": "",
+     "gespraechspartner": "GF, QMB"
+    },
+    {
+     "zeit": "09:15–11:30",
+     "thema": "Bewertung der Systemdokumentation",
+     "normkapitel": "4.1–8.7, 10",
+     "gespraechspartner": "GF, QMB"
+    },
+    {
+     "zeit": "11:30–12:30",
+     "thema": "Interne Audits und Managementbewertung",
+     "normkapitel": "9.1–9.3",
+     "gespraechspartner": "GF, QMB"
+    },
+    {
+     "zeit": "12:30–13:00",
+     "thema": "Abschlussbesprechung",
+     "normkapitel": "",
+     "gespraechspartner": "GF, QMB"
+    }
+   ],
+   "pruefpunkte": [
+    {
+     "normpunkt": "0",
+     "titel": "Systemdokumentation",
+     "frage": "Managementsystemdokumentation (Ausgabe bzw. Stand)",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 2",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "4.1",
+     "titel": "Kontext",
+     "frage": "Wurden relevante externe und interne Themen bestimmt?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 3",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "4.2",
+     "titel": "Interessierte Parteien",
+     "frage": "Wurden die interessierten Parteien und ihre Anforderungen bestimmt?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 4",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "4.3",
+     "titel": "Anwendungsbereich",
+     "frage": "Ist der Anwendungsbereich festgelegt und dokumentiert?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 3",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "4.4",
+     "titel": "Prozesse",
+     "frage": "Sind die Prozesse festgelegt und dokumentiert?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 4, Seite 9–16",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "5.2",
+     "titel": "Qualitätspolitik",
+     "frage": "Ist die Qualitätspolitik festgelegt und bekannt gemacht?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 5",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "5.3",
+     "titel": "Rollen",
+     "frage": "Sind Verantwortlichkeiten und Befugnisse zugewiesen?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 6; QM-Übersicht, Reiter „Organigramm“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "6.1",
+     "titel": "Risiken und Chancen",
+     "frage": "Wurden Risiken und Chancen bestimmt und Maßnahmen geplant?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 7; QM-Übersicht, Reiter „Risiken“, „Chancen“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "6.2",
+     "titel": "Qualitätsziele",
+     "frage": "Sind Qualitätsziele festgelegt und wird ihre Erreichung geplant?",
+     "bemerkung": "QM-Übersicht, Reiter „Ziele & Kennzahlen“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "7.1.5",
+     "titel": "Prüfmittel",
+     "frage": "Werden Messmittel überwacht und kalibriert?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 16; QM-Übersicht, Reiter „Prüfmittel“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "7.2",
+     "titel": "Kompetenz",
+     "frage": "Wird die Kompetenz der Mitarbeiter sichergestellt und nachgewiesen?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 8; QM-Übersicht, Reiter „Schulungsplan“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "8.2",
+     "titel": "Anforderungen an Produkte",
+     "frage": "Wie werden Kundenanforderungen ermittelt und Angebote geprüft?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 11",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "8.4",
+     "titel": "Externe Anbieter",
+     "frage": "Werden externe Anbieter ausgewählt und bewertet?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 14; QM-Übersicht, Reiter „Lieferantenbewertung“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "8.5",
+     "titel": "Leistungserbringung",
+     "frage": "Wird die Dienstleistung unter beherrschten Bedingungen erbracht?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 12",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "9.2",
+     "titel": "Internes Audit",
+     "frage": "Werden interne Audits nach Programm durchgeführt?",
+     "bemerkung": "Auditprogramm 2026–2028; Auditbericht internes Audit Seite 1",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "9.3",
+     "titel": "Managementbewertung",
+     "frage": "Wird die Managementbewertung durchgeführt?",
+     "bemerkung": "Managementbewertung 2026 Seite 1–3",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "10.2",
+     "titel": "Nichtkonformität",
+     "frage": "Wie wird mit Reklamationen und Fehlern umgegangen?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 15, Seite 17",
+     "norm": "ISO 9001"
+    }
+   ]
+  },
+  {
+   "id": "s2",
+   "stufe": 2,
+   "datum": "2026-10-27",
+   "zertifizierer": "TÜV NORD CERT",
+   "auditor": "Test-Auditor",
+   "normen": "ISO 9001",
+   "auditor_level": "mittel",
+   "ruhemodus_tage": 1,
+   "planpunkte": [
+    {
+     "zeit": "08:30–09:00",
+     "thema": "Eröffnung, Führung und Politik",
+     "normkapitel": "5.1, 5.2",
+     "gespraechspartner": "GF",
+     "bereich": "Geschäftsführung"
+    },
+    {
+     "zeit": "09:00–10:30",
+     "thema": "Angebot und Auftrag",
+     "normkapitel": "8.2",
+     "gespraechspartner": "Kundendienst",
+     "bereich": "Kundendienst"
+    },
+    {
+     "zeit": "10:30–12:00",
+     "thema": "Montage beim Kunden",
+     "normkapitel": "8.5, 7.1.5",
+     "gespraechspartner": "Montage",
+     "bereich": "Montage"
+    },
+    {
+     "zeit": "13:00–14:00",
+     "thema": "Einkauf und Lieferanten",
+     "normkapitel": "8.4",
+     "gespraechspartner": "GF",
+     "bereich": "Geschäftsführung"
+    },
+    {
+     "zeit": "14:00–15:00",
+     "thema": "Reklamationen und Verbesserung",
+     "normkapitel": "10.2",
+     "gespraechspartner": "Kundendienst",
+     "bereich": "Kundendienst"
+    }
+   ]
+  }
+ ],
+ "mitarbeiter": [
+  {
+   "id": "m1",
+   "name": "Erika Beispiel",
+   "bereich": "Geschäftsführung",
+   "funktion": "Geschäftsführerin"
+  },
+  {
+   "id": "m2",
+   "name": "Max Probe",
+   "bereich": "Kundendienst",
+   "funktion": "QMB, Kundendienst"
+  }
+ ],
+ "dokumente": [
+  {
+   "id": "d1",
+   "d_nr": "D-01",
+   "titel": "Unternehmens- und Prozesshandbuch",
+   "kurzname": "UPH",
+   "stand": "01.10.2026",
+   "wichtigkeit": "kennen",
+   "datei": "quellen/UPH.pdf",
+   "link": "https://example.com/uph"
+  },
+  {
+   "id": "d2",
+   "d_nr": "D-02",
+   "titel": "QM-Übersicht",
+   "kurzname": "QMÜ",
+   "stand": "01.10.2026",
+   "wichtigkeit": "kennen",
+   "datei": "quellen/QM-Uebersicht.xlsx",
+   "kopie_datei": "quellen/QM-Uebersicht.pdf"
+  },
+  {
+   "id": "d3",
+   "d_nr": "D-03",
+   "titel": "Managementbewertung 2026",
+   "kurzname": "MB",
+   "stand": "15.09.2026",
+   "wichtigkeit": "kennen",
+   "datei": "quellen/MB.pdf"
+  },
+  {
+   "id": "d4",
+   "d_nr": "D-04",
+   "titel": "Auditbericht internes Audit",
+   "stand": "10.09.2026",
+   "wichtigkeit": "finden",
+   "datei": "quellen/Auditbericht.pdf"
+  },
+  {
+   "id": "d5",
+   "d_nr": "D-05",
+   "titel": "Auditprogramm 2026–2028",
+   "stand": "01.09.2026",
+   "wichtigkeit": "finden",
+   "datei": "quellen/Auditprogramm.pdf"
+  },
+  {
+   "id": "d6",
+   "d_nr": "D-06",
+   "titel": "Notfallplan",
+   "stand": "ENTWURF",
+   "wichtigkeit": "finden",
+   "datei": "quellen/Notfallplan.pdf"
+  }
+ ],
+ "faktencheck": [
+  {
+   "id": "k1",
+   "thema": "Geschäftsführung",
+   "angabe": "Erika Beispiel und Max Probe (Organigramm)",
+   "fundstelle": "QM-Übersicht, Reiter „Organigramm“; Handbuch Seite 6"
+  },
+  {
+   "id": "k2",
+   "thema": "Mitarbeiterzahl",
+   "angabe": "„[bitte ergänzen] Mitarbeiter“",
+   "fundstelle": "Managementbewertung Seite 1"
+  },
+  {
+   "id": "k3",
+   "thema": "Zertifizierer",
+   "angabe": "„in Auswahl (TÜV oder DEKRA)“",
+   "fundstelle": "Managementbewertung Seite 1"
+  },
+  {
+   "id": "k4",
+   "thema": "Geltungsbereich",
+   "angabe": "Planung, Installation und Wartung von Heizungs- und Sanitäranlagen",
+   "fundstelle": "Handbuch Seite 3"
+  }
+ ],
+ "stolperfallen": [
+  {
+   "id": "x1",
+   "stufe": 1,
+   "thema": "Wer ist Geschäftsführer?",
+   "frage": "Im Organigramm stehen zwei Geschäftsführer, im Handbuch nur einer. Wer führt die Firma?",
+   "warum": "Organigramm und Handbuch Seite 6 widersprechen sich",
+   "antwortlinie": "Erika Beispiel ist Geschäftsführerin, Max Probe QMB – das Organigramm korrigieren wir."
+  },
+  {
+   "id": "x2",
+   "stufe": 1,
+   "thema": "Zertifizierer in Auswahl",
+   "frage": "In der Managementbewertung steht „Zertifizierer in Auswahl“. Warum?",
+   "warum": "MB Seite 1 ist älter als die Auswahl",
+   "antwortlinie": "Die MB war vor der Entscheidung für TÜV NORD; in der nächsten MB steht es richtig."
+  },
+  {
+   "id": "x3",
+   "stufe": 2,
+   "thema": "Notfallübung",
+   "frage": "Wann haben Sie die letzte Notfallübung gemacht?",
+   "warum": "Notfallplan: Übung noch nicht durchgeführt",
+   "antwortlinie": "Ehrlich: noch keine – sie ist für November geplant."
+  }
+ ],
+ "aufgaben": [
+  {
+   "id": "t1",
+   "todo": "Organigramm korrigieren (nur eine Geschäftsführerin)",
+   "bis_stufe": 1,
+   "verantwortlich": "Max Probe"
+  },
+  {
+   "id": "t2",
+   "todo": "Notfallplan freigeben und Übung planen",
+   "bis_stufe": 2,
+   "verantwortlich": "Erika Beispiel"
+  }
+ ]
+}

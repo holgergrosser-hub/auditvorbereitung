@@ -332,7 +332,7 @@ ANSICHT.technik = () => {
   const c = S.start.kunde.technik_check || {};
   const handy = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || window.innerWidth < 700;
   const chrome = !!(navigator.userAgentData && navigator.userAgentData.brands && navigator.userAgentData.brands.some(b => /Chrome|Chromium|Edge/.test(b.brand))) || /Chrome\//.test(navigator.userAgent);
-  const zeile = (k, titel, text, knopf) => '<div class="check"><div class="haken ' + (c[k] ? 'ja' : '') + '">' + (c[k] ? '✓' : '') + '</div><div style="flex:1"><b>' + titel + '</b><div class="grau">' + text + '</div>' + (knopf || '') + '</div></div>';
+  const zeile = (k, titel, text, knopf) => '<div class="check"><div class="haken ' + (c[k] ? 'ja' : '') + '" data-h="' + k + '">' + (c[k] ? '✓' : '') + '</div><div style="flex:1"><b>' + titel + '</b><div class="grau">' + text + '</div>' + (knopf || '') + '</div></div>';
   $('#main').innerHTML = '<h2>Technik-Check</h2><p>Bitte spätestens eine Woche vor dem Audit erledigen. Wer am Tag vorher noch installiert, wird im Audit nervös.</p>'
     + (handy ? '<div class="hinweis">Sie sind gerade am Handy. Im Audit brauchen Sie einen Laptop oder PC – am Handy ist alles zu klein, und Bildschirm teilen klappt schlecht.</div>' : '')
     + '<div class="karte">'
@@ -352,7 +352,9 @@ ANSICHT.technik = () => {
 };
 async function technik(k, still) {
   try { const j = await api('technik', { check: { [k]: true } }); S.start.kunde.technik_check = j.technik_check; } catch (e) { hinweisBox(e.message); return; }
-  if (!still && S.ansicht === 'technik') ANSICHT.technik(); zeichneKopf();
+  if (!still && S.ansicht === 'technik') ANSICHT.technik();
+  else { const h = $('[data-h="' + k + '"]'); if (h) { h.classList.add('ja'); h.textContent = '✓'; } } // Vorschau-Video bleibt stehen, Haken trotzdem sichtbar
+  zeichneKopf();
 }
 async function teilen() {
   if (S.stream && S.stream.active) return S.stream;

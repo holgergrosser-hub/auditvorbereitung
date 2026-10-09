@@ -379,16 +379,17 @@ const teilTreffer = (t, w) => t.length >= 5 && w !== t && (w.startsWith(t) || (t
 function woerter(t) { return norm(t).split(' ').filter(w => w.length > 2 && !STOPP.has(w) && !/^\d+$/.test(w)).map(stamm); }
 
 /** Volltextsuche ueber Auszuege (BM25-artig). Rueckgabe [{auszug, punkte, treffer:[woerter]}] */
-function auszuegeSuchen(frage, auszuege, max) {
+function auszuegeSuchen(frage, auszuege, max, opt) {
+  const teil = opt && opt.genau ? () => false : teilTreffer; // genau: nur ganze Woerter (Seitenzuordnung), sonst auch Teile zusammengesetzter Woerter
   const q = [...new Set(woerter(frage))]; if (!q.length) return [];
   const docs = (auszuege || []).map(a => ({ a, w: woerter(a.text + ' ' + (a.ort || '')), o: woerter((a.ort || '') + ' ' + String(a.text || '').split('\n')[0]) }));
   const N = docs.length || 1, avg = docs.reduce((s, d) => s + d.w.length, 0) / N || 1;
-  const df = {}; q.forEach(t => { df[t] = docs.filter(d => d.w.some(x => x === t || teilTreffer(t, x))).length; });
+  const df = {}; q.forEach(t => { df[t] = docs.filter(d => d.w.some(x => x === t || teil(t, x))).length; });
   return docs.map(d => {
     let s = 0; const hit = [];
-    q.forEach(t => { const tf = d.w.filter(x => x === t).length + 0.6 * d.w.filter(x => teilTreffer(t, x)).length; if (!tf) return; hit.push(t);
+    q.forEach(t => { const tf = d.w.filter(x => x === t).length + 0.6 * d.w.filter(x => teil(t, x)).length; if (!tf) return; hit.push(t);
       s += Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5)) * (tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * d.w.length / avg));
-      if (d.o.some(x => x === t || teilTreffer(t, x))) s += 3; }); // Treffer im Reiternamen oder in der Ueberschrift zaehlt mehr
+      if (d.o.some(x => x === t || teil(t, x))) s += 3; }); // Treffer im Reiternamen oder in der Ueberschrift zaehlt mehr
     return { auszug: d.a, punkte: s * (hit.length / q.length + 0.5), treffer: hit };
   }).filter(x => x.punkte > 0).sort((x, y) => y.punkte - x.punkte).slice(0, max || 5);
 }
@@ -419,10 +420,10 @@ function auszuegeZurFundstelle(hilfe, frage, dokumente, auszuege, max) {
   const out = [];
   orte.forEach(o => {
     let kand = (auszuege || []).filter(a => a.dokument_id === o.dokument_id && (o.reiter ? a.reiter === o.reiter : o.seiten.indexOf(a.seite) >= 0));
-    let best = auszuegeSuchen(suche, kand, 2);
+    let best = auszuegeSuchen(suche, kand, 2, { genau: true });
     if (o.seiten) { // Seitenverschiebung (neue Fassung): deutlich besser passende Nachbarseite zusaetzlich zeigen
       const nachbarn = (auszuege || []).filter(a => a.dokument_id === o.dokument_id && o.seiten.some(s => Math.abs(a.seite - s) === 1) && o.seiten.indexOf(a.seite) < 0);
-      const b2 = auszuegeSuchen(suche, nachbarn, 1);
+      const b2 = auszuegeSuchen(suche, nachbarn, 1, { genau: true });
       if (b2.length && b2[0].punkte > 1 && (!best.length || b2[0].punkte > best[0].punkte * 1.5)) best = b2.concat(best).slice(0, 2);
     }
     if (!best.length && kand.length) best = [{ auszug: kand[0], punkte: 0, treffer: [] }];
@@ -443,7 +444,7 @@ function seitenKorrigieren(hilfe, frage, dokumente, auszuege) {
   const pos = pdfDocs.map(d => ({ d, p: Math.min(...[d.titel, d.kurzname].filter(Boolean).map(x => { const i = n.indexOf(String(x).toLowerCase().slice(0, 18)); return i < 0 ? 1e9 : i; })) })).filter(x => x.p < 1e9).sort((a, b) => a.p - b.p);
   if (!pos.length) return { text, aenderungen: aend };
   const suche = frage + ' ' + text.replace(/Seiten?\s+\d+(\s*[–-]\s*\d+)?/g, '');
-  const wert = (dok, s) => { const r = auszuegeSuchen(suche, (auszuege || []).filter(a => a.dokument_id === dok && a.seite === s), 1); return r.length ? r[0].punkte : 0; };
+  const wert = (dok, s) => { const r = auszuegeSuchen(suche, (auszuege || []).filter(a => a.dokument_id === dok && a.seite === s), 1, { genau: true }); return r.length ? r[0].punkte : 0; };
   const neu = text.replace(/(Seiten?\s+)(\d{1,3})(?:(\s*[–-]\s*)(\d{1,3}))?/g, (m, wort, a, strich, b, off) => {
     const dok = (pos.filter(x => x.p <= off).pop() || pos[0]).d.id;
     const s = Number(a), e = b ? Math.min(Number(b), s + 6) : s;

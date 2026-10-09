@@ -5,3 +5,5 @@ node_modules/
 supabase/.temp/
 test/bilder/
 web/kunde/demo-lokal.json
+test/testkunde/netlify/
+test/testkunde/befunde.json

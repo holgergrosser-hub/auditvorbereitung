@@ -43,7 +43,8 @@ Q.dokumente.forEach((d, i) => {
       if (j === 0) { karte[r] = 1; return; }
       // zuerst Seiten, deren Ueberschrift (erste Zeilen) den Reiter nennt – sonst irgendwo im Text (Kennzahlen-Seiten nennen andere Reiter oft im Fliesstext)
       const oben = (x) => x.split('\n').filter(z => z.trim()).slice(0, 3).join(' ');
-      let t = seiten.findIndex((x, i) => i >= ab && kopf && oben(x).indexOf(kopf) >= 0);
+      let t = seiten.findIndex((x, i) => i >= ab && x.split('\n').map(z => z.trim()).filter(Boolean).slice(0, 4).some(z => z === r)); // Seitentitel = Reitername
+      if (t < 0) t = seiten.findIndex((x, i) => i >= ab && kopf && oben(x).indexOf(kopf) >= 0);
       if (t < 0) t = seiten.findIndex((x, i) => i >= ab && kopf && x.indexOf(kopf) >= 0);
       if (t >= 0) { karte[r] = t + 1; ab = t; }
     });
@@ -69,9 +70,11 @@ Q.audits.forEach(a => {
   if (Q.mitarbeiter.length && pp.some(p => p.bereich)) pp = L.mitarbeiterZuordnen(pp, Q.mitarbeiter);
   punkteJe[a.id] = pp;
   let fr = [];
-  if (a.prueflisten && a.prueflisten.length) {
+  if ((a.prueflisten && a.prueflisten.length) || (a.pruefpunkte && a.pruefpunkte.length)) {
     const punkte = [];
-    a.prueflisten.forEach(f => { const r = F.lies(docXml(f)); if (r.art !== 'pruefliste') throw new Error('Keine Pruefliste: ' + f); r.daten.punkte.forEach((p, i) => punkte.push(Object.assign({ id: path.basename(f) + '#' + i, norm: r.daten.norm }, p))); });
+    // Pruefliste als JSON (z. B. von anderen Zertifizierern abgetippt): {normpunkt, titel, frage, bemerkung (= Fundstelle), norm}
+    (a.pruefpunkte || []).forEach((p, i) => punkte.push(Object.assign({ id: a.id + '-pp' + i, norm: a.normen ? a.normen.split(/,\s*/)[0] : 'ISO 9001', bewertung: '' }, p)));
+    (a.prueflisten || []).forEach(f => { const r = F.lies(docXml(f)); if (r.art !== 'pruefliste') throw new Error('Keine Pruefliste: ' + f); r.daten.punkte.forEach((p, i) => punkte.push(Object.assign({ id: path.basename(f) + '#' + i, norm: r.daten.norm }, p))); });
     fr = L.zeigMalFragen(L.fahrplanAusPrueflisten(punkte), dokumente);
     // eigene Dokumente, die die Frage nennt (z. B. Auditprogramm), an den Anfang der Fundstelle
     L.dokumenteErgaenzen(fr, dokumente).forEach(x => console.log('  ergänzt:', x.normkapitel, '→', x.dokument));
@@ -80,7 +83,7 @@ Q.audits.forEach(a => {
   }
   if (a.stufe === 2 || !fr.length) fr = fr.concat(L.fragenOhneKi(pp, a.stufe).map(f => Object.assign({ art: 'frage', normen: (a.normen || 'ISO 9001').split(/,\s*/) }, f)));
   fragenJe[a.id] = fr.map((f, i) => Object.assign({ id: a.id + '-f' + (i + 1) }, f, { reihenfolge: i + 1 }));
-  delete a.auditplan; delete a.prueflisten; delete a.planpunkte; a.status = 'fragen_bereit';
+  delete a.auditplan; delete a.prueflisten; delete a.planpunkte; delete a.pruefpunkte; a.status = 'fragen_bereit';
 });
 
 // 3) Widerspruchs-Check als Hinweis fuer Holger (nicht im Paket fuer den Kunden)

@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       const art = String(d.art || '');
       if (!['spur', 'rundgang', 'falle', 'lernen', 'rueckmeldung', 'aufgabe', 'auditor'].includes(art)) return antwort({ fehler: 'Unbekannte Art' }, 400);
       const daten = d.daten && typeof d.daten === 'object' ? d.daten : {};
-      if (JSON.stringify(daten).length > 20000) return antwort({ fehler: 'Zu viele Daten' }, 413);
+      if (JSON.stringify(daten).length > (art === 'spur' || art === 'rundgang' ? 400000 : 20000)) return antwort({ fehler: 'Zu viele Daten' }, 413); // Belegfoto (verkleinert) darf mit
       pflicht(await db.from('kunden_eintraege').upsert({ kunde_id: kundeId, audit_id: auditId, mitarbeiter_id: maId, art, schluessel: String(d.schluessel || '').slice(0, 100), daten, geaendert_am: new Date().toISOString() },
         { onConflict: 'kunde_id,audit_id,mitarbeiter_id,art,schluessel' }));
       return antwort({ ok: true });
