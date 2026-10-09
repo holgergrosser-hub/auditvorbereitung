@@ -41,10 +41,16 @@ Q.dokumente.forEach((d, i) => {
       const erst = (A.auszuege.find(a => a.dokument_id === d.id && a.reiter === r) || {}).text || '';
       const kopf = erst.split('\n')[0].split('·')[0].trim().slice(0, 25);
       if (j === 0) { karte[r] = 1; return; }
-      const t = seiten.findIndex((x, i) => i >= ab && kopf && x.indexOf(kopf) >= 0);
+      // zuerst Seiten, deren Ueberschrift (erste Zeilen) den Reiter nennt – sonst irgendwo im Text (Kennzahlen-Seiten nennen andere Reiter oft im Fliesstext)
+      const oben = (x) => x.split('\n').filter(z => z.trim()).slice(0, 3).join(' ');
+      let t = seiten.findIndex((x, i) => i >= ab && kopf && oben(x).indexOf(kopf) >= 0);
+      if (t < 0) t = seiten.findIndex((x, i) => i >= ab && kopf && x.indexOf(kopf) >= 0);
       if (t >= 0) { karte[r] = t + 1; ab = t; }
     });
     dokumente[i].kopie_seiten = karte;
+    // Selbstkontrolle: steht der Reitername (erstes Wort) oben auf der zugeordneten Seite?
+    Object.entries(karte).forEach(([r, sn]) => { const w = r.split(/[\s&]+/)[0].slice(0, 6).toLowerCase(); const top = (seiten[sn - 1] || '').split('\n').filter(z => z.trim()).slice(0, 3).join(' ').toLowerCase();
+      if (w && top.indexOf(w) < 0) console.log('  PRÜFEN: Reiter „' + r + '“ → PDF-Seite ' + sn + ' (' + d.titel + '), Überschrift dort: ' + top.slice(0, 60)); });
   }
 });
 

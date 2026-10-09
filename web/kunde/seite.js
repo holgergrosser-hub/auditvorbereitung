@@ -299,7 +299,10 @@ function kopieUrl(d, ort) { // eigener Seitenbetrachter (pdf.html) statt #page: 
   return 'pdf.html?d=' + encodeURIComponent(d.kopie) + (von ? '&s=' + von + '&b=' + bis : '') + '&t=' + encodeURIComponent(d.titel);
 }
 function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
-async function oeffne(id) {
+async function oeffne(id, ort) {
+  // Mit Seite/Reiter: immer den Seitenbetrachter (springt sicher auf die Stelle); Google-Links koennen keine Seite ansteuern
+  const d = S.start.dokumente.find(x => x.id === id), u = ort ? kopieUrl(d, ort) : '';
+  if (u && /&s=\d/.test(u)) { const w = window.open(u, '_blank'); if (!w) location.href = u; return; }
   const fenster = window.open('', '_blank');
   try {
     const j = await api('dokument', { dokument_id: id });
@@ -330,6 +333,7 @@ ANSICHT.fakten = () => {
 
 /* ------------------------------------------------ "Wo steht das?" (Auszuege) */
 async function auszuege() { if (!S.auszuege) { try { S.auszuege = (await api('auszuege')).auszuege || []; } catch (e) { S.auszuege = []; } } return S.auszuege; }
+function d0(id) { return S.start.dokumente.find(x => x.id === id) || {}; }
 function dokTitel(id) { const d = S.start.dokumente.find(x => x.id === id); return d ? d.titel : 'Dokument'; }
 function markiere(text, treffer) {
   let t = esc(text);
@@ -337,7 +341,7 @@ function markiere(text, treffer) {
   return t.replace(/\n/g, '<br>');
 }
 function auszugHtml(x, treffer) {
-  return '<div class="auszug"><div class="zeile" style="justify-content:space-between"><b>' + esc(dokTitel(x.auszug.dokument_id)) + ' · ' + esc(x.auszug.ort || '') + '</b><span class="zeile"><button class="knopf klein zweit" data-d="' + esc(x.auszug.dokument_id) + '">Dokument öffnen</button>' + kopieKnopf(x.auszug.dokument_id, x.auszug.ort) + '</span></div><div class="auszug-text">' + markiere(x.auszug.text, treffer || x.treffer) + '</div></div>';
+  return '<div class="auszug"><div class="zeile" style="justify-content:space-between"><b>' + esc(dokTitel(x.auszug.dokument_id)) + ' · ' + esc(x.auszug.ort || '') + '</b><span class="zeile">' + stelleKnopf(x.auszug.dokument_id, x.auszug.ort) + (d0(x.auszug.dokument_id).link ? '<button class="knopf klein zweit" data-d="' + esc(x.auszug.dokument_id) + '">live öffnen</button>' : '') + '</span></div><div class="auszug-text">' + markiere(x.auszug.text, treffer || x.treffer) + '</div></div>';
 }
 async function hilfeHtml(f) {
   const a = await auszuege();
@@ -346,7 +350,13 @@ async function hilfeHtml(f) {
     + (treffer.length ? '<div class="grau" style="margin-top:6px">Auszug aus Ihrer Dokumentation:</div>' + treffer.map(x => auszugHtml(x, L.woerter(f.frage))).join('') : '')
     + '<div class="doks">' + (f.dokumente || []).map(d => '<button class="knopf klein zweit" data-d="' + d.id + '">' + esc((d.d_nr ? d.d_nr + ' ' : '') + d.titel) + (d.stand ? ' · ' + esc(d.stand) : '') + '</button>').join('') + '</div>';
 }
-function dokKnoepfe(el) { $$('[data-d]', el).forEach(b => b.onclick = () => oeffne(b.dataset.d)); }
+function dokKnoepfe(el) { $$('[data-d]', el).forEach(b => b.onclick = () => oeffne(b.dataset.d, b.dataset.ort || '')); }
+function stelleKnopf(dokId, ort, text) { // "Seite 33 öffnen" statt "Dokument öffnen", wenn die Stelle bekannt ist
+  const d = S.start.dokumente.find(x => x.id === dokId), u = ort ? kopieUrl(d, ort) : '';
+  const m = String(ort || '').match(/Seite\s+\d+(?:\s*[–-]\s*\d+)?/), r = String(ort || '').match(/„[^“]+“/);
+  const label = u && /&s=\d/.test(u) ? (m ? m[0] : 'Reiter ' + (r ? r[0] : '')) + ' öffnen' : (text || 'Dokument öffnen');
+  return '<button class="knopf klein zweit" data-d="' + esc(dokId) + '" data-ort="' + esc(ort || '') + '">' + esc(label) + '</button>';
+}
 ANSICHT.finden = async () => {
   const a = await auszuege();
   const kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), finden = S.start.dokumente.filter(d => d.wichtigkeit !== 'kennen');
@@ -751,14 +761,15 @@ async function azubi(prozessId) {
       + '<div class="az-azubi">🧑‍🔧 ' + esc(frage) + ' <button class="knopf klein zweit" id="az-vor">🔊</button></div>'
       + '<textarea id="az-text" placeholder="Erklären Sie es so, wie Sie es an der Kaffeemaschine sagen würden"></textarea>'
       + '<div class="zeile"><button class="knopf klein zweit" id="az-diktat">🎤 Diktieren</button><button class="knopf" id="az-weiter">' + (schritt < 2 ? 'Antworten' : 'Fertig') + '</button><span class="grau">Nachfrage ' + Math.min(schritt, 2) + ' von 2</span>'
-      + '<button class="link" id="az-quelle">Im Handbuch nachsehen (Seite ' + p.von + (p.bis > p.von ? '–' + p.bis : '') + ')</button><button class="knopf klein zweit" id="az-muster">💡 Musterlösung</button></div><div id="az-quelltext"></div>';
+      + '<button class="link" id="az-quelle">Im Handbuch nachlesen</button>' + stelleKnopf(p.dokument_id, 'Seite ' + p.von + (p.bis > p.von ? '–' + p.bis : '')) + '<button class="knopf klein zweit" id="az-muster">💡 Musterlösung</button></div><div id="az-quelltext"></div>';
     $('#az-zurueck').onclick = () => azubi();
+    $$('[data-d]', box).forEach(b => b.onclick = () => oeffne(b.dataset.d, b.dataset.ort || ''));
     $('#az-vor').onclick = () => vorlesen(frage);
     diktat($('#az-diktat'), (t) => { $('#az-text').value += ($('#az-text').value ? ' ' : '') + t; });
     $('#az-muster').onclick = () => { const m = L.musterErklaerung(p, dokTitel(p.dokument_id));
       $('#az-quelltext').innerHTML = '<div class="karte gut"><b>So könnten Sie es erklären</b> <span class="grau">(aus Ihrem Handbuch in gesprochene Sprache übertragen – nicht auswendig lernen, sondern mit eigenen Worten und Ihrem Beispiel)</span><p>' + esc(m.text) + '</p>'
         + (m.schritte.length ? '<div class="grau">Die Schritte im Handbuch: ' + m.schritte.map((x, i) => (i + 1) + '. ' + esc(x.tat)).join(' · ') + '</div>' : '') + '</div>'; };
-    $('#az-quelle').onclick = () => { $('#az-quelltext').innerHTML = '<div class="auszug"><div class="auszug-text">' + esc(p.text.slice(0, 1800)).replace(/\n/g, '<br>') + '</div><button class="knopf klein zweit" data-d="' + esc(p.dokument_id) + '">Dokument öffnen</button></div>'; dokKnoepfe($('#az-quelltext')); };
+    $('#az-quelle').onclick = () => { $('#az-quelltext').innerHTML = '<div class="auszug"><div class="auszug-text">' + esc(p.text.slice(0, 1800)).replace(/\n/g, '<br>') + '</div>' + stelleKnopf(p.dokument_id, 'Seite ' + p.von + (p.bis > p.von ? '–' + p.bis : '')) + '</div>'; dokKnoepfe($('#az-quelltext')); };
     $('#az-weiter').onclick = async () => {
       const t = $('#az-text').value.trim(); if (!t) { $('#az-text').focus(); return; }
       teile.push(t); schritt++;
