@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Dokument</title>
+<!-- Eigener Seitenbetrachter: öffnet IMMER genau die angegebene Seite (Browser-PDF-Anzeigen ignorieren #page teils, Safari ganz).
+     Aufruf: pdf.html?d=dok/d1.pdf&s=5&b=5&t=Handbuch  (s = erste Seite, b = letzte Seite der Fundstelle) -->
+<style>
+:root{--blau:#1F4E79;--hell:#EEF4FA;--rand:#D5E1EC;--text:#1B2733;--grau:#5B6B7A;--gelb:#F5B700}
+*{box-sizing:border-box}
+body{margin:0;background:#E9EEF3;color:var(--text);font:15px/1.4 system-ui,"Segoe UI",Arial,sans-serif}
+.leiste{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;background:var(--blau);color:#fff;padding:8px 16px}
+.titel{font-weight:700;font-size:1.05rem}
+.ziel{background:var(--gelb);color:#1B2733;border-radius:99px;padding:3px 12px;font-weight:700;white-space:nowrap}
+.knoepfe{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.knoepfe button,.knoepfe a{background:#fff;color:var(--blau);border:0;border-radius:8px;padding:6px 10px;font:600 .9rem system-ui,Arial,sans-serif;cursor:pointer;text-decoration:none}
+.knoepfe .info{color:#fff;opacity:.9;font-size:.9rem}
+#seiten{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px}
+.seite{position:relative;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18);max-width:100%}
+.seite canvas{display:block;width:100%;height:100%}
+.seite.treffer{outline:4px solid var(--gelb);outline-offset:3px}
+.marke{position:absolute;top:-12px;left:-6px;background:var(--gelb);color:#1B2733;font-weight:700;font-size:.85rem;border-radius:6px;padding:2px 8px;z-index:2}
+.nr{position:absolute;top:-19px;right:0;font-size:.8rem;color:var(--grau)}
+#meldung{max-width:640px;margin:24px auto;background:#fff;border-radius:10px;padding:16px}
+</style>
+</head>
+<body>
+<div class="leiste">
+  <div><span class="titel" id="titel">Dokument</span> <span class="ziel" id="ziel" hidden></span></div>
+  <div class="knoepfe">
+    <button id="zum-ziel" hidden>↩ zur Fundstelle</button>
+    <button id="vor" aria-label="vorige Seite">‹</button><span class="info" id="pos">–</span><button id="nach" aria-label="nächste Seite">›</button>
+    <a id="roh" target="_blank" rel="noopener">PDF herunterladen</a>
+  </div>
+</div>
+<div id="seiten"></div>
+<div id="meldung" hidden></div>
+<script src="pdfjs/pdf.min.js"></script>
+<script>
+(async function () {
+  const q = new URLSearchParams(location.search);
+  const datei = q.get('d') || '';
+  if (!/^dok\/[A-Za-z0-9_.-]+\.pdf$/.test(datei)) return melden('Kein gültiges Dokument angegeben.');
+  const von = Math.max(1, parseInt(q.get('s') || '1', 10) || 1), bisRoh = parseInt(q.get('b') || '', 10);
+  const titel = q.get('t') || 'Dokument';
+  document.title = titel + (q.get('s') ? ' – Seite ' + von : '');
+  document.getElementById('titel').textContent = titel;
+  const roh = document.getElementById('roh'); roh.href = datei; roh.setAttribute('download', '');
+  if (!window.pdfjsLib) return weiter('Der Seitenbetrachter konnte nicht geladen werden.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs/pdf.worker.min.js';
+  let pdf;
+  try { pdf = await pdfjsLib.getDocument({ url: datei }).promise; } catch (e) { return weiter('Das Dokument ließ sich nicht öffnen.'); }
+  const n = pdf.numPages, start = Math.min(von, n), bis = Math.min(Math.max(isNaN(bisRoh) ? start : bisRoh, start), n);
+  if (q.get('s')) { const z = document.getElementById('ziel'); z.textContent = start === bis ? 'Seite ' + start : 'Seite ' + start + '–' + bis; z.hidden = false; }
+  // Erst alle Seitengrößen holen, dann Platzhalter in exakter Größe: so springt die Ansicht nicht weg, während Seiten nachladen
+  const box = document.getElementById('seiten'), breite = Math.min(900, box.clientWidth - 32), seiten = [];
+  for (let i = 1; i <= n; i++) {
+    const p = await pdf.getPage(i), vp = p.getViewport({ scale: 1 }), h = Math.round(breite * vp.height / vp.width);
+    const div = document.createElement('div'); div.className = 'seite' + (q.get('s') && i >= start && i <= bis ? ' treffer' : ''); div.style.width = breite + 'px'; div.style.height = h + 'px'; div.dataset.seite = i; div.id = 'seite-' + i;
+    if (q.get('s') && i === start) div.insertAdjacentHTML('afterbegin', '<span class="marke">Hier steht es – Seite ' + i + '</span>');
+    div.insertAdjacentHTML('beforeend', '<span class="nr">Seite ' + i + ' von ' + n + '</span>');
+    box.appendChild(div); seiten.push({ p, div, fertig: false });
+  }
+  async function zeichne(s) {
+    if (s.fertig) return; s.fertig = true;
+    const dpr = Math.min(2, window.devicePixelRatio || 1), vp1 = s.p.getViewport({ scale: 1 }), vp = s.p.getViewport({ scale: dpr * breite / vp1.width });
+    const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); s.div.prepend(c);
+    await s.p.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    s.div.dataset.gezeichnet = '1';
+  }
+  const beobachter = new IntersectionObserver((eintraege) => eintraege.forEach(e => { if (e.isIntersecting) zeichne(seiten[e.target.dataset.seite - 1]); }), { rootMargin: '600px 0px' });
+  seiten.forEach(s => beobachter.observe(s.div));
+  const leiste = document.querySelector('.leiste');
+  function springe(i, sanft) { const el = document.getElementById('seite-' + i); window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - leiste.offsetHeight - 16, behavior: sanft ? 'smooth' : 'auto' }); }
+  await zeichne(seiten[start - 1]); springe(start, false);
+  const pos = document.getElementById('pos'), zurueck = document.getElementById('zum-ziel');
+  function aktuell() { const y = leiste.offsetHeight + 40; let a = 1; seiten.forEach((s, i) => { if (s.div.getBoundingClientRect().top <= y) a = i + 1; }); return a; }
+  function zeigePos() { const a = aktuell(); pos.textContent = 'Seite ' + a + ' von ' + n; zurueck.hidden = !q.get('s') || (a >= start && a <= bis); }
+  window.addEventListener('scroll', zeigePos, { passive: true }); zeigePos();
+  document.getElementById('vor').onclick = () => springe(Math.max(1, aktuell() - 1), true);
+  document.getElementById('nach').onclick = () => springe(Math.min(n, aktuell() + 1), true);
+  zurueck.onclick = () => springe(start, true);
+  window.__pdfBereit = { start, bis, n };
+  function melden(t) { const m = document.getElementById('meldung'); m.hidden = false; m.textContent = t; }
+  function weiter(t) { melden(t + ' Sie werden zur PDF-Datei weitergeleitet …'); setTimeout(() => { location.href = datei + '#page=' + von; }, 1500); }
+})();
+</script>
+</body>
+</html>

@@ -288,11 +288,11 @@ function teilenAnzeige() {
   el.innerHTML = '<span>● Ihr Bildschirm wird für das Übungsfoto geteilt. Es wird nichts aufgezeichnet oder verschickt – das Foto bleibt in diesem Browser.</span><button class="knopf klein" id="teilen-aus">Teilen beenden</button>';
   $('#teilen-aus').onclick = () => { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; teilenAnzeige(); hinweisBox('Bildschirm teilen ist beendet.', 'ok'); };
 }
-function kopieUrl(d, ort) {
+function kopieUrl(d, ort) { // eigener Seitenbetrachter (pdf.html) statt #page: der Browser springt sonst nicht zuverlaessig auf die Seite
   if (!d || !d.kopie) return '';
-  let seite = 0; const m = String(ort || '').match(/Seite\s+(\d+)/); if (m) seite = Number(m[1]);
-  const r = String(ort || '').match(/„([^“]+)“/); if (r && d.kopie_seiten && d.kopie_seiten[r[1]]) seite = d.kopie_seiten[r[1]];
-  return d.kopie + (seite ? '#page=' + seite : '');
+  let von = 0, bis = 0; const m = String(ort || '').match(/Seite\s+(\d+)(?:\s*[–-]\s*(\d+))?/); if (m) { von = Number(m[1]); bis = Number(m[2] || m[1]); }
+  const r = String(ort || '').match(/„([^“]+)“/); if (r && d.kopie_seiten && d.kopie_seiten[r[1]]) von = bis = d.kopie_seiten[r[1]];
+  return 'pdf.html?d=' + encodeURIComponent(d.kopie) + (von ? '&s=' + von + '&b=' + bis : '') + '&t=' + encodeURIComponent(d.titel);
 }
 function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
 async function oeffne(id) {

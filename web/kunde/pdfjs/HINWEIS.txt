@@ -1,0 +1,1 @@
+PDF.js 3.11.174 (Mozilla, Apache-2.0) – lokal mitgeliefert, damit der Seitenbetrachter ohne fremde Server läuft.

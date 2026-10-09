@@ -21,3 +21,5 @@ Anonymisiert – keine Kundendaten in Git.
 | P14 | Holgers Regel für die letzten Tage: nichts mehr ändern, nichts ausdrucken, nicht im Internet lesen, ausruhen. | 3 Tage vor dem Audit schaltet das Tool in den **Ruhemodus**: nur noch Spickzettel und „So läuft Ihr Audit“, keine neuen Aufgaben. | V1 |
 | P15 | „Nächstes Jahr fällt die Erklärung weg“: Der Kunde soll die jährliche Aktualisierung selbst können. | Nach dem Audit: Feststellungen → Maßnahmen, Fragen aus dem echten Audit sammeln, Vorlage für das Folgejahr. | V2 |
 | P16 | Holger hat einmal die falsche Firma gezeigt. | Firmenname groß auf jeder Seite im Backoffice und im Kundenbereich. | V1 |
+| P17 | Test 09.10.: Übungsfoto ging nicht – mit nur einem Bildschirm liegt beim Klick die Übungsseite vorn. | Foto auf drei Wegen: 5-Sekunden-Foto, eigenes Bildschirmfoto mit Strg+V einfügen, Bild wählen. | V1 |
+| P18 | Test 09.10.: Link „S. 5“ öffnete Seite 3. | Eigener Seitenbetrachter mit gelber Markierung, alle Links automatisch geprüft. | V1 |

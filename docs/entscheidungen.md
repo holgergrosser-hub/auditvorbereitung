@@ -29,3 +29,7 @@
 **E-A14 PDF-Kopien der Kundendokumente im Paket.** Falls der Kunde keinen Zugriff auf die Originale hat, öffnet „PDF-Kopie“ die richtige Seite bzw. den richtigen Reiter. Verworfen: nur Google-Links.
 
 **E-A15 Spickzettel je Programmpunkt des Auditplans.** Je Punkt: Normkapitel, Thema, Dokument mit Seite/Reiter – zum Danebenlegen, nicht zum Lernen. Verworfen: Liste aller Fundstellen nach Dokument (unübersichtlich).
+
+**E-A16 Eigener Seitenbetrachter (pdf.html mit PDF.js, lokal mitgeliefert) statt `datei.pdf#page=N`.** Im Test mit Holger öffnete der Chrome-PDF-Betrachter bei „S. 5“ die Seite 3 – das verunsichert Kunden. Der eigene Betrachter springt immer auf die angegebene Seite, markiert die Fundstelle gelb und hat „zur Fundstelle“. Ein Test öffnet jeden Link und prüft die sichtbare Seite gegen die Fußzeile „Seite N von“ bzw. den Reiternamen. Verworfen: `#page` (Browser-abhängig, Safari ignoriert es), Einzelseiten-PDFs (Kontext fehlt), PDF.js vom CDN (Firmennetze sperren das).
+
+**E-A17 Senden jederzeit aus der Kopfzeile, mit Nachricht.** Änderungswünsche vor dem Audit dürfen nicht erst „nach dem Audit“ abgeschickt werden. Faktencheck-Korrekturen haben einen eigenen Senden-Knopf mit vorausgefülltem Text. Verworfen: „E-Mail vorbereiten“ (leere Mail, Anhang von Hand).
