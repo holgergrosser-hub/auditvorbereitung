@@ -293,14 +293,14 @@ const FAKTEN_STANDARD = [
   { thema: 'Gefahrstoffe / Reinigungsmittel', frage: 'Welche Gefahrstoffe bzw. Reinigungsmittel verwenden Sie aktuell?' }
 ];
 /** Platzhalter und Widersprueche in Dokumenttexten finden (Idee 5, ohne KI): liefert To-do-Vorschlaege mit HA/OP */
-const PLATZHALTER = /(bitte vom kunden ergänzen|bitte ergänzen|noch zu klären|zu klären|platzhalter|\bentwurf\b|\bxx+\b|\?\?\?|\[[^\]]{0,30}\]|tbd|in auswahl)/i;
+const PLATZHALTER = /([Bb]itte (vom Kunden )?ergänzen|[Zz]u klären|[Pp]latzhalter|\bENTWURF\b|\b[Xx]{2,}\b|\?\?\?|\[(?:[Bb]itte|offen|tbd|TBD|xx|XX|Datum|Name|\.\.\.|…)[^\]]{0,40}\]|\b(?:tbd|TBD)\b|in [Aa]uswahl)/;
 function widerspruchsCheck(texte, stamm) {
   // texte: [{d_nr, titel, text, stand}], stamm: {firma, zertifizierer, geltungsbereich}
   const todo = []; const s = stamm || {};
   (texte || []).forEach(d => {
     String(d.text || '').split(/\n+/).forEach(z => {
       const m = z.match(PLATZHALTER);
-      if (m) todo.push({ prio: /entwurf/i.test(m[0]) ? 'OP' : 'HA', todo: d.titel + ': „' + z.trim().slice(0, 140) + '“ klären bzw. ausfüllen', normbezug: '7.5', dokument: d.d_nr || '' });
+      if (m) todo.push({ prio: /ENTWURF/.test(m[0]) ? 'OP' : 'HA', todo: d.titel + ': „' + z.trim().slice(0, 140) + '“ klären bzw. ausfüllen', normbezug: '7.5', dokument: d.d_nr || '' });
     });
     if (s.zertifizierer) {
       const andere = ['TÜV SÜD', 'TÜV NORD', 'TÜV Rheinland', 'DEKRA', 'DQS', 'SGS', 'DNV', 'Bureau Veritas', 'OnlineCert'].filter(z => norm(z) !== norm(s.zertifizierer) && new RegExp(z.replace(/ /g, '\\s*'), 'i').test(d.text || ''));
@@ -349,12 +349,300 @@ const ABLAUF = {
   ruhe: 'Jetzt nichts mehr ändern, nichts mehr ausdrucken und nicht im Internet lesen – das bringt nur Fragezeichen. Sie haben die Antworten gefunden. Ruhen Sie sich aus und gehen Sie entspannt ins Audit.'
 };
 
+/* ================================================================ "Wo steht das?" – Auszuege aus den eigenen Dokumenten (ohne KI) */
+
+// sehr einfache deutsche Stammform: Kleinbuchstaben, Umlaute, typische Endungen weg
+const STOPP = new Set('der die das und oder ein eine einer eines einem einen ist sind wird werden wurde wurden zu zur zum im in am an auf fur von mit fuer bei aus als wie was wo wer welche welcher welches sich sie ihr ihre ihren wir unser unsere nicht auch nach uber oder bzw dass des den dem es so liegt liegen vor diese dieser dieses durch inkl usw steht stehen finde finden suche suchen zeige zeigen gibt haben habt hat welchem welchen dokument dokumente unsere unserem seite seiten reiter tab tabs kapitel'.split(' '));
+function stamm(w) { return w.length > 5 ? w.replace(/(ungen|ung|en|er|es|e|n|s)$/, '') : w; }
+function woerter(t) { return norm(t).split(' ').filter(w => w.length > 2 && !STOPP.has(w) && !/^\d+$/.test(w)).map(stamm); }
+
+/** Volltextsuche ueber Auszuege (BM25-artig). Rueckgabe [{auszug, punkte, treffer:[woerter]}] */
+function auszuegeSuchen(frage, auszuege, max) {
+  const q = [...new Set(woerter(frage))]; if (!q.length) return [];
+  const docs = (auszuege || []).map(a => ({ a, w: woerter(a.text + ' ' + (a.ort || '')), o: woerter((a.ort || '') + ' ' + String(a.text || '').split('\n')[0]) }));
+  const N = docs.length || 1, avg = docs.reduce((s, d) => s + d.w.length, 0) / N || 1;
+  const df = {}; q.forEach(t => { df[t] = docs.filter(d => d.w.includes(t)).length; });
+  return docs.map(d => {
+    let s = 0; const hit = [];
+    q.forEach(t => { const tf = d.w.filter(x => x === t).length; if (!tf) return; hit.push(t);
+      s += Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5)) * (tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * d.w.length / avg));
+      if (d.o.includes(t)) s += 3; }); // Treffer im Reiternamen oder in der Ueberschrift zaehlt mehr
+    return { auszug: d.a, punkte: s * (hit.length / q.length + 0.5), treffer: hit };
+  }).filter(x => x.punkte > 0).sort((x, y) => y.punkte - x.punkte).slice(0, max || 5);
+}
+
+/**
+ * Auszuege zu einer Fundstelle: "Handbuch (UPH) Seite 3–4; QM-Übersicht, Reiter „Risiken“" -> passende Textstellen.
+ * Seiten gehoeren zum zuletzt davor genannten Dokument. Seitenverschiebung (neue Fassung) wird mit +-1 Seite abgefangen.
+ */
+function auszuegeZurFundstelle(hilfe, frage, dokumente, auszuege, max) {
+  const text = String(hilfe || ''); const n = text.toLowerCase();
+  const pos = (dokumente || []).map(d => {
+    const namen = [d.titel, d.kurzname, d.d_nr].filter(Boolean).map(x => String(x).toLowerCase());
+    const p = namen.map(x => { const i = n.indexOf(x.length > 3 ? x.slice(0, Math.min(x.length, 18)) : x); return i; }).filter(i => i >= 0);
+    return { d, p: p.length ? Math.min(...p) : -1 };
+  }).filter(x => x.p >= 0).sort((a, b) => a.p - b.p);
+  const orte = []; // {dokument_id, seiten:[..]} oder {dokument_id, reiter}
+  const re = /Seiten?\s+(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?/g; let m;
+  while ((m = re.exec(text))) {
+    const vor = pos.filter(x => x.p <= m.index && (auszuege || []).some(a => a.dokument_id === x.d.id && a.seite)).pop()
+      || pos.find(x => (auszuege || []).some(a => a.dokument_id === x.d.id && a.seite));
+    if (!vor) continue;
+    const von = Number(m[1]), bis = Math.min(Number(m[2] || m[1]), von + 3); const s = [];
+    for (let i = von; i <= bis; i++) s.push(i);
+    orte.push({ dokument_id: vor.d.id, seiten: s });
+  }
+  (dokumente || []).forEach(d => ((d.inhalt_kurz || {}).reiter || []).forEach(r => { if (text.indexOf('„' + r + '“') >= 0 || new RegExp('Reiter\\s+' + r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(text)) orte.push({ dokument_id: d.id, reiter: r }); }));
+  const suche = [frage, text].join(' ');
+  const out = [];
+  orte.forEach(o => {
+    let kand = (auszuege || []).filter(a => a.dokument_id === o.dokument_id && (o.reiter ? a.reiter === o.reiter : o.seiten.indexOf(a.seite) >= 0));
+    let best = auszuegeSuchen(suche, kand, 2);
+    if (o.seiten) { // Seitenverschiebung (neue Fassung): deutlich besser passende Nachbarseite zusaetzlich zeigen
+      const nachbarn = (auszuege || []).filter(a => a.dokument_id === o.dokument_id && o.seiten.some(s => Math.abs(a.seite - s) === 1) && o.seiten.indexOf(a.seite) < 0);
+      const b2 = auszuegeSuchen(suche, nachbarn, 1);
+      if (b2.length && b2[0].punkte > 1 && (!best.length || b2[0].punkte > best[0].punkte * 1.5)) best = b2.concat(best).slice(0, 2);
+    }
+    if (!best.length && kand.length) best = [{ auszug: kand[0], punkte: 0, treffer: [] }];
+    best.slice(0, o.reiter ? 1 : 2).forEach(b => { if (!out.some(x => x.auszug.id === b.auszug.id)) out.push(b); });
+  });
+  if (!out.length) auszuegeSuchen(suche, auszuege, 3).forEach(b => out.push(b)); // keine Fundstelle erkannt: freie Suche
+  return out.slice(0, max || 4);
+}
+
+/**
+ * Seitenzahlen nachfuehren: Fundstellen wurden oft gegen eine aeltere Fassung geschrieben (Handbuch hatte 40, jetzt 39 Seiten).
+ * Prueft je "Seite N" die Nachbarseiten und korrigiert, wenn der Inhalt dort deutlich besser passt.
+ * Rueckgabe {text, aenderungen:[{alt, neu}]}
+ */
+function seitenKorrigieren(hilfe, frage, dokumente, auszuege) {
+  const text = String(hilfe || ''); const n = text.toLowerCase(); const aend = [];
+  const pdfDocs = (dokumente || []).filter(d => (auszuege || []).some(a => a.dokument_id === d.id && a.seite));
+  const pos = pdfDocs.map(d => ({ d, p: Math.min(...[d.titel, d.kurzname].filter(Boolean).map(x => { const i = n.indexOf(String(x).toLowerCase().slice(0, 18)); return i < 0 ? 1e9 : i; })) })).filter(x => x.p < 1e9).sort((a, b) => a.p - b.p);
+  if (!pos.length) return { text, aenderungen: aend };
+  const suche = frage + ' ' + text.replace(/Seiten?\s+\d+(\s*[–-]\s*\d+)?/g, '');
+  const wert = (dok, s) => { const r = auszuegeSuchen(suche, (auszuege || []).filter(a => a.dokument_id === dok && a.seite === s), 1); return r.length ? r[0].punkte : 0; };
+  const neu = text.replace(/(Seiten?\s+)(\d{1,3})(?:(\s*[–-]\s*)(\d{1,3}))?/g, (m, wort, a, strich, b, off) => {
+    const dok = (pos.filter(x => x.p <= off).pop() || pos[0]).d.id;
+    const s = Number(a), e = b ? Math.min(Number(b), s + 6) : s;
+    const bereich = (v) => { let sum = 0; for (let i = s + v; i <= e + v; i++) sum += wert(dok, i); return sum; }; // ganzer Bereich zaehlt
+    const basis = bereich(0);
+    let best = 0, bestWert = basis;
+    [-1, 1].forEach(v => { const w = bereich(v); if (w > bestWert * 1.4 && w > 2) { best = v; bestWert = w; } });
+    if (!best) return m;
+    const r = wort + (s + best) + (b ? strich + (Number(b) + best) : '');
+    aend.push({ alt: m, neu: r }); return r;
+  });
+  return { text: neu, aenderungen: aend };
+}
+
+/**
+ * Dokumentpruefung (Idee 9) ohne KI: Text aus dem Bildschirmfoto (Texterkennung im Browser) mit den Auszuegen vergleichen.
+ * Welches Dokument ist zu sehen? Passt es zur Fundstelle der Frage? Rueckgabe {passt:'ja'|'teilweise'|'nein'|'unklar', gezeigt, hinweis}
+ */
+function fotoPruefen(ocrText, erwartet, auszuege, dokumente) {
+  const w = woerter(ocrText);
+  if (w.length < 12) return { passt: 'unklar', gezeigt: null, hinweis: 'Auf dem Foto ist kaum Text zu erkennen. Dokument größer anzeigen (Strg + Mausrad).' };
+  const kurz = w.slice(0, 400).join(' ');
+  const top = auszuegeSuchen(kurz, auszuege, 3);
+  const gezeigt = top.length ? top[0].auszug : null;
+  const docName = (id) => ((dokumente || []).find(d => d.id === id) || {}).titel || 'Dokument';
+  const erwDocs = [...new Set((erwartet || []).map(e => (e.auszug || e).dokument_id))];
+  const erwIds = new Set((erwartet || []).map(e => (e.auszug || e).id));
+  if (!gezeigt) return { passt: 'unklar', gezeigt: null, hinweis: 'Das gezeigte Dokument ist nicht in Ihrer Dokumentation. Nur gültige Dokumente öffnen.' };
+  const ort = gezeigt.ort ? ', ' + gezeigt.ort : '';
+  const nahe = (a) => (erwartet || []).some(e => { const x = e.auszug || e; return x.dokument_id === a.dokument_id && ((a.seite && x.seite && Math.abs(a.seite - x.seite) <= 1) || (a.reiter && a.reiter === x.reiter)); });
+  if (erwIds.has(gezeigt.id) || nahe(gezeigt) || top.some(t => erwIds.has(t.auszug.id) && t.punkte >= top[0].punkte * 0.8))
+    return { passt: 'ja', gezeigt, hinweis: 'Richtig: ' + docName(gezeigt.dokument_id) + ort + '.' };
+  if (erwDocs.indexOf(gezeigt.dokument_id) >= 0)
+    return { passt: 'teilweise', gezeigt, hinweis: 'Richtiges Dokument (' + docName(gezeigt.dokument_id) + '), aber eine andere Stelle' + ort + '. Gesucht war: ' + (erwartet || []).map(e => (e.auszug || e).ort).filter(Boolean).slice(0, 2).join(', ') + '.' };
+  if (!erwDocs.length) return { passt: 'unklar', gezeigt, hinweis: 'Sie zeigen: ' + docName(gezeigt.dokument_id) + ort + '.' };
+  return { passt: 'nein', gezeigt, hinweis: 'Sie zeigen ' + docName(gezeigt.dokument_id) + ort + ' – gesucht war ' + erwDocs.map(docName).join(' bzw. ') + '.' };
+}
+
+/* ================================================================ Antwort-Feedback ohne KI (Idee 5): Holgers Formel */
+// Gute Antwort = Was wir machen + wo es steht (zeigen) + ein Beispiel. Keine Superlative, nichts erfinden.
+function antwortFeedback(text) {
+  const t = String(text || '').trim(), n = norm(t), w = n ? n.split(' ').length : 0;
+  const hinweise = [];
+  if (!w) return { note: 'leer', hinweise: ['Sagen Sie einen Satz, was Sie machen – und zeigen Sie das Dokument.'] };
+  const zeigt = /(handbuch|liste|ubersicht|seite|reiter|plan|bericht|protokoll|nachweis|dokument|ordner|zeige|zeigen|hier steht|siehe|tabelle|formular|vorlage|datei)/.test(n);
+  const beispiel = /(zum beispiel|z b|beispiel|letzte|letzten|zuletzt|im (januar|februar|marz|april|mai|juni|juli|august|september|oktober|november|dezember)|20\d\d|auftrag|kunde [a-z]|gestern|letzte woche|neulich)/.test(n);
+  const superlativ = /(immer|nie |niemals|perfekt|100 ?%|alles (ist )?(gut|super)|keine fehler|kein problem|ausnahmslos)/.test(n);
+  const unsicher = /(glaube|vielleicht|eigentlich|weiss nicht|keine ahnung|muss ich nachschauen)/.test(n);
+  if (!zeigt) hinweise.push('Zeigen Sie das Dokument: „Das steht in … – hier.“');
+  if (!beispiel) hinweise.push('Nennen Sie ein echtes Beispiel (letzter Fall, Datum, Auftrag).');
+  if (superlativ) hinweise.push('Vorsicht mit „immer/nie/perfekt“ – das fordert Nachfragen heraus. Besser: „In der Regel …, zuletzt …“.');
+  if (unsicher) hinweise.push('Statt zu raten: „Das schaue ich nach“ und im Dokument nachsehen.');
+  if (w > 90) hinweise.push('Kürzer antworten – der Auditor fragt nach, wenn er mehr wissen will.');
+  const note = !hinweise.length ? 'gut' : (zeigt || beispiel) && !superlativ ? 'ok' : 'ueben';
+  return { note, zeigt, beispiel, superlativ, woerter: w, hinweise };
+}
+
+/* ================================================================ Pruefungsreife (Idee 7) */
+function pruefungsreife(o) {
+  // o: {fragen, antworten, technik_check, faktencheck, fallen, fallen_geuebt, spur_stationen, spur_fertig, stufe}
+  const z = { gruen: 0, gelb: 0, rot: 0, offen: 0 }; (o.fragen || []).forEach(f => z[ampel((o.antworten || []).filter(a => a.frage_id === f.id))]++);
+  const n = (o.fragen || []).length || 1;
+  const teile = [
+    ['Fragen/Fahrplan', 0.55, (z.gruen + 0.5 * z.gelb) / n],
+    ['Technik-Check', 0.15, ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].filter(k => (o.technik_check || {})[k]).length / 4],
+    ['Faktencheck', 0.1, (o.faktencheck || []).length ? (o.faktencheck.filter(f => f.antwort).length / o.faktencheck.length) : 1],
+    ['Stolperfallen', 0.2, (o.fallen || 0) ? Math.min(1, (o.fallen_geuebt || 0) / o.fallen) : 1]
+  ];
+  if (o.stufe === 2) teile.push(['Beispielvorgang', 0.2, (o.spur_stationen || 0) ? Math.min(1, (o.spur_fertig || 0) / o.spur_stationen) : 0]);
+  const summe = teile.reduce((s, t) => s + t[1], 0);
+  const prozent = Math.round(teile.reduce((s, t) => s + t[1] * t[2], 0) / summe * 100);
+  return { prozent, teile: teile.map(t => ({ name: t[0], prozent: Math.round(t[2] * 100) })), stufe: prozent >= 85 ? 'bereit' : prozent >= 60 ? 'fast' : 'ueben' };
+}
+
+/* ================================================================ Tageslektion (Idee 3): 5 Minuten, Wiederholung wie Vokabeln */
+function tageslektion(fragen, antworten, anzahl, heute) {
+  const tag = String(heute || new Date().toISOString()).slice(0, 10);
+  const info = (fragen || []).map(f => {
+    const a = (antworten || []).filter(x => x.frage_id === f.id && !x.ist_beispiel);
+    const zuletzt = a.map(x => String(x.beantwortet_am || '').slice(0, 10)).sort().pop() || '';
+    const farbe = ampel(a);
+    const faellig = farbe === 'offen' ? 0 : farbe === 'rot' ? 1 : farbe === 'gelb' ? 2 : 4; // Tage bis Wiederholung
+    const tage = zuletzt ? Math.round((new Date(tag) - new Date(zuletzt)) / 86400000) : 99;
+    const prio = (farbe === 'rot' ? 0 : farbe === 'gelb' ? 1 : farbe === 'offen' ? 2 : 3) - (tage >= faellig ? 0 : 10);
+    return { f, prio, tage };
+  }).filter(x => x.prio >= 0 || x.tage >= 4);
+  return info.sort((a, b) => a.prio - b.prio || b.tage - a.tage).slice(0, anzahl || 3).map(x => x.f);
+}
+
+/* ================================================================ Audit-Deutsch (Idee 4) */
+const AUDIT_DEUTSCH = [
+  ['Kontext der Organisation', 'Was um uns herum und bei uns passiert und uns beeinflusst (Markt, Kunden, Personal, Wetter/Klima, Gesetze).'],
+  ['Interessierte Parteien', 'Wer will was von uns? Kunden, Mitarbeiter, Lieferanten, Behörden, Berufsgenossenschaft, Nachbarn.'],
+  ['Geltungsbereich', 'Was genau zertifiziert wird – die Leistungen, die wir wirklich anbieten. Steht später auf dem Zertifikat.'],
+  ['Nicht anwendbare Anforderungen', 'Normteile, die bei uns nicht passen (z. B. keine Entwicklung) – mit Begründung.'],
+  ['Politik', 'Unsere Grundsätze in einem Absatz – von der Geschäftsführung freigegeben.'],
+  ['Risiken und Chancen', 'Was kann schiefgehen, was können wir besser machen – und was tun wir dagegen bzw. dafür?'],
+  ['Ziele', 'Was wir dieses Jahr erreichen wollen, mit Zahl und Termin.'],
+  ['Kompetenz / Qualifikation', 'Wer kann was, wer braucht welche Schulung – und der Nachweis dazu.'],
+  ['Dokumentierte Information', 'Alles Aufgeschriebene: Vorgaben (Handbuch, Pläne) und Nachweise (Protokolle, Listen).'],
+  ['Lenkung', 'Wer erstellt, gibt frei, wo liegt die gültige Fassung, was ist alt?'],
+  ['Externe Anbieter', 'Lieferanten und Dienstleister, die wir beauftragen.'],
+  ['Lieferantenbewertung', 'Noten für unsere Lieferanten (Qualität, Termin, Preis) – einmal im Jahr.'],
+  ['Nichtkonformität / Abweichung', 'Etwas ist nicht so, wie es sein soll (Reklamation, Fehler, Unfall).'],
+  ['Korrekturmaßnahme', 'Was wir tun, damit der Fehler nicht wieder passiert – nicht nur reparieren.'],
+  ['Wirksamkeit', 'Hat die Maßnahme wirklich geholfen? Woran sehen wir das?'],
+  ['Kennzahl / KPI', 'Eine Zahl, an der wir sehen, wie gut es läuft (Reklamationen, Termintreue, Diesel pro Monat).'],
+  ['Internes Audit', 'Unsere eigene Prüfung vorab – mit Bericht.'],
+  ['Managementbewertung', 'Unser Jahresrückblick der Geschäftsführung: Ziele, Audit, Kunden, Ressourcen, Entscheidungen.'],
+  ['Umweltaspekt', 'Wo wir die Umwelt beeinflussen (Diesel, Reinigungsmittel, Abfall, Wasser).'],
+  ['Bindende Verpflichtungen', 'Gesetze und Vorschriften, die wir einhalten müssen (z. B. Gefahrstoffverordnung) – Liste der Normen und Gesetze.'],
+  ['Notfallvorsorge', 'Was tun wir, wenn etwas passiert (Chemie ausgelaufen, Brand, Unfall)? Notfallplan.'],
+  ['Feststellung / Hinweis / Abweichung', 'Was der Auditor am Ende aufschreibt: Hinweis = Tipp, Abweichung = muss behoben werden.']
+];
+
+/* ================================================================ Rollentausch (Idee 12): Kunde ist Auditor und findet den Fehler */
+const ROLLENTAUSCH = [
+  { frage: 'Wie bewerten Sie Ihre Lieferanten?', antwort: 'Wir arbeiten nur mit den besten Lieferanten, da gibt es nie Probleme. Das brauchen wir nicht aufzuschreiben.', richtig: 'b',
+    optionen: { a: 'Die Antwort ist gut – kurz und klar.', b: '„Nie Probleme“ und kein Nachweis – besser: Lieferantenbewertung zeigen (Noten, Datum).', c: 'Er hätte mehr Lieferanten nennen müssen.' },
+    erklaerung: 'Superlative („nie“) fordern Nachfragen heraus, und ohne Dokument fehlt der Nachweis. Besser: „Einmal im Jahr bewerten wir die Lieferanten mit Noten – hier die Liste.“' },
+  { frage: 'Zeigen Sie mir Ihre Qualitätspolitik.', antwort: '(öffnet einen Ordner „Archiv“) … Moment, hier ist eine Politik von 2023.', richtig: 'a',
+    optionen: { a: 'Falsche, alte Fassung – immer nur gültige Dokumente öffnen.', b: 'Alles in Ordnung, Politik ist Politik.', c: 'Er hätte sie auswendig aufsagen sollen.' },
+    erklaerung: 'Alte Fassungen erzeugen Widersprüche. Nur Dokumente aus der aktuellen Ablage (Stand prüfen) zeigen.' },
+  { frage: 'Wann haben Sie zuletzt Maschinen gewartet? Das steht in Ihrem Geltungsbereich.', antwort: 'Ja, das machen wir ständig, sehr viel.', richtig: 'c',
+    optionen: { a: 'Gute Antwort, selbstbewusst.', b: 'Er hätte gar nichts sagen sollen.', c: 'Ehrlich wäre besser: „Zuletzt vor längerer Zeit, Schwerpunkt ist Reinigung“ – und den Geltungsbereich besprechen.' },
+    erklaerung: 'Was im Geltungsbereich steht, kommt aufs Zertifikat. Wenn es nicht gemacht wird: offen sagen, der Auditor hilft bei der Formulierung.' },
+  { frage: 'Wie viele Mitarbeiter haben Sie?', antwort: 'In der Managementbewertung steht „bitte vom Kunden ergänzen“ – das füllen wir noch aus.', richtig: 'b',
+    optionen: { a: 'Ehrlich, also gut.', b: 'Ehrlich ist gut, aber Platzhalter gehören vor dem Audit ausgefüllt – Faktencheck machen.', c: 'Er hätte eine Zahl schätzen sollen.' },
+    erklaerung: 'Platzhalter fallen sofort auf. Deshalb vorher den Faktencheck – im Audit selbst einfach die richtige Zahl nennen.' },
+  { frage: 'Haben Sie interne Audits durchgeführt?', antwort: 'Ja, am 03.08. durch unseren Berater. Hier ist der Auditbericht – 0 Abweichungen, 8 Empfehlungen, die stehen im Maßnahmenplan.', richtig: 'a',
+    optionen: { a: 'Sehr gut: Was, wann, wer, Nachweis, Folgemaßnahmen.', b: 'Zu kurz.', c: 'Der Berater darf kein internes Audit machen.' },
+    erklaerung: 'Genau so: kurze Aussage, Dokument zeigen, Verbindung zu den Maßnahmen.' },
+  { frage: 'Welche Umweltaspekte sind für Sie wichtig?', antwort: 'Umwelt ist uns sehr wichtig, wir achten auf alles und sind sehr nachhaltig.', richtig: 'c',
+    optionen: { a: 'Gute Antwort, zeigt Haltung.', b: 'Er hätte die Norm zitieren sollen.', c: 'Zu allgemein – konkret wäre: Diesel, Reinigungsmittel, Abfall; hier die Umweltaspekte-Liste und ein Beispiel.' },
+    erklaerung: 'Allgemeine Bekenntnisse überzeugen nicht. Konkret werden und das eigene Beispiel erzählen.' },
+  { frage: 'Gibt es Reklamationen?', antwort: 'Dieses Jahr keine. Wir erfassen sie trotzdem – hier die Liste, Nullmeldung, und so würden wir vorgehen (Prozess U4).', richtig: 'a',
+    optionen: { a: 'Richtig gut: Auch „keine“ wird nachgewiesen.', b: 'Er hätte eine Reklamation erfinden sollen.', c: 'Unnötig, die Liste zu zeigen.' },
+    erklaerung: 'Auch „nichts passiert“ ist ein Nachweis, wenn es aufgeschrieben ist.' },
+  { frage: 'Wer ist bei Ihnen Geschäftsführer?', antwort: 'Ich bin Geschäftsführerin … also eigentlich mein Mann, ich bin Gesellschafterin.', richtig: 'b',
+    optionen: { a: 'Ist doch egal.', b: 'Rollen müssen in Dokumenten und Antwort übereinstimmen – vorher klären und richtigstellen.', c: 'Sie hätte „Chefin“ sagen sollen.' },
+    erklaerung: 'Widersprüche zwischen Handelsregister, Organigramm und Antwort führen zu Nachfragen. Faktencheck vorher.' }
+];
+
+/* ================================================================ Spurensuche an einem Beispielauftrag (Idee 8) */
+const SPUR_STATIONEN = [
+  { k: 'anfrage', name: 'Anfrage', hilfe: 'E-Mail oder Notiz der Kundenanfrage' },
+  { k: 'angebot', name: 'Angebot', hilfe: 'Angebot mit Nummer und Datum' },
+  { k: 'auftrag', name: 'Auftrag / Auftragsbestätigung', hilfe: 'Bestellung des Kunden oder Ihre Auftragsbestätigung' },
+  { k: 'planung', name: 'Einsatzplanung', hilfe: 'Disposition, Termin, eingesetzte Personen' },
+  { k: 'einkauf', name: 'Material / Einkauf', hilfe: 'Bestellung von Material oder Reinigungsmitteln (falls nötig)' },
+  { k: 'durchfuehrung', name: 'Durchführung', hilfe: 'Stundenzettel, Fotos, Checkliste' },
+  { k: 'abnahme', name: 'Abnahme / Fertigmeldung', hilfe: 'Abnahmeprotokoll, E-Mail des Kunden, Unterschrift' },
+  { k: 'rechnung', name: 'Rechnung', hilfe: 'Rechnung mit Bezug auf Auftrag/Angebot' },
+  { k: 'reklamation', name: 'Reklamation (falls vorhanden)', hilfe: 'Reklamation und was Sie getan haben', optional: true }
+];
+/** Roter Faden pruefen: Datum aufsteigend, gleiche Kunden-/Auftragsnummer, Pflichtstationen vorhanden */
+function spurPruefen(stationen) {
+  const s = (stationen || []).filter(x => x && (x.datum || x.nummer || x.foto || x.notiz));
+  const hinweise = [];
+  const pflicht = SPUR_STATIONEN.filter(x => !x.optional).map(x => x.k);
+  const fehlt = pflicht.filter(k => !s.some(x => x.k === k));
+  if (fehlt.length) hinweise.push('Es fehlen noch: ' + fehlt.map(k => SPUR_STATIONEN.find(x => x.k === k).name).join(', '));
+  const reihe = SPUR_STATIONEN.map(x => x.k);
+  const mitDatum = s.filter(x => x.datum).sort((a, b) => reihe.indexOf(a.k) - reihe.indexOf(b.k));
+  for (let i = 1; i < mitDatum.length; i++) if (mitDatum[i].datum < mitDatum[i - 1].datum && mitDatum[i].k !== 'reklamation')
+    hinweise.push('Datum passt nicht: ' + SPUR_STATIONEN.find(x => x.k === mitDatum[i].k).name + ' (' + mitDatum[i].datum + ') liegt vor ' + SPUR_STATIONEN.find(x => x.k === mitDatum[i - 1].k).name + ' (' + mitDatum[i - 1].datum + ')');
+  const nummern = [...new Set(s.map(x => norm(x.nummer)).filter(Boolean))];
+  if (nummern.length > 1) hinweise.push('Unterschiedliche Kunden-/Auftragsnummern: ' + nummern.join(', ') + ' – gehört alles zum selben Auftrag?');
+  const ohneNachweis = s.filter(x => !x.foto && pflicht.indexOf(x.k) >= 0).map(x => SPUR_STATIONEN.find(y => y.k === x.k).name);
+  if (ohneNachweis.length) hinweise.push('Noch ohne Foto/Bildschirmfoto: ' + ohneNachweis.join(', '));
+  return { fertig: pflicht.length - fehlt.length, von: pflicht.length, ok: !hinweise.length, hinweise };
+}
+
+/* ================================================================ Foto-Rundgang (Idee 10) */
+const RUNDGANG_STANDARD = [
+  { k: 'feuerloescher', name: 'Feuerlöscher', intervall_monate: 24, hilfe: 'Prüfplakette fotografieren (Monat/Jahr der nächsten Prüfung)' },
+  { k: 'leitern', name: 'Leitern und Tritte', intervall_monate: 12, hilfe: 'Prüfaufkleber oder Prüfblatt der Sichtprüfung' },
+  { k: 'elektro', name: 'Elektrische Geräte (DGUV V3)', intervall_monate: 12, hilfe: 'Prüfaufkleber an Geräten/Kabeln' },
+  { k: 'fahrzeug', name: 'Fahrzeuge (UVV/HU)', intervall_monate: 12, hilfe: 'HU-Plakette, UVV-Prüfnachweis' },
+  { k: 'erstehilfe', name: 'Erste-Hilfe-Kasten', intervall_monate: 12, hilfe: 'Inhalt vollständig, Ablaufdaten' },
+  { k: 'chemie', name: 'Reinigungsmittel / Chemikalien', intervall_monate: 0, hilfe: 'Lagerung, Kennzeichnung, Betriebsanweisung in der Nähe' },
+  { k: 'psa', name: 'Schutzausrüstung (PSA)', intervall_monate: 12, hilfe: 'Handschuhe, Brille, Absturzsicherung – Prüfdatum bei PSA gegen Absturz' }
+];
+/** Faellig? naechste: "2026-03" (Monat der naechsten Pruefung) oder letzte Pruefung + Intervall */
+function rundgangStatus(eintrag, heute) {
+  const h = String(heute || new Date().toISOString()).slice(0, 7);
+  let naechste = eintrag.naechste || '';
+  if (!naechste && eintrag.letzte && eintrag.intervall_monate) {
+    const [j, m] = String(eintrag.letzte).slice(0, 7).split('-').map(Number); const t = new Date(Date.UTC(j, m - 1 + eintrag.intervall_monate, 1));
+    naechste = t.toISOString().slice(0, 7);
+  }
+  if (!naechste) return { status: eintrag.foto ? 'ok' : 'offen', naechste: '' };
+  return { status: naechste < h ? 'faellig' : (naechste === h ? 'bald' : 'ok'), naechste };
+}
+
+/* ================================================================ Auditor nach Mass (Idee 1, ohne KI: steuert Reihenfolge und Fallen) */
+const AUDITOR_TYPEN = {
+  plauderer: { name: 'Der Plauderer', text: 'Erzählt viel, fragt offen, will die Firma verstehen.', level: 'einfach', fallen_anteil: 0.1 },
+  sachlich: { name: 'Der Sachliche', text: 'Geht seine Liste durch, will zu jedem Punkt das Dokument sehen.', level: 'mittel', fallen_anteil: 0.25 },
+  paragraphen: { name: 'Der Paragraphenreiter', text: 'Fragt mit Normbegriffen, achtet auf Formalien (Stand, Freigabe, Unterschrift).', level: 'streng', fallen_anteil: 0.4 },
+  stichprobe: { name: 'Der Stichprobenjäger', text: 'Will echte Beispiele sehen: „Zeigen Sie mir den letzten Auftrag.“', level: 'streng', fallen_anteil: 0.35 },
+  schweiger: { name: 'Der Schweiger', text: 'Sagt wenig, wartet ab. Man muss nicht füllen – kurz antworten, zeigen, warten.', level: 'mittel', fallen_anteil: 0.25 }
+};
+/** Uebungsreihe fuer einen Auditor-Typ: Fragen plus eingestreute Stolperfallen */
+function uebungsreihe(fragen, fallen, typ, laenge) {
+  const t = AUDITOR_TYPEN[typ] || AUDITOR_TYPEN.sachlich; const n = laenge || 10;
+  const nf = Math.min((fallen || []).length, Math.round(n * t.fallen_anteil));
+  const fr = (fragen || []).slice(0, n - nf), fa = (fallen || []).slice(0, nf);
+  const out = []; let i = 0, j = 0;
+  while (i < fr.length || j < fa.length) { if (i < fr.length) out.push({ art: 'frage', item: fr[i++] }); if (j < fa.length && (out.length % 3 === 2 || i >= fr.length)) out.push({ art: 'falle', item: fa[j++] }); }
+  return out.slice(0, n);
+}
+
 const Logik = { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
-  tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF };
+  tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
+  stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
 export default Logik;
 export { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
-  tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF };
+  tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
+  stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };

@@ -8,6 +8,9 @@
 //   nachweis {audit_id, frage_id, mitarbeiter_id, bild (data:image/png;base64,…), notiz}
 //   technik  {check:{laptop, chrome, dokument_offen, bildschirm}}
 //   fakt     {fakt_id, antwort:'stimmt'|'stimmt_nicht', korrektur}
+//   auszuege                      alle Textstellen der gueltigen Dokumente (Suche "Wo steht das?" laeuft im Browser)
+//   eintrag  {audit_id?, mitarbeiter_id?, art, schluessel, daten}   Spurensuche, Rundgang, Fallen, Lernstand, Rueckmeldung
+//   eintraege {audit_id?}         eigene Eintraege lesen
 // Bereitstellen: supabase functions deploy kunde --no-verify-jwt   (Kunden haben kein Supabase-Login)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import L from '../_shared/logik.js';
@@ -43,15 +46,40 @@ Deno.serve(async (req) => {
     if (!kundeId) return antwort({ fehler: 'Link ungültig oder abgelaufen. Bitte bei QM-Dienstleistungen einen neuen Link anfordern.' }, 401);
 
     if (d.aktion === 'start') {
-      const [kunde, audits, mitarbeiter, dokumente, fakten] = await Promise.all([
-        db.from('kunden').select('name, ort, technik_check').eq('id', kundeId).single(),
+      const [kunde, audits, mitarbeiter, dokumente, fakten, fallen] = await Promise.all([
+        db.from('kunden').select('name, ort, technik_check, berater_email').eq('id', kundeId).single(),
         db.from('audits').select('id, stufe, datum, zertifizierer, auditor, normen, auditor_level, ruhemodus_tage, status').eq('kunde_id', kundeId).order('stufe'),
         db.from('mitarbeiter').select('id, name, bereich, funktion').eq('kunde_id', kundeId).order('bereich'),
         db.from('dokumente').select(DOK_FELDER).eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr'),
-        db.from('faktencheck').select('id, reihenfolge, thema, angabe, fundstelle, antwort, korrektur').eq('kunde_id', kundeId).order('reihenfolge')
+        db.from('faktencheck').select('id, reihenfolge, thema, angabe, fundstelle, antwort, korrektur').eq('kunde_id', kundeId).order('reihenfolge'),
+        db.from('stolperfallen').select('id, stufe, reihenfolge, thema, frage, warum, antwortlinie').eq('kunde_id', kundeId).eq('freigegeben', true).order('reihenfolge')
       ]);
       return antwort({ kunde: pflicht(kunde), audits: pflicht(audits).filter((a: any) => a.status === 'fragen_bereit'),
-        mitarbeiter: pflicht(mitarbeiter), dokumente: pflicht(dokumente), faktencheck: pflicht(fakten), level: L.AUDITOR_LEVEL });
+        mitarbeiter: pflicht(mitarbeiter), dokumente: pflicht(dokumente), faktencheck: pflicht(fakten), stolperfallen: pflicht(fallen), level: L.AUDITOR_LEVEL });
+    }
+
+    if (d.aktion === 'auszuege') {
+      const doks = pflicht(await db.from('dokumente').select('id').eq('kunde_id', kundeId).eq('gueltig', true));
+      if (!doks.length) return antwort({ auszuege: [] });
+      return antwort({ auszuege: pflicht(await db.from('auszuege').select('id, dokument_id, ort, seite, reiter, text').in('dokument_id', doks.map((x: any) => x.id)).limit(5000)) });
+    }
+
+    if (d.aktion === 'eintrag' || d.aktion === 'eintraege') {
+      let auditId = null, maId = null;
+      if (d.audit_id) { const a = pflicht(await db.from('audits').select('id, kunde_id').eq('id', d.audit_id).maybeSingle()); if (!a || a.kunde_id !== kundeId) return antwort({ fehler: 'Audit nicht gefunden' }, 404); auditId = a.id; }
+      if (d.mitarbeiter_id) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
+      if (d.aktion === 'eintraege') {
+        let q = db.from('kunden_eintraege').select('audit_id, mitarbeiter_id, art, schluessel, daten, geaendert_am').eq('kunde_id', kundeId);
+        if (auditId) q = q.or('audit_id.eq.' + auditId + ',audit_id.is.null');
+        return antwort({ eintraege: pflicht(await q.limit(2000)) });
+      }
+      const art = String(d.art || '');
+      if (!['spur', 'rundgang', 'falle', 'lernen', 'rueckmeldung', 'aufgabe', 'auditor'].includes(art)) return antwort({ fehler: 'Unbekannte Art' }, 400);
+      const daten = d.daten && typeof d.daten === 'object' ? d.daten : {};
+      if (JSON.stringify(daten).length > 20000) return antwort({ fehler: 'Zu viele Daten' }, 413);
+      pflicht(await db.from('kunden_eintraege').upsert({ kunde_id: kundeId, audit_id: auditId, mitarbeiter_id: maId, art, schluessel: String(d.schluessel || '').slice(0, 100), daten, geaendert_am: new Date().toISOString() },
+        { onConflict: 'kunde_id,audit_id,mitarbeiter_id,art,schluessel' }));
+      return antwort({ ok: true });
     }
 
     if (d.aktion === 'technik') { // nur bekannte Felder, Zeitstempel vom Server

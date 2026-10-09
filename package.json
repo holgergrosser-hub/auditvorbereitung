@@ -1,1 +1,9 @@
-{"type":"module","private":true,"scripts":{"test":"node --test test/*.test.mjs","sync":"cp supabase/functions/_shared/logik.js web/logik.js"}}
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "sync": "cp supabase/functions/_shared/logik.js web/logik.js",
+    "paket": "node scripts/paket_bauen.mjs"
+  }
+}
