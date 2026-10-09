@@ -12,6 +12,7 @@ const KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const MODELL = Deno.env.get('KI_MODELL') || 'claude-sonnet-5-5';
 const ERLAUBT = (Deno.env.get('ERLAUBTE_HERKUNFT') || '*').split(',').map(s => s.trim());
 const MAX_JE_TAG = Number(Deno.env.get('KI_MAX_JE_KUNDE_TAG') || '300'); // Kostenbremse je Kunde
+const API_URL = Deno.env.get('KI_API_URL') || 'https://api.anthropic.com/v1/messages'; // nur fuer Tests umstellbar
 
 function cors(origin: string | null) {
   const o = ERLAUBT.includes('*') ? '*' : (origin && ERLAUBT.includes(origin) ? origin : ERLAUBT[0]);
@@ -44,7 +45,7 @@ async function zaehlen(kundeId: string) {
 }
 // deno-lint-ignore no-explicit-any
 async function claude(system: string, inhalt: any[], maxTokens = 700) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+  const r = await fetch(API_URL, { method: 'POST',
     headers: { 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: MODELL, max_tokens: maxTokens, system, messages: inhalt }) });
   const j = await r.json();
@@ -52,6 +53,17 @@ async function claude(system: string, inhalt: any[], maxTokens = 700) {
   return (j.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n');
 }
 const kurz = (s: unknown, n: number) => String(s || '').slice(0, n);
+// Textstellen aus den gueltigen Dokumenten des Kunden (Grundlage fuer alle KI-Antworten: nur eigene Dokumente)
+// deno-lint-ignore no-explicit-any
+async function auszuegeDesKunden(kundeId: string): Promise<{ ausz: any[]; titel: Record<string, string> }> {
+  const { data: doks } = await db.from('dokumente').select('id, titel').eq('kunde_id', kundeId).eq('gueltig', true);
+  const titel: Record<string, string> = Object.fromEntries((doks || []).map((x: any) => [x.id, x.titel]));
+  if (!doks || !doks.length) return { ausz: [], titel };
+  const { data } = await db.from('auszuege').select('id, dokument_id, ort, seite, reiter, text').in('dokument_id', doks.map((x: any) => x.id)).limit(5000);
+  return { ausz: data || [], titel };
+}
+// deno-lint-ignore no-explicit-any
+const auszugText = (t: any[], titel: Record<string, string>) => t.map((x: any, i: number) => '[' + (i + 1) + '] ' + (titel[x.auszug.dokument_id] || 'Dokument') + ', ' + (x.auszug.ort || '') + ':\n' + kurz(x.auszug.text, 1400)).join('\n\n');
 
 Deno.serve(async (req) => {
   const h = cors(req.headers.get('origin'));
@@ -87,13 +99,36 @@ Deno.serve(async (req) => {
         + 'Stelle immer nur EINE Frage, kurz, in der Sie-Form. Wenn die Antwort keinen Nachweis nennt, frage nach dem Dokument oder einem echten Beispiel. '
         + 'Erfinde keine Fakten über die Firma. Themen aus dem Auditplan: ' + kurz(JSON.stringify(d.themen || []), 2000)
         + (d.fallen ? ' Stolperfallen, die du nach und nach ansprechen darfst: ' + kurz(JSON.stringify(d.fallen), 2000) : '');
+      if (d.zum_schluss) { // kurze Rueckmeldung zum Gespraech
+        const fb = await claude('Du bist ein erfahrener ISO-Berater. Antworte nur mit JSON.', [{ role: 'user', content: 'Übungsgespräch zwischen Auditor und Kunde:\n'
+          + verlauf.map((m: any) => (m.role === 'user' ? 'Kunde: ' : 'Auditor: ') + m.content).join('\n') + '\n\nGib eine kurze Rückmeldung an den Kunden nach der Formel „Was wir machen – wo es steht – ein Beispiel“. Format: {"gut":"ein Satz","ueben":"ein Satz","tipp":"ein Satz"}' }], 400);
+        return antwort(L.kiJson(fb) || {});
+      }
       return antwort({ text: await claude(system, verlauf, 300) });
+    }
+
+    if (d.aktion === 'wissensfrage') { // "Frag Ihre Dokumente": Antwort NUR aus den eigenen Dokumenten, mit Quellen
+      const frage = kurz(d.frage, 500).trim();
+      if (frage.length < 3) return antwort({ fehler: 'Bitte eine Frage eingeben.' }, 400);
+      const { ausz, titel } = await auszuegeDesKunden(kundeId);
+      const treffer = L.auszuegeSuchen(frage, ausz, 8);
+      if (!treffer.length) return antwort({ beantwortet: false, antwort: 'Dazu habe ich in Ihren Dokumenten nichts gefunden. Fragen Sie im Zweifel Ihren Berater.', quellen: [] });
+      const roh = await claude('Du hilfst einer kleinen Firma bei der Vorbereitung auf ihr ISO-Zertifizierungsaudit. Du antwortest AUSSCHLIESSLICH mit Informationen aus den nummerierten Auszügen ihrer eigenen Dokumente. '
+        + 'Erfinde nichts, ergänze kein Normwissen, das nicht in den Auszügen steht. Wenn die Auszüge die Frage nicht beantworten, sag das ehrlich. Sie-Form, einfache Sprache, höchstens 5 Sätze. Antworte nur mit JSON.',
+        [{ role: 'user', content: 'Frage: ' + frage + '\n\nAuszüge:\n' + auszugText(treffer, titel)
+          + '\n\nFormat: {"beantwortet":true|false,"antwort":"…","quellen":[Nummern der benutzten Auszüge],"so_sagen":"ein Satz, wie man es dem Auditor sagt (optional)"}' }], 600);
+      let j: any; try { j = L.kiJson(roh); } catch (_e) { j = { antwort: roh, quellen: [] }; } // Antwort ohne JSON: Text trotzdem zeigen
+      const nr = (Array.isArray(j.quellen) ? j.quellen : []).map((n: any) => Number(n)).filter((n: number) => n >= 1 && n <= treffer.length);
+      const quellen = [...new Set(nr)].map((n: number) => { const a = treffer[n - 1].auszug; return { dokument_id: a.dokument_id, ort: a.ort, titel: titel[a.dokument_id] || '' }; });
+      return antwort({ beantwortet: j.beantwortet !== false && !!j.antwort, antwort: kurz(j.antwort, 1500) || 'Keine Antwort.', so_sagen: kurz(j.so_sagen, 300), quellen });
     }
 
     if (d.aktion === 'antwort_feedback') { // Feedback nach Holgers Formel, ergaenzt die Regeln ohne KI
       const regel = L.antwortFeedback(d.antwort);
+      const { ausz, titel } = await auszuegeDesKunden(kundeId);
+      const belege = L.auszuegeSuchen(kurz(d.frage, 600) + ' ' + kurz(d.hilfe, 400), ausz, 4);
       const roh = await claude('Du bist ein erfahrener ISO-Berater und coachst einen Kunden für sein Zertifizierungsaudit. Antworte nur mit JSON.',
-        [{ role: 'user', content: 'Auditorfrage: ' + kurz(d.frage, 600) + '\nAntwort des Kunden: ' + kurz(d.antwort, 2000) + '\nFundstelle in seinen Dokumenten: ' + kurz(d.hilfe, 800)
+        [{ role: 'user', content: 'Auditorfrage: ' + kurz(d.frage, 600) + '\nAntwort des Kunden: ' + kurz(d.antwort, 2000) + '\nFundstelle in seinen Dokumenten: ' + kurz(d.hilfe, 800) + (belege.length ? '\nAuszüge aus seinen Dokumenten:\n' + auszugText(belege, titel) : '')
           + '\nBewerte nach der Formel „Was wir machen – wo es steht (zeigen) – ein Beispiel“. Keine Superlative, nichts erfinden. '
           + 'Format: {"note":"gut|ok|ueben","lob":"ein Satz","verbesserung":"ein Satz","bessere_antwort":"max. 3 Sätze, nur mit Fakten aus Antwort und Fundstelle"}' }], 500);
       return antwort(Object.assign({ regel }, L.kiJson(roh)));

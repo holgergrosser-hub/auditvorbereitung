@@ -27,5 +27,12 @@ SERVICE=$(node -e "
 const c=require('crypto');const b=x=>Buffer.from(x).toString('base64url');const k=b(JSON.stringify({alg:'HS256',typ:'JWT'})),p=b(JSON.stringify({role:'service_role',exp:Math.floor(Date.now()/1000)+86400}));
 console.log(k+'.'+p+'.'+c.createHmac('sha256',process.argv[1]).update(k+'.'+p).digest('base64url'))" "$SECRET")
 (cd $FN && SUPABASE_URL=http://localhost:54321 SUPABASE_SERVICE_ROLE_KEY=$SERVICE setsid nohup "$DENO" run -A functions/kunde/index.ts > /tmp/mini-deno.log 2>&1 < /dev/null &)
+# Edge Function "ki" auf Port 8002 (Deno.serve wird umgelenkt), KI-Antworten vom Ersatz im Mini-Server
+cat > $FN/ki8002.ts <<'TS'
+const orig = Deno.serve; // @ts-ignore Testumlenkung
+Deno.serve = (h: any) => orig({ port: 8002 }, h);
+await import('./functions/ki/index.ts');
+TS
+(cd $FN && SUPABASE_URL=http://localhost:54321 SUPABASE_SERVICE_ROLE_KEY=$SERVICE ANTHROPIC_API_KEY=test KI_API_URL=http://localhost:54321/fake-anthropic setsid nohup "$DENO" run -A ki8002.ts > /tmp/mini-ki.log 2>&1 < /dev/null &)
 JWT_SECRET=$SECRET SPEICHER=$TMP/speicher setsid nohup node test/mini-supabase/server.mjs > /tmp/mini-server.log 2>&1 < /dev/null &
 sleep 8; echo "Bereit: http://localhost:54321  (Logs /tmp/mini-*.log)"

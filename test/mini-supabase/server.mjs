@@ -44,6 +44,16 @@ http.createServer(async (req, res) => {
     const inhalt = await body(req);
     if (u.pathname.startsWith('/rest/v1/')) return weiter(req, res, 'http://127.0.0.1:3001' + u.pathname.slice(8) + u.search, inhalt);
     if (u.pathname.startsWith('/functions/v1/kunde')) return weiter(req, res, 'http://127.0.0.1:8000/' + u.search, inhalt);
+    if (u.pathname.startsWith('/functions/v1/ki')) return weiter(req, res, 'http://127.0.0.1:8002/' + u.search, inhalt);
+    if (u.pathname === '/fake-anthropic') { // Ersatz fuer die Anthropic-API: feste Antworten je Aufgabe
+      const d = JSON.parse(inhalt.toString() || '{}'), sys = String(d.system || ''), txt = JSON.stringify(d.messages || []);
+      let t = 'Welche Dokumente gehören zu Ihrem Managementsystem?';
+      if (/AUSSCHLIESSLICH/.test(sys)) t = JSON.stringify({ beantwortet: true, antwort: 'Laut Ihrem Handbuch bewertet die Geschäftsleitung die Lieferanten einmal jährlich nach Qualität, Termintreue, Preis und Service.', quellen: [1], so_sagen: 'Wir bewerten unsere Lieferanten einmal im Jahr, das steht im Handbuch Seite 33.' });
+      else if (/Übungsgespräch/.test(txt)) t = JSON.stringify({ gut: 'Sie nennen den Ablauf klar.', ueben: 'Zeigen Sie das Dokument.', tipp: 'Nennen Sie ein Beispiel vom letzten Monat.' });
+      else if (/coachst/.test(sys)) t = JSON.stringify({ note: 'ok', lob: 'Gut erklärt.', verbesserung: 'Nennen Sie die Fundstelle.', bessere_antwort: 'Wir … (Handbuch S. 33).' });
+      else if (/Zertifizierungsauditor/.test(sys)) t = (d.messages || []).length > 1 ? 'Danke. Können Sie mir das Dokument dazu zeigen?' : 'Guten Tag. Wie bewerten Sie Ihre Lieferanten?';
+      return json(res, 200, { content: [{ type: 'text', text: t }] });
+    }
     if (u.pathname === '/auth/v1/token') {
       const d = JSON.parse(inhalt.toString() || '{}'); const mail = d.email || 'x@y.de'; const id = crypto.createHash('md5').update(mail).digest('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*/, '$1-$2-$3-$4-$5');
       const user = { id, email: mail, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
@@ -67,7 +77,7 @@ http.createServer(async (req, res) => {
       return json(res, 200, { Key: rest, Id: crypto.randomUUID() });
     }
     // statische Seiten
-    if (u.pathname === '/config.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); return res.end('window.AV_CONFIG = { supabaseUrl: "http://localhost:' + PORT + '", anonKey: "' + ANON + '", ki: false };'); }
+    if (u.pathname === '/config.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); return res.end('window.AV_CONFIG = { supabaseUrl: "http://localhost:' + PORT + '", anonKey: "' + ANON + '", ki: true };'); }
     let f = path.join(WEB, decodeURIComponent(u.pathname)); if (!f.startsWith(WEB)) return json(res, 403, {});
     if (fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, 'index.html');
     if (!fs.existsSync(f)) return json(res, 404, { message: 'nicht gefunden' });

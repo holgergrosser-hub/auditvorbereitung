@@ -373,7 +373,9 @@ const ABLAUF = {
 
 // sehr einfache deutsche Stammform: Kleinbuchstaben, Umlaute, typische Endungen weg
 const STOPP = new Set('der die das und oder ein eine einer eines einem einen ist sind wird werden wurde wurden zu zur zum im in am an auf fur von mit fuer bei aus als wie was wo wer welche welcher welches sich sie ihr ihre ihren wir unser unsere nicht auch nach uber oder bzw dass des den dem es so liegt liegen vor diese dieser dieses durch inkl usw steht stehen finde finden suche suchen zeige zeigen gibt haben habt hat welchem welchen dokument dokumente unsere unserem seite seiten reiter tab tabs kapitel'.split(' '));
-function stamm(w) { return w.length > 5 ? w.replace(/(ungen|ung|en|er|es|e|n|s)$/, '') : w; }
+function stamm(w) { return w.length > 5 ? w.replace(/(ungen|ung|ten|en|er|es|et|te|e|n|s)$/, '') : w; }
+// Zusammengesetzte Woerter: "lieferant" passt (schwaecher) auch in "lieferantenbewert", "bewert" in "lieferantenbewert"
+const teilTreffer = (t, w) => t.length >= 5 && w !== t && (w.startsWith(t) || (t.length >= 6 && w.endsWith(t)));
 function woerter(t) { return norm(t).split(' ').filter(w => w.length > 2 && !STOPP.has(w) && !/^\d+$/.test(w)).map(stamm); }
 
 /** Volltextsuche ueber Auszuege (BM25-artig). Rueckgabe [{auszug, punkte, treffer:[woerter]}] */
@@ -381,12 +383,12 @@ function auszuegeSuchen(frage, auszuege, max) {
   const q = [...new Set(woerter(frage))]; if (!q.length) return [];
   const docs = (auszuege || []).map(a => ({ a, w: woerter(a.text + ' ' + (a.ort || '')), o: woerter((a.ort || '') + ' ' + String(a.text || '').split('\n')[0]) }));
   const N = docs.length || 1, avg = docs.reduce((s, d) => s + d.w.length, 0) / N || 1;
-  const df = {}; q.forEach(t => { df[t] = docs.filter(d => d.w.includes(t)).length; });
+  const df = {}; q.forEach(t => { df[t] = docs.filter(d => d.w.some(x => x === t || teilTreffer(t, x))).length; });
   return docs.map(d => {
     let s = 0; const hit = [];
-    q.forEach(t => { const tf = d.w.filter(x => x === t).length; if (!tf) return; hit.push(t);
+    q.forEach(t => { const tf = d.w.filter(x => x === t).length + 0.6 * d.w.filter(x => teilTreffer(t, x)).length; if (!tf) return; hit.push(t);
       s += Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5)) * (tf * 2.2) / (tf + 1.2 * (0.25 + 0.75 * d.w.length / avg));
-      if (d.o.includes(t)) s += 3; }); // Treffer im Reiternamen oder in der Ueberschrift zaehlt mehr
+      if (d.o.some(x => x === t || teilTreffer(t, x))) s += 3; }); // Treffer im Reiternamen oder in der Ueberschrift zaehlt mehr
     return { auszug: d.a, punkte: s * (hit.length / q.length + 0.5), treffer: hit };
   }).filter(x => x.punkte > 0).sort((x, y) => y.punkte - x.punkte).slice(0, max || 5);
 }

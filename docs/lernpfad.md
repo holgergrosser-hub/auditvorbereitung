@@ -12,7 +12,7 @@
 | A08 | Auszüge und Suche | „Wo steht das?“: Seiten/Reiter, Suche ohne KI | ✓ |
 | A09 | Testfassung ohne Server | Paket, Netlify Drop, Fortschritt im Browser, Ergebnis-Datei | ✓ |
 | A10 | Bildschirm und Texterkennung | Bildschirm teilen, Foto, Texterkennung im Browser | ✓ |
-| A11 | KI sicher einbinden | Geheimnis als Secret, Kostenbremse, Rückfall auf Regeln | geschrieben, ungetestet |
+| A11 | KI sicher einbinden | Geheimnis als Secret, Kostenbremse, Rückfall auf Regeln, Antworten nur aus eigenen Dokumenten | ✓ lokal getestet (Ersatz-KI), echter Schlüssel fehlt |
 | A12 | Auswertung und Fragenbank | Ampel je Mitarbeiter, Fragen aus echten Audits | ✓ (Datei-Auswertung) |
 | A13 | Supabase-Projekt | Eigenes Projekt (Frankfurt), öffentlicher Schlüssel vs. Geheimschlüssel, Backoffice-Nutzer | in Arbeit |
 | A14 | Automatisch ausspielen | GitHub Action spielt Migrationen und Edge Functions ein; Mini-Supabase für Tests ohne Internet | in Arbeit |

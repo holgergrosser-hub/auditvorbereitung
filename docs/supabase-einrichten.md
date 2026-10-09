@@ -14,7 +14,7 @@ Einmalig, etwa 20 Minuten. Danach kommt jede Änderung automatisch über GitHub.
    `insert into public.backoffice_nutzer (email, name) values ('ihre@mail.de', 'Ihr Name');`
 7. **Netlify:** Add new site → Import from GitHub → `auditvorbereitung`. `netlify.toml` regelt den Rest.
    Kunden: `https://<site>/kunde/?t=…` · Backoffice: `https://<site>/backoffice/`
-8. **Optional KI:** Edge Functions → Secrets: `ANTHROPIC_API_KEY`, `KI_MODELL`; in `config.js` `ki: true`.
+8. **KI einschalten:** console.anthropic.com → API-Schlüssel (mit Ausgabenlimit). Supabase → Edge Functions → Secrets: `ANTHROPIC_API_KEY` (und optional `KI_MODELL`, `KI_MAX_JE_KUNDE_TAG`). Claude stellt dann in `config.js` `ki: true`.
 
 ## Neuer Kunde
 1. Unterlagen an Claude (PDFs, Excel, Auditplan/Prüfliste des Zertifizierers, Termine).

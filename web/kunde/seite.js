@@ -37,6 +37,7 @@ async function verbinden() {
 
 // Neue Supabase-Schlüssel (sb_publishable_…) sind kein JWT: dann nur "apikey" senden, sonst zusätzlich "authorization"
 function kopfzeilen() { const h = { 'content-type': 'application/json', apikey: cfg.anonKey }; if (/^eyJ/.test(cfg.anonKey || '')) h.authorization = 'Bearer ' + cfg.anonKey; return h; }
+const kiAn = () => !!(cfg.supabaseUrl && cfg.ki && token);
 /* KI nur im Servermodus und wenn eingeschaltet (config.js: ki: true); sonst laufen die Regeln ohne KI */
 async function ki(aktion, daten) {
   if (!cfg.supabaseUrl || !cfg.ki || !token) return null;
@@ -442,21 +443,69 @@ ANSICHT.finden = async () => {
   const kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), finden = S.start.dokumente.filter(d => d.wichtigkeit !== 'kennen');
   $('#main').innerHTML = '<h2>Wo steht das?</h2><p>Geben Sie ein Stichwort ein – Sie sehen die Stelle in Ihrer eigenen Dokumentation. Diese Suche dürfen Sie auch im Audit offen nutzen, wie eine ausgedruckte Liste.</p>'
     + '<p class="grau">Kein Zugriff auf die Originaldateien (z. B. Google-Anmeldung klappt nicht)? Nutzen Sie die <b>PDF-Kopie</b> – und sagen Sie ' + esc(bn('dat')) + ' Bescheid, damit es bis zum Audit klappt.</p>'
-    + '<div class="karte"><div class="zeile"><input id="suche" type="search" placeholder="z. B. Lieferantenbewertung, Feuerlöscher, Politik, Notfall" style="flex:1"><button class="knopf" id="suchen">Suchen</button><button class="knopf zweit klein" id="sprich" title="Frage sprechen">🎤</button></div></div>'
+    + '<div class="karte"><div class="zeile"><input id="suche" type="search" placeholder="z. B. Lieferantenbewertung, Feuerlöscher, Politik, Notfall" style="flex:1"><button class="knopf" id="suchen">Suchen</button>' + (kiAn() ? '<button class="knopf zweit" id="ki-fragen" title="Die KI antwortet nur aus Ihren eigenen Dokumenten">🤖 KI fragen</button>' : '') + '<button class="knopf zweit klein" id="sprich" title="Frage sprechen">🎤</button></div></div>'
     + '<div id="ergebnis"></div>'
     + pdfSicherungHtml()
     + '<h3>Ihre Dokumente</h3><div class="karte">' + kennen.map(d => '<div class="zeile"><span class="chip">kennen</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span>' + kopieKnopf(d.id, '') + '</div>').join('')
     + finden.map(d => '<div class="zeile"><span class="chip grau">finden</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span>' + kopieKnopf(d.id, '') + '</div>').join('') + '</div>';
   dokKnoepfe($('#main'));
-  const los = () => {
+  const los = (mitKi) => {
     const q = $('#suche').value.trim(); if (!q) return;
     const r = L.auszuegeSuchen(q, a, 5);
-    $('#ergebnis').innerHTML = r.length ? r.map(x => auszugHtml(x)).join('') : '<div class="karte grau">Nichts gefunden. Probieren Sie ein anderes Wort (z. B. „Lieferant“ statt „Zulieferer“).</div>';
+    $('#ergebnis').innerHTML = '<div id="ki-antwort"></div>' + (r.length ? r.map(x => auszugHtml(x)).join('') : '<div class="karte grau">Nichts gefunden. Probieren Sie ein anderes Wort (z. B. „Lieferant“ statt „Zulieferer“).</div>');
     dokKnoepfe($('#ergebnis'));
+    // Ganze Fragen ("Wer bewertet unsere Lieferanten?") beantwortet zusätzlich die KI – nur aus den eigenen Dokumenten
+    if (kiAn() && (mitKi === true || /\?\s*$/.test(q) || q.split(/\s+/).length >= 4)) kiAntwort(q);
   };
-  $('#suchen').onclick = los; $('#suche').onkeydown = (e) => { if (e.key === 'Enter') los(); };
+  $('#suchen').onclick = () => los(false); if ($('#ki-fragen')) $('#ki-fragen').onclick = () => los(true);
+  $('#suche').onkeydown = (e) => { if (e.key === 'Enter') los(false); };
   diktat($('#sprich'), (t) => { $('#suche').value = t; los(); });
 };
+/* Probegespräch mit dem KI-Auditor (Edge Function "ki", Aktion gespraech): eine Frage nach der anderen */
+function kiGespraech() {
+  const box = $('#ki-gespraech'); if (!box) return;
+  const verlauf = []; const typ = ((eintrag('auditor', 'typ') || {}).daten || {}).typ || 'sachlich';
+  const themen = (S.planpunkte || []).map(p => ((p.normkapitel || '') + ' ' + (p.thema || '')).trim()).slice(0, 30);
+  const fallen = fallenFuerStufe().map(f => f.frage).slice(0, 10);
+  const zeichne = (warte) => {
+    box.innerHTML = (verlauf.length ? verlauf.map(m => '<div class="' + (m.rolle === 'kunde' ? 'az-chef' : 'az-azubi') + '">' + (m.rolle === 'kunde' ? '' : '🧑‍💼 ') + esc(m.text) + '</div>').join('') : '<p>Der Übungsauditor beginnt mit einer Frage zu Ihrem Auditplan.</p>')
+      + (warte ? '<p class="grau">Der Auditor überlegt …</p>' : '')
+      + (verlauf.length && !warte ? '<textarea id="kg-text" placeholder="Ihre Antwort – wie im Audit"></textarea><div class="zeile"><button class="knopf klein zweit" id="kg-diktat">🎤 Diktieren</button><button class="knopf" id="kg-los">Antworten</button><button class="knopf zweit" id="kg-ende">Gespräch beenden</button></div>'
+        : (!warte ? '<button class="knopf" id="kg-start">▶ Gespräch beginnen</button>' : ''));
+    if ($('#kg-start')) $('#kg-start').onclick = () => schritt();
+    if ($('#kg-los')) $('#kg-los').onclick = () => { const t = $('#kg-text').value.trim(); if (!t) return $('#kg-text').focus(); verlauf.push({ rolle: 'kunde', text: t }); schritt(); };
+    if ($('#kg-ende')) $('#kg-ende').onclick = ende;
+    if ($('#kg-diktat')) diktat($('#kg-diktat'), (t) => { $('#kg-text').value += ($('#kg-text').value ? ' ' : '') + t; });
+  };
+  const schritt = async () => {
+    zeichne(true);
+    const k = await ki('gespraech', { verlauf, typ, stufe: S.audit.stufe, themen, fallen });
+    if (!k || !k.text) { box.insertAdjacentHTML('beforeend', '<div class="hinweis">Die KI ist gerade nicht erreichbar. Bitte später noch einmal.</div>'); return; }
+    verlauf.push({ rolle: 'auditor', text: k.text }); zeichne(false);
+  };
+  const ende = async () => {
+    const runden = verlauf.filter(m => m.rolle === 'kunde').length;
+    zeichne(true);
+    const k = runden ? await ki('gespraech', { verlauf, typ, stufe: S.audit.stufe, zum_schluss: true }) : null;
+    await speichereEintrag('lernen', 'gespraech:' + new Date().toISOString().slice(0, 10), { runden });
+    box.innerHTML = '<div class="karte gut"><b>Gespräch beendet – ' + runden + (runden === 1 ? ' Antwort' : ' Antworten') + '</b>'
+      + (k ? ['gut', 'ueben', 'tipp'].map(x => k[x] ? '<p><b>' + ({ gut: 'Gut', ueben: 'Üben', tipp: 'Tipp' }[x]) + ':</b> ' + esc(k[x]) + '</p>' : '').join('') : '') + '</div><button class="knopf" id="kg-neu">Neues Gespräch</button>';
+    $('#kg-neu').onclick = () => { verlauf.length = 0; zeichne(false); };
+  };
+  zeichne(false);
+}
+async function kiAntwort(frage) {
+  const el = $('#ki-antwort'); if (!el) return;
+  el.innerHTML = '<div class="karte ki-antwort"><span class="eyebrow">🤖 Antwort aus Ihren Dokumenten</span><p class="grau">Die KI liest die passenden Stellen …</p></div>';
+  const k = await ki('wissensfrage', { frage });
+  if (!$('#ki-antwort')) return;
+  if (!k) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="karte ki-antwort"><span class="eyebrow">🤖 Antwort aus Ihren Dokumenten</span><p>' + esc(k.antwort) + '</p>'
+    + (k.so_sagen ? '<p class="so-sagen">So können Sie es dem Auditor sagen: „' + esc(k.so_sagen) + '“</p>' : '')
+    + ((k.quellen || []).length ? '<div class="zeile">' + k.quellen.map(q => '<span class="grau">' + esc(q.titel) + ' · ' + esc(q.ort || '') + '</span>' + stelleKnopf(q.dokument_id, q.ort)).join('') + '</div>' : '')
+    + '<p class="grau">Die KI antwortet nur aus Ihren eigenen Dokumenten. Öffnen Sie die Stelle, bevor Sie sie im Audit zeigen.</p></div>';
+  dokKnoepfe(el);
+}
 function diktat(knopf, fertig) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR || !knopf) { if (knopf) knopf.hidden = true; return; }
@@ -814,7 +863,8 @@ ANSICHT.lernen = () => {
   const karten = abk.concat(L.AUDIT_DEUTSCH);
   const gekonnt = (i) => { const e = eintrag('lernen', 'deutsch:' + i); return e && e.daten.kann; };
   $('#main').innerHTML = '<h2>Lernen</h2>'
-    + '<p class="grau">Drei Übungen, jede dauert ein paar Minuten. Sie helfen vor allem für <b>Stufe 2</b>, wenn der Auditor fragt „Wie machen Sie das?“.</p>'
+    + '<p class="grau">' + (kiAn() ? 'Vier' : 'Drei') + ' Übungen, jede dauert ein paar Minuten. Sie helfen vor allem für <b>Stufe 2</b>, wenn der Auditor fragt „Wie machen Sie das?“.</p>'
+    + (kiAn() ? '<h3>Probegespräch mit dem KI-Auditor</h3><p class="erkl-kurz"><b>Was ist das?</b> Ein Übungsauditor stellt Ihnen Fragen wie im echten Audit – zu den Themen Ihres Auditplans und den Stolperfallen. Antworten Sie nach der Formel: <b>Was wir machen – wo es steht – ein Beispiel</b>. Am Ende bekommen Sie eine kurze Rückmeldung. Nur zum Üben, nicht im echten Audit.</p><div class="karte" id="ki-gespraech"></div>' : '')
     + '<h3>Erklär es dem Azubi</h3><p class="erkl-kurz"><b>Was ist das?</b> Sie erklären einen Ablauf aus Ihrem Handbuch so, als käme morgen ein neuer Mitarbeiter. Wer es einem Azubi in eigenen Worten erklären kann, kann es auch dem Auditor erklären. Wenn Sie nicht weiterwissen: <b>Musterlösung</b> ansehen.</p><div class="karte" id="azubi"></div>'
     + '<h3>Audit-Deutsch: Was heißt das eigentlich?</h3><p class="erkl-kurz"><b>Was ist das?</b> Lernkarten für Fachwörter, die Auditoren benutzen. Vorne das Fachwort, hinten die Bedeutung in Alltagssprache. Begriff anklicken, dann „Kann ich“ oder „Nochmal“.</p><div class="karten">'
     + karten.map((k, i) => '<div class="lernkarte ' + (gekonnt(i) ? 'kann' : '') + '" data-i="' + i + '"><div class="vorne">' + esc(k[0]) + '</div><div class="hinten" hidden>' + esc(k[1]) + '<div class="zeile"><button class="knopf klein gruen" data-k="1">Kann ich</button><button class="knopf klein zweit" data-k="0">Nochmal</button></div></div></div>').join('') + '</div>'
@@ -823,6 +873,7 @@ ANSICHT.lernen = () => {
       + Object.entries(r.optionen).map(([k, t]) => '<label class="option"><input type="radio" name="r' + i + '" value="' + k + '" ' + (e && e.daten.wahl === k ? 'checked' : '') + '> ' + esc(t) + '</label>').join('')
       + '<div class="erkl" ' + (e ? '' : 'hidden') + '>' + (e ? (e.daten.wahl === r.richtig ? '✓ Richtig. ' : '✗ Nicht ganz. ') : '') + esc(r.erklaerung) + '</div></div>'; }).join('');
   azubi();
+  if (kiAn()) kiGespraech();
   $$('.lernkarte').forEach(k => { $('.vorne', k).onclick = () => { $('.hinten', k).hidden = !$('.hinten', k).hidden; };
     $$('[data-k]', k).forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'deutsch:' + k.dataset.i, { kann: b.dataset.k === '1' }); k.classList.toggle('kann', b.dataset.k === '1'); $('.hinten', k).hidden = true; }); });
   $$('.karte[data-r]').forEach(k => $$('input', k).forEach(inp => inp.onchange = async () => {
