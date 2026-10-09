@@ -17,3 +17,9 @@
 **E-A08 Keine verdeckte Hilfe im echten Audit.** Grund: Täuschung des Zertifizierers gefährdet das Zertifikat. Der Dokumentenfinder ist offen nutzbar wie eine ausgedruckte Liste. Verworfen: „Souffleur“-Modus.
 
 **E-A09 Stolperfallen und Faktencheck werden vom Berater freigegeben.** Grund: Inhalte stammen aus Gesprächen und Widerspruchs-Check; Kunde soll nichts Falsches lernen. Verworfen: automatische Veröffentlichung.
+
+**E-A10 Fehlerbuch ohne eigene Tabellen.** Ursache je Frage als Eintrag (`kunden_eintraege`, art `lernen`), Baustelle schließt nach zweimal in Folge sicher. Je Ursache eine andere Übung; schwer auffindbare Fundstellen gehen als Hinweis an den Berater. Verworfen: drei neue Tabellen und KI-Ursachenvorschlag aus dem Steckbrief (Regel-Vorschlag genügt), „zwei verschiedene Tage“ (Vorbereitung oft nur wenige Tage).
+
+**E-A11 „Erklär es dem Azubi“ zuerst ohne KI.** Prozesse aus den Handbuch-Auszügen, Nachplappern über gleiche Wortfolgen, feste Anfänger-Nachfragen, Beispielkiste für den Spickzettel. Das echte Gespräch mit Nachbohren kommt mit der KI-Funktion nach der Supabase-Einrichtung. Verworfen: vier neue Tabellen und Avatar.
+
+**E-A12 Stadion-Modus erst nach Supabase, freiwillig, ab 60 % Prüfungsreife, nicht in den letzten 3 Tagen.** Grund: Holgers Botschaft „Der Auditor ist ein Gespräch und hilft“ darf nicht untergraben werden. Verworfen: Vergessenskurve als Ersatz für den Ruhemodus.

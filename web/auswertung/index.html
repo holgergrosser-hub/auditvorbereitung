@@ -63,6 +63,23 @@ function zeichne() {
     html += '<div class="karte"><b>Faktencheck</b><table>' + (e.faktencheck || []).map(f => '<tr class="' + (f.antwort === 'stimmt_nicht' ? 'korr' : '') + '"><td>' + esc(f.thema) + '</td><td>' + esc(f.angabe) + '</td><td>' + (f.antwort === 'stimmt' ? '<span class="fein">✓ stimmt</span>' : f.antwort === 'stimmt_nicht' ? '<b>Korrektur:</b> ' + esc(f.korrektur) : '<span class="grau">offen</span>') + '</td></tr>').join('') + '</table></div>';
     // Stolperfallen
     const fa = ein('falle'); if (fa.length) html += '<div class="karte"><b>Stolperfallen</b><table>' + fa.map(x => { const f = (paket.stolperfallen || []).find(y => y.id === x.schluessel) || {}; return '<tr><td>' + esc(f.thema) + '</td><td>' + (x.daten.sicherheit === 'sicher' ? '<span class="fein">sicher</span>' : '<b>unsicher</b>') + '</td><td>' + esc(x.daten.text || '') + '</td></tr>'; }).join('') + '</table></div>';
+    // Fehlerbuch: Ursachen und schwer auffindbare Fundstellen (Hinweis auf die eigene Dokumentation)
+    const urs = {}; ein('lernen').filter(x => /^ursache:/.test(x.schluessel)).forEach(x => { urs[x.schluessel.slice(8)] = x.daten.ursache; });
+    const alleFragen = Object.values(paket.fragenJe).flat();
+    const buch = L.fehlerbuch(alleFragen, e.antworten || [], urs);
+    if (buch.length) {
+      const z = {}; buch.forEach(b => { const k = b.ursache || b.vorschlag || 'offen'; z[k] = (z[k] || 0) + 1; });
+      const haupt = Object.entries(z).filter(([k]) => k !== 'offen').sort((a, b) => b[1] - a[1])[0];
+      const hot = L.fundstellenHotspots(buch);
+      html += '<div class="karte"><b>Fehlerbuch: ' + buch.length + ' offene Baustellen</b><p>' + Object.entries(z).map(([k, n]) => (L.URSACHEN[k] ? L.URSACHEN[k].symbol + ' ' + L.URSACHEN[k].name : '❓ ohne Ursache') + ': ' + n).join(' · ') + '</p>'
+        + (haupt ? '<p><b>Diagnose:</b> Der Kunde scheitert vor allem an „' + esc(L.URSACHEN[haupt[0]].name) + '“ (' + Math.round(haupt[1] / buch.length * 100) + ' %). Empfehlung: ' + esc(L.URSACHEN[haupt[0]].uebung) + '</p>' : '')
+        + (hot.length && hot[0].anzahl > 1 ? '<p><b>Schwer auffindbare Fundstellen</b> (Verweis im Dokument verbessern?):</p><ul>' + hot.slice(0, 5).map(h => '<li>' + esc(h.ort) + ' – ' + h.anzahl + '×</li>').join('') + '</ul>' : '') + '</div>';
+    }
+    // Erklaer es dem Azubi + Beispielkiste
+    const az = ein('lernen').filter(x => /^azubi:/.test(x.schluessel));
+    if (az.length) html += '<div class="karte"><b>Erklär es dem Azubi</b><table>' + az.map(x => '<tr><td>' + esc(x.schluessel.split(':').pop()) + '</td><td>' + (x.daten.note === 'gut' ? '<span class="fein">gut</span>' : esc(x.daten.note)) + '</td><td>eigene Worte ' + Math.round((1 - (x.daten.nachplappern || 0)) * 100) + ' %</td><td>' + (x.daten.beispiel ? 'mit Beispiel' : 'ohne Beispiel') + '</td></tr>').join('') + '</table></div>';
+    const kiste = ein('lernen').filter(x => /^beispiel:/.test(x.schluessel));
+    if (kiste.length) html += '<div class="karte"><b>Beispielkiste</b> – eigene Beispiele des Kunden für das Audit<ul>' + kiste.map(x => '<li><b>' + esc(x.daten.prozess || '') + ':</b> ' + esc(x.daten.text) + '</li>').join('') + '</ul></div>';
     // Spur + Rundgang
     const sp = ein('spur'); if (sp.length) { const pr = L.spurPruefen(sp.map(x => Object.assign({ k: x.schluessel }, x.daten))); html += '<div class="karte"><b>Beispielauftrag: ' + pr.fertig + ' von ' + pr.von + ' Stationen</b>' + (pr.hinweise.length ? '<ul>' + pr.hinweise.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : ' – roter Faden hält') + '</div>'; }
     const rg = ein('rundgang'); if (rg.length) html += '<div class="karte"><b>Rundgang</b><table>' + rg.map(x => { const it = (paket.rundgang || []).find(y => y.k === x.schluessel) || {}; const s = L.rundgangStatus(Object.assign({ intervall_monate: it.intervall_monate }, x.daten)); return '<tr><td>' + esc(it.name || x.schluessel) + '</td><td>' + esc(s.status) + '</td><td>' + esc(s.naechste) + '</td><td>' + (x.daten.foto ? '<img class="mini" src="' + x.daten.foto + '">' : '') + '</td></tr>'; }).join('') + '</table></div>';

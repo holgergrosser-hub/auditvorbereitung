@@ -617,6 +617,97 @@ function rundgangStatus(eintrag, heute) {
   return { status: naechste < h ? 'faellig' : (naechste === h ? 'bald' : 'ok'), naechste };
 }
 
+/* ================================================================ Erklaer es dem Azubi (Teach-back, ohne KI) */
+
+/** Prozesse aus den Handbuch-Auszuegen: Seiten mit "Prozess-Nr." – Name in der ersten Zeile, Kuerzel (W1, U5 …) */
+function prozesseAusAuszuegen(auszuege) {
+  const starts = (auszuege || []).filter(a => a.seite && /Prozess-Nr\./.test(a.text)).map(a => {
+    const zeilen = String(a.text).split('\n').map(s => s.trim()).filter(Boolean);
+    const nr = (String(a.text).match(/Prozess-Nr\.\s*\n?\s*([A-Z]{1,3}\d{1,2})/) || [])[1] || '';
+    const art = (zeilen[1] || '').match(/prozess$/i) ? zeilen[1] : '';
+    return { id: a.dokument_id + ':' + (nr || a.seite), nr, name: zeilen[0], art, dokument_id: a.dokument_id, von: a.seite };
+  }).filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i).sort((a, b) => a.dokument_id.localeCompare(b.dokument_id) || a.von - b.von);
+  starts.forEach((p, i) => { const n = starts[i + 1]; p.bis = n && n.dokument_id === p.dokument_id ? Math.max(p.von, n.von - 1) : p.von + 1; p.bis = Math.min(p.bis, p.von + 3); });
+  return starts.map(p => Object.assign(p, { text: (auszuege || []).filter(a => a.dokument_id === p.dokument_id && a.seite >= p.von && a.seite <= p.bis).map(a => a.text).join('\n') }));
+}
+/** Nachplappern: Anteil der Wortfolgen (3 Woerter) aus der Erklaerung, die woertlich im Handbuchtext stehen (0..1) */
+function nachplappern(erklaerung, quelltext) {
+  const w = norm(erklaerung).split(' ').filter(Boolean), q = ' ' + norm(quelltext) + ' ';
+  if (w.length < 8) return 0;
+  let gleich = 0, gesamt = 0;
+  for (let i = 0; i + 3 <= w.length; i++) { gesamt++; if (q.indexOf(' ' + w.slice(i, i + 3).join(' ') + ' ') >= 0) gleich++; }
+  return gesamt ? Math.round(gleich / gesamt * 100) / 100 : 0;
+}
+/** Anfaenger-Nachfragen eines Azubis (wie ein neuer Mitarbeiter, nicht wie ein Pruefer) */
+function azubiNachfragen(prozess) {
+  const n = norm(prozess.name), f = [];
+  if (/reklamation|beschwerde/.test(n)) f.push('Und was mache ich, wenn der Kunde am Telefon schimpft?', 'Wer entscheidet, ob wir kostenlos nachbessern?');
+  if (/einkauf|lieferant|wareneingang/.test(n)) f.push('Woher weiß ich, bei wem ich bestellen darf?', 'Was mache ich, wenn die Lieferung falsch ist?');
+  if (/angebot|auftrag/.test(n)) f.push('Woher weiß ich, was ich dem Kunden anbieten darf?', 'Was passiert, wenn der Kunde den Auftrag ändert?');
+  if (/durchfuhrung|arbeit|einsatz/.test(n)) f.push('Woran erkenne ich, dass ich fertig bin?', 'Was mache ich, wenn vor Ort etwas kaputtgeht?');
+  if (/wartung|instandhaltung|prufung/.test(n)) f.push('Woher weiß ich, wann ein Gerät geprüft werden muss?', 'Was mache ich mit einem kaputten Gerät?');
+  if (/schulung|kompetenz/.test(n)) f.push('Welche Unterweisung brauche ich, bevor ich loslege?', 'Wo sehe ich, was ich schon gelernt habe?');
+  if (/audit|bewertung|massnahme|risik|chance/.test(n)) f.push('Wozu machen wir das eigentlich?', 'Was passiert mit dem Ergebnis?');
+  f.push('Und was mache ich, wenn das schiefgeht?', 'Wo finde ich das, wenn ich es vergessen habe?', 'Kannst du mir ein Beispiel vom letzten Mal erzählen?');
+  return [...new Set(f)].slice(0, 3);
+}
+/** Auswertung einer Erklaerung ohne KI: eigene Worte? Beispiel? Wie viele Schluesselbegriffe des Prozesses vorkommen */
+function erklaerungAuswerten(erklaerung, prozess) {
+  const fb = antwortFeedback(erklaerung), p = nachplappern(erklaerung, prozess.text);
+  const schluessel = [...new Set(woerter(prozess.text))].filter(w => w.length >= 7).slice(0, 60);
+  const genannt = new Set(woerter(erklaerung));
+  const treffer = schluessel.filter(w => genannt.has(w)).length;
+  const hinweise = [];
+  if (p >= 0.35) hinweise.push('Das klingt sehr nach Handbuch. Wie würden Sie es einem Kollegen an der Kaffeemaschine erklären?');
+  if (!fb.beispiel) hinweise.push('Erzählen Sie ein echtes Beispiel vom letzten Mal – das merkt sich jeder Azubi (und jeder Auditor).');
+  if (fb.woerter < 25) hinweise.push('Etwas ausführlicher: Was passiert zuerst, was dann, wer entscheidet?');
+  if (fb.superlativ) hinweise.push('Vorsicht mit „immer/nie/perfekt“.');
+  return { nachplappern: p, beispiel: fb.beispiel, woerter: fb.woerter, abdeckung: schluessel.length ? Math.round(treffer / Math.min(schluessel.length, 15) * 100) : 0,
+    note: !hinweise.length ? 'gut' : p < 0.35 && fb.beispiel ? 'ok' : 'ueben', hinweise };
+}
+
+/* ================================================================ Fehlerbuch mit Ursache */
+const URSACHEN = {
+  wissen: { name: 'Wusste ich nicht', symbol: '📖', uebung: 'Lesen Sie den Auszug aus Ihrer Dokumentation und erklären Sie ihn danach in eigenen Worten.' },
+  finden: { name: 'Hab’s nicht gefunden', symbol: '🔍', uebung: 'Zeig mal üben – genau diese Fundstelle, bis Sie sie in unter 60 Sekunden öffnen.' },
+  verstanden: { name: 'Frage falsch verstanden', symbol: '🤔', uebung: 'Die Begriffe in Alltagssprache nachlesen (Audit-Deutsch), dann die Frage noch einmal.' },
+  nervoes: { name: 'War nervös', symbol: '😬', uebung: 'Wissen ist da – üben Sie die Frage noch einmal zügig, mit einem Atemzug vorher.' }
+};
+/** Vorschlag fuer die Ursache aus dem Verhalten (der Kunde entscheidet) */
+function ursacheVorschlag(a) {
+  if (!a) return null;
+  if (a.pruefung && (a.pruefung.passt === 'teilweise' || a.pruefung.passt === 'nein')) return 'finden';
+  if (a.hilfe_genutzt || (a.dauer_sekunden || 0) > ZEIG_MAL_SEKUNDEN) return 'finden';
+  if (a.sicherheit === 'weiss_nicht' && (a.dauer_sekunden || 0) < 15) return 'wissen';
+  return null;
+}
+/**
+ * Fehlerbuch: Fragen, die zuletzt gelb/rot waren oder noch nicht zweimal in Folge sicher (ohne Hilfe) beantwortet wurden.
+ * ursachen: {frage_id: 'finden'|…}. Rueckgabe [{frage, ursache, vorschlag, fehler, serie}]
+ */
+function fehlerbuch(fragen, antworten, ursachen) {
+  const out = [];
+  (fragen || []).forEach(f => {
+    const a = (antworten || []).filter(x => x.frage_id === f.id && !x.ist_beispiel).sort((x, y) => String(x.beantwortet_am || '').localeCompare(String(y.beantwortet_am || '')));
+    const fehler = a.filter(x => x.sicherheit !== 'sicher' || x.hilfe_genutzt || (x.pruefung && x.pruefung.passt === 'nein'));
+    if (!fehler.length) return;
+    let serie = 0; for (let i = a.length - 1; i >= 0; i--) { const x = a[i]; if (x.sicherheit === 'sicher' && !x.hilfe_genutzt && !(x.pruefung && x.pruefung.passt === 'nein')) serie++; else break; }
+    if (serie >= 2) return; // zweimal in Folge sicher: Baustelle geschlossen
+    out.push({ frage: f, ursache: (ursachen || {})[f.id] || null, vorschlag: ursacheVorschlag(fehler[fehler.length - 1]), fehler: fehler.length, serie });
+  });
+  return out;
+}
+/** Fundstellen, die oft nicht gefunden werden: Hinweis an den Berater, die Verweise im Dokument zu verbessern */
+function fundstellenHotspots(buch) {
+  const z = {};
+  (buch || []).filter(e => (e.ursache || e.vorschlag) === 'finden').forEach(e => {
+    const m = String(e.frage.hilfe || '').match(/[^;·]*?(Seiten?\s+\d+(?:\s*[–-]\s*\d+)?|Reiter\s+„[^“]+“)/);
+    const k = m ? m[0].trim().slice(0, 80) : 'ohne Fundstelle';
+    z[k] = (z[k] || 0) + 1;
+  });
+  return Object.entries(z).map(([ort, anzahl]) => ({ ort, anzahl })).sort((a, b) => b.anzahl - a.anzahl);
+}
+
 /* ================================================================ Auditor nach Mass (Idee 1, ohne KI: steuert Reihenfolge und Fallen) */
 const AUDITOR_TYPEN = {
   plauderer: { name: 'Der Plauderer', text: 'Erzählt viel, fragt offen, will die Firma verstehen.', level: 'einfach', fallen_anteil: 0.1 },
@@ -639,10 +730,12 @@ const Logik = { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelL
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
+  prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
   stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
 export default Logik;
 export { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
+  prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
   stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };

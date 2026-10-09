@@ -64,3 +64,27 @@ test('Prüfungsreife, Tageslektion und Übungsreihe', () => {
   const reihe = L.uebungsreihe(fr, [{ id: 'x1' }, { id: 'x2' }], 'paragraphen', 5);
   assert.equal(reihe.length, 5); assert.ok(reihe.some(x => x.art === 'falle'));
 });
+
+test('Azubi: Prozesse aus dem Handbuch, Nachplappern erkannt, eigene Worte mit Beispiel gut', () => {
+  const az2 = [
+    { id: 'p1', dokument_id: 'd1', seite: 32, ort: 'Seite 32', text: 'Kundenreklamationen\nUnterstützungsprozess\n1. Stammdaten\nProzess-Nr.\nU4\nDie Reklamation wird erfasst, die Ursache analysiert und eine Nachbesserung veranlasst. Der Kunde wird informiert.' },
+    { id: 'p2', dokument_id: 'd1', seite: 33, ort: 'Seite 33', text: 'Lieferantenbewertung\nUnterstützungsprozess\nProzess-Nr.\nU5\nJährliche Bewertung.' }];
+  const P = L.prozesseAusAuszuegen(az2);
+  assert.deepEqual(P.map(p => p.nr), ['U4', 'U5']); assert.equal(P[0].bis, 32);
+  assert.ok(L.azubiNachfragen(P[0])[0].includes('schimpft'));
+  assert.ok(L.nachplappern('Die Reklamation wird erfasst, die Ursache analysiert und eine Nachbesserung veranlasst.', P[0].text) > 0.8);
+  assert.equal(L.erklaerungAuswerten('Wenn ein Kunde anruft, schreibe ich das auf und fahre hin. Zum Beispiel im März war ein Fenster streifig, da haben wir am nächsten Tag kostenlos nachgereinigt und das in der Liste notiert.', P[0]).note, 'gut');
+});
+
+test('Fehlerbuch: Ursache, Vorschlag, Baustelle schließt nach zweimal sicher', () => {
+  const fr = [{ id: 'f1', hilfe: 'Handbuch Seite 33' }, { id: 'f2', hilfe: 'QM-Übersicht, Reiter „Risiken“' }];
+  const an = [
+    { frage_id: 'f1', sicherheit: 'unsicher', hilfe_genutzt: true, dauer_sekunden: 80, beantwortet_am: '1' },
+    { frage_id: 'f2', sicherheit: 'weiss_nicht', dauer_sekunden: 5, beantwortet_am: '1' },
+    { frage_id: 'f2', sicherheit: 'sicher', beantwortet_am: '2' }, { frage_id: 'f2', sicherheit: 'sicher', beantwortet_am: '3' }];
+  const b = L.fehlerbuch(fr, an, {});
+  assert.equal(b.length, 1); assert.equal(b[0].frage.id, 'f1'); assert.equal(b[0].vorschlag, 'finden');
+  assert.equal(L.ursacheVorschlag({ sicherheit: 'weiss_nicht', dauer_sekunden: 4 }), 'wissen');
+  assert.equal(L.fundstellenHotspots(b)[0].ort, 'Handbuch Seite 33');
+  assert.equal(L.fehlerbuch(fr, an, { f1: 'nervoes' })[0].ursache, 'nervoes');
+});

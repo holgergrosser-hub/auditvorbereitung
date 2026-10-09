@@ -150,11 +150,28 @@ ANSICHT.heute = () => {
     + r.teile.map(t => '<div class="teil"><span>' + esc(t.name) + '</span><div class="balken"><span style="width:' + t.prozent + '%;background:var(--blau2)"></span></div><span class="grau">' + t.prozent + ' %</span></div>').join('') + '</div>'
     + (lektion.length ? '<h3>Ihre 5 Minuten für heute</h3><div class="karte"><p>Drei Punkte – zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 120)) + (String(f.frage).length > 120 ? ' …' : '') + '</span></div>').join('') + '<p><button class="knopf" id="lektion">▶ Los geht’s</button></p></div>' : '')
     + (schritte.length ? '<h3>Als Nächstes</h3><div class="karte">' + schritte.map(s => '<div class="zeile weiter" data-k="' + s[0] + '">→ ' + esc(s[1]) + '</div>').join('') + '</div>' : '')
+    + baustellenHtml()
     + (aufgaben.length ? '<h3>Ihre Aufgaben</h3><div class="karte">' + aufgaben.map(a => { const e = eintrag('aufgabe', a.id); return '<label class="check"><input type="checkbox" data-a="' + esc(a.id) + '" ' + (e && e.daten.erledigt ? 'checked' : '') + '><span><b>' + esc(a.todo) + '</b><br><span class="grau">' + (a.bis_stufe ? 'bis Stufe ' + a.bis_stufe : '') + (a.verantwortlich ? ' · ' + esc(a.verantwortlich) : '') + (a.termin ? ' · bis ' + esc(a.termin) : '') + '</span></span></label>'; }).join('') + '</div>' : '');
-  const l = $('#lektion'); if (l) l.onclick = () => reihe(lektion.map(f => ({ art: 'frage', item: f })), 'Tageslektion');
+  const l = $('#lektion'); if (l) l.onclick = () => reihe(lektion.map(f => ({ art: 'frage', item: f, modus: ursachen()[f.id] })), 'Tageslektion');
+  $$('[data-bau]').forEach(b => b.onclick = () => { const f = S.fragen.find(x => x.id === b.dataset.bau); reihe([{ art: 'frage', item: f, modus: b.dataset.modus || null }], null, false); });
+  $$('[data-bu]').forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + b.dataset.bu, { ursache: b.dataset.u }); ANSICHT.heute(); });
   $$('.weiter').forEach(x => x.onclick = () => zeige(x.dataset.k));
   $$('[data-a]').forEach(c => c.onchange = async () => { await speichereEintrag('aufgabe', c.dataset.a, { erledigt: c.checked }, true); zeichneKopf(); });
 };
+
+function baustellenHtml() {
+  if (!S.ma) return '';
+  const buch = L.fehlerbuch(S.fragen, S.antworten, ursachen());
+  if (!buch.length) return S.antworten.length ? '<h3>Ihre Baustellen</h3><div class="karte gut">Keine offenen Baustellen. Was einmal schwer war, haben Sie inzwischen zweimal sicher geschafft.</div>' : '';
+  const gruppen = {}; buch.forEach(e => { const k = e.ursache || 'offen'; (gruppen[k] = gruppen[k] || []).push(e); });
+  const haupt = Object.entries(gruppen).filter(([k]) => k !== 'offen').sort((a, b) => b[1].length - a[1].length)[0];
+  return '<h3>Ihre Baustellen (' + buch.length + ')</h3><div class="karte"><p class="grau">Hier sammelt sich, was noch hakt. Eine Baustelle ist geschlossen, wenn Sie die Frage zweimal hintereinander sicher geschafft haben.'
+    + (haupt ? ' Ihre häufigste Baustelle: <b>' + esc(L.URSACHEN[haupt[0]].name) + '</b>.' : '') + '</p>'
+    + Object.entries(gruppen).map(([k, liste]) => '<div class="bau-gruppe"><b>' + (k === 'offen' ? '❓ Noch ohne Ursache' : L.URSACHEN[k].symbol + ' ' + esc(L.URSACHEN[k].name)) + '</b>' + (k !== 'offen' ? ' <span class="grau">– ' + esc(L.URSACHEN[k].uebung) + '</span>' : '')
+      + liste.map(e => '<div class="bau"><span class="np">' + esc(e.frage.normkapitel || '–') + '</span><span class="bau-text">' + esc(String(e.frage.frage).slice(0, 100)) + (e.serie ? ' <span class="chip">1× sicher – noch 1×</span>' : '') + '</span>'
+        + (k === 'offen' ? '<span class="zeile">' + Object.entries(L.URSACHEN).map(([u, x]) => '<button class="knopf klein zweit ' + (e.vorschlag === u ? 'an' : '') + '" title="' + esc(x.name) + '" data-bu="' + e.frage.id + '" data-u="' + u + '">' + x.symbol + '</button>').join('') + '</span>'
+          : '<button class="knopf klein" data-bau="' + e.frage.id + '" data-modus="' + k + '">Jetzt passend üben</button>') + '</div>').join('') + '</div>').join('') + '</div>';
+}
 
 /* ------------------------------------------------ Technik-Check (P07) */
 ANSICHT.technik = () => {
@@ -334,7 +351,7 @@ function naechstesItem() {
   const q = S.queue; if (!q) return;
   if (q.pos >= q.items.length) return reiheEnde();
   const it = q.items[q.pos++];
-  if (it.art === 'falle') falleTrainer(it.item); else trainer(it.item);
+  if (it.art === 'falle') falleTrainer(it.item); else trainer(it.item, it.modus);
 }
 function reiheEnde() {
   const q = S.queue; clearInterval(uhr);
@@ -352,7 +369,28 @@ function kopfTrainer(info) {
   return '<div class="zeile" style="justify-content:space-between"><span class="grau">' + esc(info) + (q && q.items.length > 1 ? ' · ' + q.pos + ' von ' + q.items.length : '') + '</span><button class="knopf klein zweit" id="t-zu">' + (q && q.items.length > 1 ? 'Beenden' : 'Schließen') + '</button></div>';
 }
 
-async function trainer(f) {
+/* Fehlerbuch: Ursache mit einem Klick (Vorschlag aus dem Verhalten ist vorausgewaehlt) */
+function ursachen() { const o = {}; S.eintraege.filter(e => e.art === 'lernen' && /^ursache:/.test(e.schluessel) && (!e.mitarbeiter_id || !S.ma || e.mitarbeiter_id === S.ma.id)).forEach(e => { o[e.schluessel.slice(8)] = e.daten.ursache; }); return o; }
+function ursacheFragen(el, f, antwort) {
+  if (!el) return;
+  const vor = L.ursacheVorschlag(antwort), akt = ursachen()[f.id];
+  el.insertAdjacentHTML('beforeend', '<div class="ursache"><span class="grau">Woran lag es? (ein Klick – dann übt das Programm passend)</span><div class="zeile">'
+    + Object.entries(L.URSACHEN).map(([k, u]) => '<button class="knopf klein zweit ' + ((akt || vor) === k ? 'an' : '') + '" data-u="' + k + '">' + u.symbol + ' ' + esc(u.name) + '</button>').join('') + '</div></div>');
+  $$('[data-u]', el).forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + f.id, { ursache: b.dataset.u }); $$('[data-u]', el).forEach(x => x.classList.toggle('an', x === b)); });
+}
+function glossarZurFrage(f) {
+  const n = ' ' + L.norm(f.frage) + ' ';
+  const treffer = L.AUDIT_DEUTSCH.filter(([b]) => L.norm(b).split(' ').some(w => w.length > 5 && n.indexOf(L.stamm(w)) >= 0));
+  return '<div class="hinweis"><b>Die Frage in Alltagssprache:</b>' + (treffer.length ? treffer.slice(0, 3).map(([b, e]) => '<div><b>' + esc(b) + '</b> = ' + esc(e) + '</div>').join('') : '<div>Lesen Sie die Frage langsam und fragen Sie sich: Was will der Auditor <i>sehen</i>?</div>') + '</div>';
+}
+function beispielKiste() { return S.eintraege.filter(e => e.art === 'lernen' && /^beispiel:/.test(e.schluessel) && e.daten.text && (!e.mitarbeiter_id || !S.ma || e.mitarbeiter_id === S.ma.id)); }
+function beispielVorschlag(f) {
+  const fw = new Set(L.woerter(f.frage + ' ' + (f.hilfe || '')));
+  const b = beispielKiste().find(e => L.woerter((e.daten.prozess || '') + ' ' + e.daten.text).filter(w => w.length > 5 && fw.has(w)).length >= 2);
+  return b ? '<div class="ok-box">💡 Ihr eigenes Beispiel dazu: „' + esc(b.daten.text.slice(0, 220)) + '“</div>' : '';
+}
+
+async function trainer(f, modus) {
   const zeig = f.art === 'zeig_mal' || S.audit.stufe === 1, box = $('#trainer-box');
   let start = Date.now(), hilfe = false, foto = null;
   const typ = ((eintrag('auditor', 'typ') || {}).daten || {}).typ;
@@ -360,6 +398,10 @@ async function trainer(f) {
   box.innerHTML = kopfTrainer((f.normkapitel || '') + ' · ' + wer)
     + '<h2 style="margin-top:8px">Der Auditor fragt:</h2><p style="font-size:1.15rem"><b>' + esc(f.frage) + '</b> <button class="knopf klein zweit" id="t-vor">🔊</button></p>'
     + (f.normen && f.normen.length > 1 ? '<p class="grau">Zwei Auditoren (9001 und 14001)? Einer fragt, der andere hakt ab – einmal zeigen genügt.</p>' : '')
+    + (modus === 'nervoes' ? '<div class="ok-box">Erst ein Atemzug: 4 Sekunden ein, kurz halten, langsam aus. Sie wissen das – jetzt in Ruhe.</div>' : '')
+    + (modus === 'verstanden' ? glossarZurFrage(f) : '')
+    + (modus === 'wissen' ? '<div class="hinweis" id="t-lesen">Erst lesen: <div id="t-lesen-inhalt" class="grau">Suche …</div><button class="knopf klein" id="t-gelesen">Gelesen – jetzt ohne Hilfe</button></div>' : '')
+    + beispielVorschlag(f)
     + (zeig ? '<p>Öffnen Sie jetzt das passende Dokument auf Ihrem Bildschirm, so wie Sie es dem Auditor zeigen würden.</p><div class="uhr" id="t-uhr">60</div><div id="t-teilen"></div>'
       : '<textarea id="t-text" placeholder="Ihre Antwort, wie Sie sie im Audit sagen würden"></textarea><div class="zeile"><button class="knopf klein zweit" id="t-diktat">🎤 Diktieren</button><span class="grau" id="t-dstat"></span><span class="uhr klein" id="t-uhr">0:00</span></div>')
     + '<div class="hilfe" id="t-hilfe" hidden></div><div id="t-foto"></div>'
@@ -372,6 +414,7 @@ async function trainer(f) {
   $('#t-vor').onclick = () => vorlesen(f.frage);
   const zeigeHilfe = async () => { const h = $('#t-hilfe'); if (!h.dataset.da) { h.innerHTML = '<span class="grau">Suche in Ihren Dokumenten …</span>'; h.hidden = false; h.innerHTML = await hilfeHtml(f); h.dataset.da = '1'; dokKnoepfe(h); } h.hidden = false; };
   $('#t-hilfe-k').onclick = () => { hilfe = true; zeigeHilfe(); };
+  if (modus === 'wissen') { $('#t-lesen-inhalt').innerHTML = await hilfeHtml(f); dokKnoepfe($('#t-lesen')); $('#t-gelesen').onclick = () => { $('#t-lesen').remove(); start = Date.now(); }; }
   clearInterval(uhr);
   uhr = setInterval(() => {
     const s = Math.floor((Date.now() - start) / 1000), el = $('#t-uhr'); if (!el) return;
@@ -406,6 +449,7 @@ async function trainer(f) {
       naechstesItem();
     };
     $('#t-ende').onclick = () => reiheEnde();
+    if (farbe !== 'gruen') ursacheFragen($('#t-erg .karte'), f, S.antworten[S.antworten.length - 1]);
   };
   $$('[data-s]', box).forEach(b => b.onclick = () => fertig(b.dataset.s, b.dataset.s !== 'weiss_nicht'));
   const tf = $('#t-fertig');
@@ -507,12 +551,14 @@ ANSICHT.lernen = () => {
   const karten = abk.concat(L.AUDIT_DEUTSCH);
   const gekonnt = (i) => { const e = eintrag('lernen', 'deutsch:' + i); return e && e.daten.kann; };
   $('#main').innerHTML = '<h2>Lernen</h2>'
+    + '<h3>Erklär es dem Azubi</h3><div class="karte" id="azubi"></div>'
     + '<h3>Audit-Deutsch: Was heißt das eigentlich?</h3><p class="grau">Begriff anklicken – auf der Rückseite steht es in Alltagssprache.</p><div class="karten">'
     + karten.map((k, i) => '<div class="lernkarte ' + (gekonnt(i) ? 'kann' : '') + '" data-i="' + i + '"><div class="vorne">' + esc(k[0]) + '</div><div class="hinten" hidden>' + esc(k[1]) + '<div class="zeile"><button class="knopf klein gruen" data-k="1">Kann ich</button><button class="knopf klein zweit" data-k="0">Nochmal</button></div></div></div>').join('') + '</div>'
     + '<h3>Rollentausch: Sie sind der Auditor</h3><p class="grau">Was ist an dieser Antwort gut oder schlecht? Wer den Fehler beim anderen sieht, macht ihn selbst nicht mehr.</p>'
     + L.ROLLENTAUSCH.map((r, i) => { const e = eintrag('lernen', 'rolle:' + i); return '<div class="karte" data-r="' + i + '"><div><b>Auditor:</b> ' + esc(r.frage) + '</div><div><b>Kunde:</b> <i>' + esc(r.antwort) + '</i></div>'
       + Object.entries(r.optionen).map(([k, t]) => '<label class="option"><input type="radio" name="r' + i + '" value="' + k + '" ' + (e && e.daten.wahl === k ? 'checked' : '') + '> ' + esc(t) + '</label>').join('')
       + '<div class="erkl" ' + (e ? '' : 'hidden') + '>' + (e ? (e.daten.wahl === r.richtig ? '✓ Richtig. ' : '✗ Nicht ganz. ') : '') + esc(r.erklaerung) + '</div></div>'; }).join('');
+  azubi();
   $$('.lernkarte').forEach(k => { $('.vorne', k).onclick = () => { $('.hinten', k).hidden = !$('.hinten', k).hidden; };
     $$('[data-k]', k).forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'deutsch:' + k.dataset.i, { kann: b.dataset.k === '1' }); k.classList.toggle('kann', b.dataset.k === '1'); $('.hinten', k).hidden = true; }); });
   $$('.karte[data-r]').forEach(k => $$('input', k).forEach(inp => inp.onchange = async () => {
@@ -520,6 +566,53 @@ ANSICHT.lernen = () => {
     const e = $('.erkl', k); e.hidden = false; e.textContent = (inp.value === r.richtig ? '✓ Richtig. ' : '✗ Nicht ganz. ') + r.erklaerung;
   }));
 };
+
+/* Erklaer es dem Azubi: Teach-back ohne KI – eigene Worte statt Handbuch, Beispiele sammeln */
+async function azubi(prozessId) {
+  const box = $('#azubi'); if (!box) return;
+  const prozesse = L.prozesseAusAuszuegen(await auszuege());
+  if (!prozesse.length) { box.innerHTML = '<span class="grau">Für Ihre Dokumente sind noch keine Prozesse hinterlegt.</span>'; return; }
+  const status = (p) => (eintrag('lernen', 'azubi:' + p.id) || {}).daten || null;
+  const p = prozesse.find(x => x.id === prozessId);
+  if (!p) {
+    box.innerHTML = '<p>Ein neuer Mitarbeiter fängt heute an und kennt sich nicht aus. Erklären Sie ihm einen Ablauf – <b>in Ihren eigenen Worten</b>, mit einem Beispiel vom letzten Mal. Wer es einem Azubi erklären kann, kann es auch dem Auditor erklären. Ihre Unterlagen dürfen Sie daneben offen haben.</p>'
+      + '<div class="prozesse">' + prozesse.map(x => { const st = status(x); return '<button class="prozess ' + (st ? (st.note === 'gut' ? 'gut' : 'teil') : '') + '" data-p="' + esc(x.id) + '"><b>' + esc(x.nr) + '</b> ' + esc(x.name) + (st ? '<span class="grau"> · ' + (st.note === 'gut' ? '✓ erklärt' : 'nochmal') + '</span>' : '') + '</button>'; }).join('') + '</div>';
+    $$('[data-p]', box).forEach(b => b.onclick = () => azubi(b.dataset.p));
+    return;
+  }
+  const fragen = L.azubiNachfragen(p); const teile = []; let schritt = 0;
+  const zeichne = () => {
+    const frage = schritt === 0 ? 'Hallo, ich bin Alex, heute ist mein erster Tag. Kannst du mir erklären, wie bei uns „' + p.name + '“ läuft?' : fragen[schritt - 1];
+    box.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>' + esc(p.nr + ' ' + p.name) + '</b><button class="link" id="az-zurueck">andere Abläufe</button></div>'
+      + teile.map((t, i) => '<div class="az-azubi">🧑‍🔧 ' + esc(i === 0 ? 'Kannst du mir erklären, wie „' + p.name + '“ läuft?' : fragen[i - 1]) + '</div><div class="az-chef">' + esc(t) + '</div>').join('')
+      + '<div class="az-azubi">🧑‍🔧 ' + esc(frage) + ' <button class="knopf klein zweit" id="az-vor">🔊</button></div>'
+      + '<textarea id="az-text" placeholder="Erklären Sie es so, wie Sie es an der Kaffeemaschine sagen würden"></textarea>'
+      + '<div class="zeile"><button class="knopf klein zweit" id="az-diktat">🎤 Diktieren</button><button class="knopf" id="az-weiter">' + (schritt < 2 ? 'Antworten' : 'Fertig') + '</button><span class="grau">Nachfrage ' + Math.min(schritt, 2) + ' von 2</span>'
+      + '<button class="link" id="az-quelle">Im Handbuch nachsehen (' + esc(dokTitel(p.dokument_id)) + ', Seite ' + p.von + (p.bis > p.von ? '–' + p.bis : '') + ')</button></div><div id="az-quelltext"></div>';
+    $('#az-zurueck').onclick = () => azubi();
+    $('#az-vor').onclick = () => vorlesen(frage);
+    diktat($('#az-diktat'), (t) => { $('#az-text').value += ($('#az-text').value ? ' ' : '') + t; });
+    $('#az-quelle').onclick = () => { $('#az-quelltext').innerHTML = '<div class="auszug"><div class="auszug-text">' + esc(p.text.slice(0, 1800)).replace(/\n/g, '<br>') + '</div><button class="knopf klein zweit" data-d="' + esc(p.dokument_id) + '">Dokument öffnen</button></div>'; dokKnoepfe($('#az-quelltext')); };
+    $('#az-weiter').onclick = async () => {
+      const t = $('#az-text').value.trim(); if (!t) { $('#az-text').focus(); return; }
+      teile.push(t); schritt++;
+      if (schritt <= 2) return zeichne();
+      const ges = teile.join(' '), a = L.erklaerungAuswerten(ges, p);
+      await speichereEintrag('lernen', 'azubi:' + p.id, { note: a.note, nachplappern: a.nachplappern, beispiel: a.beispiel, woerter: a.woerter, text: ges.slice(0, 3000) });
+      box.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>' + esc(p.nr + ' ' + p.name) + '</b><button class="link" id="az-zurueck">andere Abläufe</button></div>'
+        + '<div class="az-azubi">🧑‍🔧 Danke, jetzt hab ich’s verstanden!</div>'
+        + '<div class="karte ' + (a.note === 'gut' ? 'gut' : '') + '"><b>' + (a.note === 'gut' ? 'Klasse erklärt: eigene Worte und ein echtes Beispiel.' : a.note === 'ok' ? 'Gut erklärt.' : 'Daran können Sie noch feilen:') + '</b>'
+        + (a.hinweise.length ? '<ul>' + a.hinweise.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : '')
+        + '<div class="grau">Eigene Worte: ' + Math.round((1 - a.nachplappern) * 100) + ' % · Beispiel: ' + (a.beispiel ? 'ja' : 'nein') + '</div></div>'
+        + (a.beispiel ? '<div class="karte"><b>Ihr Beispiel für das Audit merken?</b><textarea id="az-bsp">' + esc(beispielSatz(ges)) + '</textarea><button class="knopf klein" id="az-merken">In die Beispielkiste</button></div>' : '')
+        + '<div class="zeile"><button class="knopf zweit" id="az-nochmal">Nochmal erklären</button></div>';
+      $('#az-zurueck').onclick = () => azubi(); $('#az-nochmal').onclick = () => azubi(p.id);
+      const m = $('#az-merken'); if (m) m.onclick = async () => { await speichereEintrag('lernen', 'beispiel:' + p.id, { prozess: p.name, text: $('#az-bsp').value.trim().slice(0, 600) }); m.textContent = 'Gemerkt ✓ – steht jetzt auf dem Spickzettel'; };
+    };
+  };
+  zeichne();
+}
+function beispielSatz(t) { const s = String(t).split(/(?<=[.!?])\s+/); const i = s.findIndex(x => /(zum Beispiel|z\. ?B\.|letzte|zuletzt|im (Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)|20\d\d|neulich)/i.test(x)); return (i >= 0 ? s.slice(i, i + 2) : s.slice(0, 2)).join(' '); }
 
 /* ------------------------------------------------ Beispielauftrag: Spurensuche (Idee 8) */
 ANSICHT.spur = () => {
@@ -563,7 +656,7 @@ ANSICHT.rundgang = () => {
 ANSICHT.tag = () => {
   const a = S.audit, ab = L.ABLAUF[a.stufe] || L.ABLAUF[1], kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), abk = S.start.dokumente.filter(d => d.kurzname && d.kurzname !== d.titel);
   const ma = S.ma, meine = S.planpunkte.filter(p => !ma || !(p.mitarbeiter_ids || []).length || p.mitarbeiter_ids.indexOf(ma.id) >= 0);
-  const bsp = S.antworten.filter(x => x.ist_beispiel && x.text);
+  const bsp = S.antworten.filter(x => x.ist_beispiel && x.text).concat(beispielKiste().map(e => ({ text: e.daten.text, prozess: e.daten.prozess })));
   // Spickzettel nach Dokumenten gruppiert: so sucht man im Audit
   const jeDok = {}; S.fragen.forEach(f => { const d = (f.dokumente || [])[0]; const k = d ? d.titel : 'Sonstiges'; (jeDok[k] = jeDok[k] || []).push(f); });
   $('#main').innerHTML = (S.ruhe ? '<div class="ruhe"><b>Ruhemodus.</b> ' + esc(L.ABLAUF.ruhe) + ' <button class="link" id="trotz">Trotzdem weiter üben</button></div>' : '')
@@ -575,7 +668,7 @@ ANSICHT.tag = () => {
     + '<h3>Den ganzen Tag offen haben</h3>' + kennen.map(d => esc(d.titel) + (d.stand ? ' (Stand ' + esc(d.stand) + ')' : '')).join(' · ')
     + (abk.length ? '<div class="grau">Abkürzungen: ' + abk.map(d => esc(d.kurzname) + ' = ' + esc(d.titel)).join(' · ') + '</div>' : '')
     + '<h3>Wo steht was?</h3>' + Object.entries(jeDok).map(([dok, fr]) => '<div class="spick-dok"><b>' + esc(dok) + ':</b> ' + fr.map(f => '<span class="spick-p"><span class="dot klein ' + L.ampel(antwortenZu(f.id)) + '"></span>' + esc(f.normkapitel || '') + ' ' + esc(spickOrt(f.hilfe, dok)) + '</span>').join(' · ') + '</div>').join('')
-    + (bsp.length ? '<h3>Meine Beispiele</h3>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(f.normkapitel || '') + '</b> ' + esc(x.text) + '</div>'; }).join('') : '')
+    + (bsp.length ? '<h3>Meine Beispiele</h3>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(x.prozess || f.normkapitel || '') + '</b> ' + esc(x.text) + '</div>'; }).join('') : '')
     + '<h3>Merksätze</h3><div>Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen · „Das schaue ich nach“ ist erlaubt</div></div>';
   $('#drucken').onclick = () => window.print();
   const t = $('#trotz'); if (t) t.onclick = () => { S.trotzRuhe = true; laden(); };
