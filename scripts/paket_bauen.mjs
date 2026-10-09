@@ -24,7 +24,29 @@ const tmp = path.join(ordner, '.dokumente-tmp.json');
 fs.writeFileSync(tmp, JSON.stringify(Q.dokumente.filter(d => d.datei).map(d => ({ id: d.id, titel: d.titel, datei: pf(d.datei) }))));
 const A = JSON.parse(execFileSync('python3', [path.join(path.dirname(new URL(import.meta.url).pathname), 'auszuege.py'), tmp], { maxBuffer: 1e9 }).toString());
 fs.unlinkSync(tmp);
-const dokumente = Q.dokumente.map(d => { const x = Object.assign({}, d); delete x.datei; if (A.reiter[d.id]) x.inhalt_kurz = Object.assign({}, x.inhalt_kurz, { reiter: A.reiter[d.id] }); return x; });
+const dokumente = Q.dokumente.map(d => { const x = Object.assign({}, d); delete x.datei; delete x.kopie_datei; if (A.reiter[d.id]) x.inhalt_kurz = Object.assign({}, x.inhalt_kurz, { reiter: A.reiter[d.id] }); return x; });
+
+// PDF-Kopien fuer Kunden ohne Zugriff auf die Originale (Google-Freigabe klappt nicht): kunde/dok/<id>.pdf, bei Tabellen Reiter -> Seite
+const kopien = [];
+Q.dokumente.forEach((d, i) => {
+  const quelle = d.kopie_datei || (/\.pdf$/i.test(d.datei || '') ? d.datei : '');
+  if (!quelle) return;
+  kopien.push({ id: d.id, quelle: pf(quelle) });
+  dokumente[i].kopie = 'dok/' + d.id + '.pdf';
+  if (A.reiter[d.id]) { // Reiter auf PDF-Seiten abbilden: erste Zeile des ersten Auszugs je Reiter auf der Seite suchen
+    const n = Number((execFileSync('pdfinfo', [pf(quelle)]).toString().match(/Pages:\s+(\d+)/) || [])[1] || 0);
+    const seiten = []; for (let s = 1; s <= n; s++) seiten.push(execFileSync('pdftotext', ['-f', String(s), '-l', String(s), pf(quelle), '-']).toString());
+    const karte = {}; let ab = 1; // Reiter stehen im PDF in derselben Reihenfolge: ab der vorigen Fundseite suchen (Seite 1 = Inhaltsverzeichnis)
+    A.reiter[d.id].forEach((r, j) => {
+      const erst = (A.auszuege.find(a => a.dokument_id === d.id && a.reiter === r) || {}).text || '';
+      const kopf = erst.split('\n')[0].split('·')[0].trim().slice(0, 25);
+      if (j === 0) { karte[r] = 1; return; }
+      const t = seiten.findIndex((x, i) => i >= ab && kopf && x.indexOf(kopf) >= 0);
+      if (t >= 0) { karte[r] = t + 1; ab = t; }
+    });
+    dokumente[i].kopie_seiten = karte;
+  }
+});
 
 // 2) Audits: Planpunkte aus dem Auditplan, Fahrplan aus den Pruefliste(n), Stufe 2 aus Vorlage
 const seitenHinweise = [];
@@ -70,6 +92,11 @@ const web = new URL('../web/', import.meta.url).pathname;
 fs.cpSync(web, ziel, { recursive: true, filter: (s) => !/demo-lokal\.json$/.test(s) });
 fs.writeFileSync(path.join(ziel, 'config.js'), '// Testfassung ohne Server: Daten aus paket.json, Fortschritt im Browser\nwindow.AV_CONFIG = { paket: "paket.json" };\n');
 fs.writeFileSync(path.join(ziel, 'kunde', 'paket.json'), JSON.stringify(paket));
+fs.mkdirSync(path.join(ziel, 'kunde', 'dok'), { recursive: true });
+kopien.forEach(k => fs.copyFileSync(k.quelle, path.join(ziel, 'kunde', 'dok', k.id + '.pdf')));
+// Netlify-Formular "ergebnis": Netlify erkennt es beim Hochladen (Formularerkennung muss in Netlify eingeschaltet sein)
+fs.writeFileSync(path.join(ziel, 'formular.html'), '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Formular</title>'
+  + '<form name="ergebnis" method="POST" data-netlify="true" hidden><input name="kunde"><input name="mitarbeiter"><input name="stufe"><input name="zusammenfassung"><textarea name="daten"></textarea></form>');
 fs.writeFileSync(path.join(ziel, '_headers'), '/*\n  X-Robots-Tag: noindex, nofollow\n  Referrer-Policy: no-referrer\n');
 fs.writeFileSync(path.join(ziel, 'index.html'), '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=kunde/">');
 fs.writeFileSync(path.join(ordner, 'befunde.json'), JSON.stringify({ widersprueche: befunde, seitenzahlen: seitenHinweise }, null, 1));

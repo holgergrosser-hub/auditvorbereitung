@@ -46,7 +46,7 @@ async function ki(aktion, daten) {
 }
 
 const S = { start: null, audit: null, ma: null, fragen: [], planpunkte: [], antworten: [], eintraege: [], auszuege: null, ansicht: 'heute', stream: null, filter: 'alle', trotzRuhe: false, queue: null };
-const KAPITEL = { '0': 'Dokumentation insgesamt', '4': '4 Kontext der Organisation', '5': '5 Führung', '6': '6 Planung', '7': '7 Unterstützung', '8': '8 Betrieb', '9': '9 Bewertung der Leistung', '10': '10 Verbesserung' };
+const KAPITEL = { '0': 'Zum Einstieg: Überblick über Ihre Dokumentation', '4': '4 Kontext der Organisation', '5': '5 Führung', '6': '6 Planung', '7': '7 Unterstützung', '8': '8 Betrieb', '9': '9 Bewertung der Leistung', '10': '10 Verbesserung' };
 const datumDe = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Termin noch offen';
 const kurzDatum = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE') : 'offen';
 
@@ -144,18 +144,26 @@ ANSICHT.heute = () => {
   if (!faktenFertig()) schritte.push(['fakten', 'Faktencheck: ' + S.start.faktencheck.filter(f => !f.antwort).length + ' Angaben bestätigen']);
   if (z.offen) schritte.push(['fahrplan', z.offen + (S.audit.stufe === 1 ? ' Punkte im Fahrplan noch nicht geübt' : ' Fragen noch nicht geübt')]);
   const fo = fallenFuerStufe().filter(f => !eintrag('falle', f.id)).length; if (fo) schritte.push(['fallen', fo + ' Stolperfallen noch nicht durchgespielt']);
+  const audits = S.start.audits.slice().sort((a, b) => a.stufe - b.stufe);
   $('#main').innerHTML = '<h2>Heute</h2>'
     + (S.ma ? '' : '<div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>')
+    + '<div class="stufen">' + [1, 2].map(n => { const a = audits.find(x => x.stufe === n), st = L.STUFEN[n], t = a ? L.tageBis(a.datum) : null;
+      return '<div class="stufe ' + (S.audit.stufe === n ? 'jetzt' : '') + '"><div class="zeile" style="justify-content:space-between"><b>' + esc(st.titel) + '</b><span class="chip">' + (a && a.datum ? kurzDatum(a.datum) + (t != null && t >= 0 ? ' · in ' + t + ' T.' : '') : 'Termin offen') + '</span></div>'
+        + '<div>' + esc(st.was) + '</div><div class="grau">' + esc(st.ueben) + '</div>' + (S.audit.stufe === n ? '<div class="jetzt-marke">← darauf bereiten Sie sich gerade vor</div>' : (a ? '<button class="link" data-stufe="' + a.id + '">zu Stufe ' + n + ' wechseln</button>' : '')) + '</div>'; }).join('') + '</div>'
     + '<div class="karte"><div class="zeile" style="justify-content:space-between"><b>Ihre Prüfungsreife: ' + r.prozent + ' %</b><span class="grau">' + (r.stufe === 'bereit' ? 'Sie sind gut vorbereitet.' : r.stufe === 'fast' ? 'Fast geschafft.' : 'Jeden Tag ein bisschen – das reicht.') + '</span></div>'
     + r.teile.map(t => '<div class="teil"><span>' + esc(t.name) + '</span><div class="balken"><span style="width:' + t.prozent + '%;background:var(--blau2)"></span></div><span class="grau">' + t.prozent + ' %</span></div>').join('') + '</div>'
     + (lektion.length ? '<h3>Ihre 5 Minuten für heute</h3><div class="karte"><p>Drei Punkte – zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 120)) + (String(f.frage).length > 120 ? ' …' : '') + '</span></div>').join('') + '<p><button class="knopf" id="lektion">▶ Los geht’s</button></p></div>' : '')
     + (schritte.length ? '<h3>Als Nächstes</h3><div class="karte">' + schritte.map(s => '<div class="zeile weiter" data-k="' + s[0] + '">→ ' + esc(s[1]) + '</div>').join('') + '</div>' : '')
     + baustellenHtml()
+    + wegweiserHtml()
+    + sendenHtml()
     + (aufgaben.length ? '<h3>Ihre Aufgaben</h3><div class="karte">' + aufgaben.map(a => { const e = eintrag('aufgabe', a.id); return '<label class="check"><input type="checkbox" data-a="' + esc(a.id) + '" ' + (e && e.daten.erledigt ? 'checked' : '') + '><span><b>' + esc(a.todo) + '</b><br><span class="grau">' + (a.bis_stufe ? 'bis Stufe ' + a.bis_stufe : '') + (a.verantwortlich ? ' · ' + esc(a.verantwortlich) : '') + (a.termin ? ' · bis ' + esc(a.termin) : '') + '</span></span></label>'; }).join('') + '</div>' : '');
   const l = $('#lektion'); if (l) l.onclick = () => reihe(lektion.map(f => ({ art: 'frage', item: f, modus: ursachen()[f.id] })), 'Tageslektion');
   $$('[data-bau]').forEach(b => b.onclick = () => { const f = S.fragen.find(x => x.id === b.dataset.bau); reihe([{ art: 'frage', item: f, modus: b.dataset.modus || null }], null, false); });
   $$('[data-bu]').forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + b.dataset.bu, { ursache: b.dataset.u }); ANSICHT.heute(); });
   $$('.weiter').forEach(x => x.onclick = () => zeige(x.dataset.k));
+  $$('[data-stufe]').forEach(b => b.onclick = () => { $('#sel-audit').value = b.dataset.stufe; merken(); laden(); });
+  sendenKnopf();
   $$('[data-a]').forEach(c => c.onchange = async () => { await speichereEintrag('aufgabe', c.dataset.a, { erledigt: c.checked }, true); zeichneKopf(); });
 };
 
@@ -171,6 +179,46 @@ function baustellenHtml() {
       + liste.map(e => '<div class="bau"><span class="np">' + esc(e.frage.normkapitel || '–') + '</span><span class="bau-text">' + esc(String(e.frage.frage).slice(0, 100)) + (e.serie ? ' <span class="chip">1× sicher – noch 1×</span>' : '') + '</span>'
         + (k === 'offen' ? '<span class="zeile">' + Object.entries(L.URSACHEN).map(([u, x]) => '<button class="knopf klein zweit ' + (e.vorschlag === u ? 'an' : '') + '" title="' + esc(x.name) + '" data-bu="' + e.frage.id + '" data-u="' + u + '">' + x.symbol + '</button>').join('') + '</span>'
           : '<button class="knopf klein" data-bau="' + e.frage.id + '" data-modus="' + k + '">Jetzt passend üben</button>') + '</div>').join('') + '</div>').join('') + '</div>';
+}
+
+const WEGWEISER = [
+  ['technik', 'Technik', 'Laptop, Chrome, Dokumente öffnen und Bildschirm teilen – einmal testen, damit am Audittag nichts hakt.'],
+  ['fakten', 'Faktencheck', 'Stimmen Namen, Rollen, Mitarbeiterzahl, Zertifizierer in Ihren Dokumenten? Kurz bestätigen oder korrigieren.'],
+  ['fahrplan', 'Fahrplan / Fragen', 'Stufe 1: den Auditplan durchgehen und zu jeder Frage das Dokument finden. Stufe 2: Fragen in eigenen Worten beantworten.'],
+  ['fallen', 'Stolperfallen', 'Nachfragen, die aus Ihren eigenen Dokumenten kommen (Widersprüche, offene Punkte) – mit einer ehrlichen Antwort.'],
+  ['finden', 'Wo steht das?', 'Suche in Ihren eigenen Dokumenten. Dürfen Sie auch im Audit offen nutzen.'],
+  ['lernen', 'Lernen', 'Erklär es dem Azubi (Abläufe in eigenen Worten), Audit-Deutsch (Fachwörter übersetzt), Rollentausch (Sie bewerten Antworten wie ein Auditor).'],
+  ['spur', 'Beispielauftrag', 'Stufe 2: einen echten Auftrag von der Anfrage bis zur Rechnung mit Belegen bereitlegen.'],
+  ['rundgang', 'Rundgang', 'Stufe 2: Prüfplaketten (Feuerlöscher, Leitern …) fotografieren – was ist fällig?'],
+  ['tag', 'Audit-Tag', 'So läuft Ihr Audit und Ihr Spickzettel zum Ausdrucken.'],
+  ['danach', 'Nach dem Audit', 'Kurz festhalten, welche Fragen kamen – und Ihr Ergebnis an den Berater schicken.']
+];
+function wegweiserHtml() {
+  const da = tabs().map(t => t[0]);
+  return '<h3>Was finden Sie wo?</h3><div class="karte wegweiser">' + WEGWEISER.filter(w => da.indexOf(w[0]) >= 0).map(w => '<div class="weiter" data-k="' + w[0] + '"><b>' + esc(w[1]) + '</b> – <span>' + esc(w[2]) + '</span></div>').join('') + '</div>';
+}
+/* Ergebnis an den Berater: in der Testfassung per Netlify-Formular (Berater sieht es in Netlify), sonst liegt alles in der Datenbank */
+function sendenHtml() {
+  if (!api.lokal || S.start.demo) return '';
+  const zuletzt = (() => { try { return localStorage.getItem('av_gesendet') || ''; } catch (e) { return ''; } })();
+  return '<h3>Ihr Stand an den Berater</h3><div class="karte"><p>Ihr Berater sieht Ihren Übungsstand erst, wenn Sie ihn senden. Gesendet wird nur Ihr Fortschritt (keine Fotos).</p><div class="zeile"><button class="knopf" id="senden">Stand jetzt an den Berater senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
+}
+function sendenKnopf() { const b = $('#senden'); if (b) b.onclick = () => senden(b); }
+async function senden(knopf) {
+  const daten = api.export(); daten.nachweise = (daten.nachweise || []).map(n => Object.assign({}, n, { bild: '' }));
+  const r = reife(), z = stand();
+  const felder = { 'form-name': 'ergebnis', kunde: S.start.kunde.name, mitarbeiter: S.ma ? S.ma.name : '', stufe: String(S.audit.stufe),
+    zusammenfassung: 'Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen', daten: JSON.stringify(daten) };
+  if (knopf) { knopf.disabled = true; knopf.textContent = 'Sende …'; }
+  try {
+    const res = await fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(felder).toString() });
+    if (!res.ok) throw new Error('Status ' + res.status);
+    const jetzt = new Date().toLocaleString('de-DE'); try { localStorage.setItem('av_gesendet', jetzt); } catch (e) { /* */ }
+    if ($('#senden-info')) $('#senden-info').textContent = '✓ Gesendet am ' + jetzt;
+    hinweisBox('Ihr Stand ist bei Ihrem Berater angekommen. Danke!', 'ok');
+  } catch (e) {
+    hinweisBox('Senden hat nicht geklappt. Bitte unter „Nach dem Audit“ die Datei herunterladen und per E-Mail schicken.');
+  } finally { if (knopf) { knopf.disabled = false; knopf.textContent = 'Stand jetzt an den Berater senden'; } }
 }
 
 /* ------------------------------------------------ Technik-Check (P07) */
@@ -209,6 +257,13 @@ async function teilen() {
     return S.stream;
   } catch (e) { hinweisBox('Bildschirm teilen wurde abgebrochen. Kein Problem – einfach noch einmal versuchen und „Gesamter Bildschirm“ wählen.'); return null; }
 }
+function kopieUrl(d, ort) {
+  if (!d || !d.kopie) return '';
+  let seite = 0; const m = String(ort || '').match(/Seite\s+(\d+)/); if (m) seite = Number(m[1]);
+  const r = String(ort || '').match(/„([^“]+)“/); if (r && d.kopie_seiten && d.kopie_seiten[r[1]]) seite = d.kopie_seiten[r[1]];
+  return d.kopie + (seite ? '#page=' + seite : '');
+}
+function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
 async function oeffne(id) {
   const fenster = window.open('', '_blank');
   try {
@@ -245,7 +300,7 @@ function markiere(text, treffer) {
   return t.replace(/\n/g, '<br>');
 }
 function auszugHtml(x, treffer) {
-  return '<div class="auszug"><div class="zeile" style="justify-content:space-between"><b>' + esc(dokTitel(x.auszug.dokument_id)) + ' · ' + esc(x.auszug.ort || '') + '</b><button class="knopf klein zweit" data-d="' + esc(x.auszug.dokument_id) + '">Dokument öffnen</button></div><div class="auszug-text">' + markiere(x.auszug.text, treffer || x.treffer) + '</div></div>';
+  return '<div class="auszug"><div class="zeile" style="justify-content:space-between"><b>' + esc(dokTitel(x.auszug.dokument_id)) + ' · ' + esc(x.auszug.ort || '') + '</b><span class="zeile"><button class="knopf klein zweit" data-d="' + esc(x.auszug.dokument_id) + '">Dokument öffnen</button>' + kopieKnopf(x.auszug.dokument_id, x.auszug.ort) + '</span></div><div class="auszug-text">' + markiere(x.auszug.text, treffer || x.treffer) + '</div></div>';
 }
 async function hilfeHtml(f) {
   const a = await auszuege();
@@ -259,10 +314,11 @@ ANSICHT.finden = async () => {
   const a = await auszuege();
   const kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), finden = S.start.dokumente.filter(d => d.wichtigkeit !== 'kennen');
   $('#main').innerHTML = '<h2>Wo steht das?</h2><p>Geben Sie ein Stichwort ein – Sie sehen die Stelle in Ihrer eigenen Dokumentation. Diese Suche dürfen Sie auch im Audit offen nutzen, wie eine ausgedruckte Liste.</p>'
+    + '<p class="grau">Kein Zugriff auf die Originaldateien (z. B. Google-Anmeldung klappt nicht)? Nutzen Sie die <b>PDF-Kopie</b> – und sagen Sie Ihrem Berater Bescheid, damit es bis zum Audit klappt.</p>'
     + '<div class="karte"><div class="zeile"><input id="suche" type="search" placeholder="z. B. Lieferantenbewertung, Feuerlöscher, Politik, Notfall" style="flex:1"><button class="knopf" id="suchen">Suchen</button><button class="knopf zweit klein" id="sprich" title="Frage sprechen">🎤</button></div></div>'
     + '<div id="ergebnis"></div>'
-    + '<h3>Ihre Dokumente</h3><div class="karte">' + kennen.map(d => '<div class="zeile"><span class="chip">kennen</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span></div>').join('')
-    + finden.map(d => '<div class="zeile"><span class="chip grau">finden</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span></div>').join('') + '</div>';
+    + '<h3>Ihre Dokumente</h3><div class="karte">' + kennen.map(d => '<div class="zeile"><span class="chip">kennen</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span>' + kopieKnopf(d.id, '') + '</div>').join('')
+    + finden.map(d => '<div class="zeile"><span class="chip grau">finden</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span>' + kopieKnopf(d.id, '') + '</div>').join('') + '</div>';
   dokKnoepfe($('#main'));
   const los = () => {
     const q = $('#suche').value.trim(); if (!q) return;
@@ -279,6 +335,28 @@ function diktat(knopf, fertig) {
   knopf.onclick = () => { const r = new SR(); r.lang = 'de-DE'; r.interimResults = false; knopf.textContent = '…'; r.onresult = (e) => fertig(e.results[0][0].transcript); r.onend = () => { knopf.textContent = '🎤'; }; r.start(); };
 }
 
+/* Auditplan durchgehen: je Programmpunkt, was der Auditor sehen will – Dokument oeffnen und abhaken */
+function bloecke() { return L.auditplanBloecke(S.planpunkte, S.fragen, S.start.dokumente).filter(b => b.fragen.length || /eröffnung|abschluss|planung/i.test(b.punkt.thema || '')); }
+function kurzName(id) { const d = S.start.dokumente.find(x => x.id === id); return d ? (d.kurzname && d.kurzname.length <= 14 ? (d.kurzname === 'UPH' ? 'Handbuch (UPH)' : d.kurzname) : d.titel) : id; }
+function orteKurz(f) { const o = L.orteJeDokument(f.hilfe, S.start.dokumente); return Object.keys(o).map(k => kurzName(k) + (o[k].length ? ' ' + o[k].slice(0, 3).join(', ') : '')).join(' · '); }
+function planDurchgangHtml() {
+  const B = bloecke(); if (!B.length) return '';
+  const fertig = (pp, d) => { const e = eintrag('lernen', 'plan:' + pp + ':' + d); return e && e.daten.ok; };
+  return '<h3 class="schritt">Schritt 1: Gehen Sie den Auditplan durch und suchen Sie die passenden Dokumente</h3>'
+    + '<p class="grau">Für jeden Programmpunkt steht hier, was der Auditor sehen will. Öffnen Sie jedes Dokument einmal und haken Sie ab, wenn Sie es gefunden haben.</p>'
+    + B.map(b => { const doks = Object.keys(b.zeigen);
+      return '<div class="karte block"><div class="zeile"><span class="zeit">' + esc(b.punkt.zeit || '') + '</span><b>' + esc(b.punkt.thema) + '</b></div>'
+        + (doks.length ? doks.map(d => { const zeilen = b.fragen.map(f => ({ f, o: L.orteJeDokument(f.hilfe, S.start.dokumente)[d] })).filter(x => x.o);
+          return '<div class="fund-zeile"><label class="check fund"><input type="checkbox" data-plan="' + esc(b.punkt.id + ':' + d) + '" ' + (fertig(b.punkt.id, d) ? 'checked' : '') + '><span><b>' + esc(kurzName(d)) + '</b> <span class="grau">– für ' + zeilen.length + (zeilen.length === 1 ? ' Punkt' : ' Punkte') + '</span></span><span class="zeile"><button class="knopf klein zweit" data-d="' + esc(d) + '">öffnen</button>' + kopieKnopf(d, '') + '</span></label>'
+            + '<details><summary>Welche Stellen?</summary><table class="spick">' + zeilen.map(x => '<tr><td class="np">' + esc(x.f.normkapitel || '–') + '</td><td>' + esc(x.f.titel || String(x.f.frage).slice(0, 60)) + '</td><td>' + esc(x.o.slice(0, 3).join(', ')) + '</td></tr>').join('') + '</table></details></div>'; }).join('')
+          + '<div class="grau">' + b.fragen.length + ' Fragen der Prüfliste gehören zu diesem Punkt.</div>'
+        : '<div class="grau">' + (/eröffnung/i.test(b.punkt.thema) ? 'Vorstellung: Wer sind Sie, was macht die Firma, wie ist sie entstanden? Firmenname und Geltungsbereich (Handbuch Seite 3) parat haben.' : /abschluss/i.test(b.punkt.thema) ? 'Der Auditor sagt, was ihm aufgefallen ist. Zuhören, mitschreiben, nachfragen – nicht diskutieren.' : /planung/i.test(b.punkt.thema) ? 'Termin und Teilnehmer für Stufe 2 abstimmen.' : '') + '</div>') + '</div>'; }).join('');
+}
+function planDurchgangBinden() {
+  $$('[data-plan]').forEach(c => c.onchange = async () => { await speichereEintrag('lernen', 'plan:' + c.dataset.plan, { ok: c.checked }); });
+  dokKnoepfe($('#main'));
+}
+
 /* ------------------------------------------------ Fahrplan / Fragen (P01, P04, P09, Ideen 1–4) */
 function kapitelVon(f) { const k = String(f.normkapitel || '').split('.')[0]; return KAPITEL[k] ? k : (f.art === 'zeig_mal' ? '0' : '8'); }
 ANSICHT.fahrplan = () => {
@@ -287,7 +365,8 @@ ANSICHT.fahrplan = () => {
   const lv = (S.start.level || {})[S.audit.auditor_level] || {};
   const typ = (eintrag('auditor', 'typ') || {}).daten || {};
   let html = '<h2>' + (zeig ? 'Fahrplan: Finden Sie die Dokumente' : 'Fragen üben') + '</h2>'
-    + (zeig ? '<p>Das ist die Prüfliste des Auditors. Er fragt diese Punkte ab – nicht unbedingt in dieser Reihenfolge. Üben Sie: <b>Frage lesen → Dokument öffnen → zeigen.</b> Sie müssen nichts auswendig lernen.</p>'
+    + (zeig ? '<p>So üben Sie in zwei Schritten. Sie müssen nichts auswendig lernen.</p>' + planDurchgangHtml()
+      + '<h3 class="schritt">Schritt 2: Einzelne Fragen der Prüfliste üben</h3><p>Das ist die Prüfliste des Auditors. Er fragt diese Punkte ab – nicht unbedingt in dieser Reihenfolge. Üben Sie: <b>Frage lesen → Dokument öffnen → zeigen.</b></p>'
       : '<p>So fragt der Auditor in Stufe 2. Antworten Sie, wie Sie es im Audit sagen würden: <b>Was wir machen – wo es steht – ein Beispiel.</b></p>')
     + '<div class="karte"><div class="balken"><span style="width:' + (z.gruen / n * 100) + '%;background:var(--gruen)"></span><span style="width:' + (z.gelb / n * 100) + '%;background:var(--gelb)"></span><span style="width:' + (z.rot / n * 100) + '%;background:var(--rot)"></span></div>'
     + '<div class="legende"><span><span class="dot gruen"></span> sicher (' + z.gruen + ')</span><span><span class="dot gelb"></span> mit Hilfe / langsam (' + z.gelb + ')</span><span><span class="dot rot"></span> weiß nicht (' + z.rot + ')</span><span><span class="dot"></span> offen (' + z.offen + ')</span></div>'
@@ -312,6 +391,7 @@ ANSICHT.fahrplan = () => {
   });
   if (!sicht.length) html += '<div class="karte grau">' + (S.fragen.length ? 'Keine Fragen in dieser Auswahl. 🎉' : 'Für Sie sind noch keine Fragen hinterlegt.') + '</div>';
   $('#main').innerHTML = html;
+  planDurchgangBinden();
   $('#filter').value = S.filter; $('#filter').onchange = (e) => { S.filter = e.target.value; ANSICHT.fahrplan(); };
   $('#naechste').onclick = () => { const f = S.fragen.find(x => L.ampel(antwortenZu(x.id)) === 'offen') || S.fragen.find(x => /gelb|rot/.test(L.ampel(antwortenZu(x.id)))); if (f) reihe([{ art: 'frage', item: f }], null, true); else hinweisBox('Alles geübt. Super!', 'ok'); };
   const pr = $('#probe'); if (pr) pr.onclick = () => reihe(S.fragen.map(f => ({ art: 'frage', item: f })), 'Generalprobe');
@@ -551,10 +631,11 @@ ANSICHT.lernen = () => {
   const karten = abk.concat(L.AUDIT_DEUTSCH);
   const gekonnt = (i) => { const e = eintrag('lernen', 'deutsch:' + i); return e && e.daten.kann; };
   $('#main').innerHTML = '<h2>Lernen</h2>'
-    + '<h3>Erklär es dem Azubi</h3><div class="karte" id="azubi"></div>'
-    + '<h3>Audit-Deutsch: Was heißt das eigentlich?</h3><p class="grau">Begriff anklicken – auf der Rückseite steht es in Alltagssprache.</p><div class="karten">'
+    + '<p class="grau">Drei Übungen, jede dauert ein paar Minuten. Sie helfen vor allem für <b>Stufe 2</b>, wenn der Auditor fragt „Wie machen Sie das?“.</p>'
+    + '<h3>Erklär es dem Azubi</h3><p class="erkl-kurz"><b>Was ist das?</b> Sie erklären einen Ablauf aus Ihrem Handbuch so, als käme morgen ein neuer Mitarbeiter. Wer es einem Azubi in eigenen Worten erklären kann, kann es auch dem Auditor erklären. Wenn Sie nicht weiterwissen: <b>Musterlösung</b> ansehen.</p><div class="karte" id="azubi"></div>'
+    + '<h3>Audit-Deutsch: Was heißt das eigentlich?</h3><p class="erkl-kurz"><b>Was ist das?</b> Lernkarten für Fachwörter, die Auditoren benutzen. Vorne das Fachwort, hinten die Bedeutung in Alltagssprache. Begriff anklicken, dann „Kann ich“ oder „Nochmal“.</p><div class="karten">'
     + karten.map((k, i) => '<div class="lernkarte ' + (gekonnt(i) ? 'kann' : '') + '" data-i="' + i + '"><div class="vorne">' + esc(k[0]) + '</div><div class="hinten" hidden>' + esc(k[1]) + '<div class="zeile"><button class="knopf klein gruen" data-k="1">Kann ich</button><button class="knopf klein zweit" data-k="0">Nochmal</button></div></div></div>').join('') + '</div>'
-    + '<h3>Rollentausch: Sie sind der Auditor</h3><p class="grau">Was ist an dieser Antwort gut oder schlecht? Wer den Fehler beim anderen sieht, macht ihn selbst nicht mehr.</p>'
+    + '<h3>Rollentausch: Sie sind der Auditor</h3><p class="erkl-kurz"><b>Was ist das?</b> Hier tauschen Sie die Rollen: Sie lesen eine Antwort, wie sie ein Kunde im Audit geben könnte, und entscheiden wie ein Auditor, ob sie gut ist. Wer den Fehler beim anderen sieht, macht ihn selbst nicht mehr.</p>'
     + L.ROLLENTAUSCH.map((r, i) => { const e = eintrag('lernen', 'rolle:' + i); return '<div class="karte" data-r="' + i + '"><div><b>Auditor:</b> ' + esc(r.frage) + '</div><div><b>Kunde:</b> <i>' + esc(r.antwort) + '</i></div>'
       + Object.entries(r.optionen).map(([k, t]) => '<label class="option"><input type="radio" name="r' + i + '" value="' + k + '" ' + (e && e.daten.wahl === k ? 'checked' : '') + '> ' + esc(t) + '</label>').join('')
       + '<div class="erkl" ' + (e ? '' : 'hidden') + '>' + (e ? (e.daten.wahl === r.richtig ? '✓ Richtig. ' : '✗ Nicht ganz. ') : '') + esc(r.erklaerung) + '</div></div>'; }).join('');
@@ -588,10 +669,13 @@ async function azubi(prozessId) {
       + '<div class="az-azubi">🧑‍🔧 ' + esc(frage) + ' <button class="knopf klein zweit" id="az-vor">🔊</button></div>'
       + '<textarea id="az-text" placeholder="Erklären Sie es so, wie Sie es an der Kaffeemaschine sagen würden"></textarea>'
       + '<div class="zeile"><button class="knopf klein zweit" id="az-diktat">🎤 Diktieren</button><button class="knopf" id="az-weiter">' + (schritt < 2 ? 'Antworten' : 'Fertig') + '</button><span class="grau">Nachfrage ' + Math.min(schritt, 2) + ' von 2</span>'
-      + '<button class="link" id="az-quelle">Im Handbuch nachsehen (' + esc(dokTitel(p.dokument_id)) + ', Seite ' + p.von + (p.bis > p.von ? '–' + p.bis : '') + ')</button></div><div id="az-quelltext"></div>';
+      + '<button class="link" id="az-quelle">Im Handbuch nachsehen (Seite ' + p.von + (p.bis > p.von ? '–' + p.bis : '') + ')</button><button class="knopf klein zweit" id="az-muster">💡 Musterlösung</button></div><div id="az-quelltext"></div>';
     $('#az-zurueck').onclick = () => azubi();
     $('#az-vor').onclick = () => vorlesen(frage);
     diktat($('#az-diktat'), (t) => { $('#az-text').value += ($('#az-text').value ? ' ' : '') + t; });
+    $('#az-muster').onclick = () => { const m = L.musterErklaerung(p, dokTitel(p.dokument_id));
+      $('#az-quelltext').innerHTML = '<div class="karte gut"><b>So könnten Sie es erklären</b> <span class="grau">(aus Ihrem Handbuch in gesprochene Sprache übertragen – nicht auswendig lernen, sondern mit eigenen Worten und Ihrem Beispiel)</span><p>' + esc(m.text) + '</p>'
+        + (m.schritte.length ? '<div class="grau">Die Schritte im Handbuch: ' + m.schritte.map((x, i) => (i + 1) + '. ' + esc(x.tat)).join(' · ') + '</div>' : '') + '</div>'; };
     $('#az-quelle').onclick = () => { $('#az-quelltext').innerHTML = '<div class="auszug"><div class="auszug-text">' + esc(p.text.slice(0, 1800)).replace(/\n/g, '<br>') + '</div><button class="knopf klein zweit" data-d="' + esc(p.dokument_id) + '">Dokument öffnen</button></div>'; dokKnoepfe($('#az-quelltext')); };
     $('#az-weiter').onclick = async () => {
       const t = $('#az-text').value.trim(); if (!t) { $('#az-text').focus(); return; }
@@ -654,31 +738,26 @@ ANSICHT.rundgang = () => {
 
 /* ------------------------------------------------ Audit-Tag: Ablauf + Spickzettel (P08, Idee 2) */
 ANSICHT.tag = () => {
-  const a = S.audit, ab = L.ABLAUF[a.stufe] || L.ABLAUF[1], kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), abk = S.start.dokumente.filter(d => d.kurzname && d.kurzname !== d.titel);
-  const ma = S.ma, meine = S.planpunkte.filter(p => !ma || !(p.mitarbeiter_ids || []).length || p.mitarbeiter_ids.indexOf(ma.id) >= 0);
+  const a = S.audit, ab = L.ABLAUF[a.stufe] || L.ABLAUF[1], st = L.STUFEN[a.stufe] || L.STUFEN[1];
+  const kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), abk = S.start.dokumente.filter(d => d.kurzname && d.kurzname !== d.titel);
   const bsp = S.antworten.filter(x => x.ist_beispiel && x.text).concat(beispielKiste().map(e => ({ text: e.daten.text, prozess: e.daten.prozess })));
-  // Spickzettel nach Dokumenten gruppiert: so sucht man im Audit
-  const jeDok = {}; S.fragen.forEach(f => { const d = (f.dokumente || [])[0]; const k = d ? d.titel : 'Sonstiges'; (jeDok[k] = jeDok[k] || []).push(f); });
+  const B = a.stufe === 1 ? bloecke() : [];
+  const ma = S.ma, meine = S.planpunkte.filter(p => !ma || !(p.mitarbeiter_ids || []).length || p.mitarbeiter_ids.indexOf(ma.id) >= 0);
   $('#main').innerHTML = (S.ruhe ? '<div class="ruhe"><b>Ruhemodus.</b> ' + esc(L.ABLAUF.ruhe) + ' <button class="link" id="trotz">Trotzdem weiter üben</button></div>' : '')
-    + '<div class="kein-druck"><h2>' + esc(ab.titel) + '</h2><div class="karte"><p>' + esc(ab.kurz) + '</p><ul>' + ab.regeln.map(r => '<li>' + esc(r) + '</li>').join('') + '</ul></div></div>'
-    + '<div class="zeile kein-druck" style="justify-content:space-between"><h2>Spickzettel</h2><button class="knopf" id="drucken">Drucken / als PDF speichern</button></div>'
-    + '<div class="karte spickzettel"><div class="nur-druck"><b style="font-size:13pt">' + esc(S.start.kunde.name) + '</b></div>'
-    + '<div><b>Stufe ' + a.stufe + ' · ' + esc(datumDe(a.datum)) + '</b>' + (a.auditor ? ' · Auditor ' + esc(a.auditor) : '') + (ma ? ' · für ' + esc(ma.name) : '') + '</div>'
-    + '<h3>Ablauf</h3>' + (meine.length ? meine.map(p => '<div>' + esc(p.zeit || '') + ' · ' + esc(p.thema) + '</div>').join('') : '<span class="grau">–</span>')
-    + '<h3>Den ganzen Tag offen haben</h3>' + kennen.map(d => esc(d.titel) + (d.stand ? ' (Stand ' + esc(d.stand) + ')' : '')).join(' · ')
-    + (abk.length ? '<div class="grau">Abkürzungen: ' + abk.map(d => esc(d.kurzname) + ' = ' + esc(d.titel)).join(' · ') + '</div>' : '')
-    + '<h3>Wo steht was?</h3>' + Object.entries(jeDok).map(([dok, fr]) => '<div class="spick-dok"><b>' + esc(dok) + ':</b> ' + fr.map(f => '<span class="spick-p"><span class="dot klein ' + L.ampel(antwortenZu(f.id)) + '"></span>' + esc(f.normkapitel || '') + ' ' + esc(spickOrt(f.hilfe, dok)) + '</span>').join(' · ') + '</div>').join('')
-    + (bsp.length ? '<h3>Meine Beispiele</h3>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(x.prozess || f.normkapitel || '') + '</b> ' + esc(x.text) + '</div>'; }).join('') : '')
-    + '<h3>Merksätze</h3><div>Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen · „Das schaue ich nach“ ist erlaubt</div></div>';
+    + '<div class="kein-druck"><h2>' + esc(ab.titel) + '</h2><div class="karte"><p><b>' + esc(st.titel) + '</b> ' + esc(ab.kurz) + '</p><ul>' + ab.regeln.map(r => '<li>' + esc(r) + '</li>').join('') + '</ul></div></div>'
+    + '<div class="kein-druck"><h2>Spickzettel</h2><p><b>Wozu?</b> Den Zettel legen Sie im Audit neben den Laptop. <b>Lernen müssen Sie ihn nicht.</b> Er zeigt je Programmpunkt des Auditplans, welche Dokumente Sie aufmachen – so finden Sie alles schnell, auch wenn Sie nervös sind.</p><button class="knopf" id="drucken">Drucken / als PDF speichern</button></div>'
+    + '<div class="karte spickzettel"><div class="spick-kopf"><b>' + esc(S.start.kunde.name) + '</b> · Stufe ' + a.stufe + ' · ' + esc(datumDe(a.datum)) + (a.auditor ? ' · Auditor ' + esc(a.auditor) : '') + (ma ? ' · für ' + esc(ma.name) : '') + '</div>'
+    + '<div class="spick-box"><b>Diese Dokumente den ganzen Tag offen haben:</b> ' + kennen.map(d => esc(d.titel) + (d.stand ? ' <span class="grau">(' + esc(d.stand) + ')</span>' : '')).join(' · ')
+    + (abk.length ? '<br><span class="grau">Abkürzungen: ' + abk.map(d => esc(d.kurzname) + ' = ' + esc(d.titel)).join(' · ') + '</span>' : '') + '</div>'
+    + (B.length ? B.map(b => '<div class="spick-block"><div class="spick-zeit"><b>' + esc(b.punkt.zeit || '') + '</b> ' + esc(b.punkt.thema) + '</div>'
+        + (b.fragen.length ? '<table class="spick">' + b.fragen.map(f => '<tr><td class="np">' + esc(f.normkapitel || '') + '</td><td>' + esc(f.titel || String(f.frage).slice(0, 60)) + '</td><td>' + esc(orteKurz(f)) + '</td></tr>').join('') + '</table>'
+          : '<div class="grau">' + (/eröffnung/i.test(b.punkt.thema) ? 'Sich vorstellen: Firma, Entwicklung, Mitarbeiter. Geltungsbereich: Handbuch Seite 3.' : /abschluss/i.test(b.punkt.thema) ? 'Zuhören, mitschreiben, Fragen stellen.' : '') + '</div>') + '</div>').join('')
+      : '<div class="spick-block"><div class="spick-zeit"><b>Ablauf</b></div>' + meine.map(p => '<div>' + esc(p.zeit || '') + ' · ' + esc(p.thema) + '</div>').join('') + '</div>')
+    + (bsp.length ? '<div class="spick-box"><b>Meine Beispiele:</b>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(x.prozess || f.titel || f.normkapitel || '') + ':</b> ' + esc(x.text) + '</div>'; }).join('') + '</div>' : '')
+    + '<div class="spick-box"><b>Merksätze:</b> Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen · „Das schaue ich nach“ ist erlaubt</div></div>';
   $('#drucken').onclick = () => window.print();
   const t = $('#trotz'); if (t) t.onclick = () => { S.trotzRuhe = true; laden(); };
 };
-function spickOrt(hilfe, dok) {
-  const h = String(hilfe || ''); const i = h.indexOf(dok);
-  const teil = i >= 0 ? h.slice(i + dok.length) : h;
-  const m = teil.match(/(Seiten?\s+\d+(?:\s*[–-]\s*\d+)?|Reiter\s+(?:„[^“]+“(?:\s+und\s+„[^“]+“)?|\d+)|Kapitel\s+\d+)/);
-  return m ? m[1].replace(/^Seiten?\s+/, 'S. ') : '';
-}
 
 /* ------------------------------------------------ Nach dem Audit: Rueckmeldung + Ergebnis an den Berater (Ideen 1, 8, 11) */
 ANSICHT.danach = () => {

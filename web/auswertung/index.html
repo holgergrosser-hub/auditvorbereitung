@@ -22,6 +22,8 @@ table{border-collapse:collapse;width:100%;font-size:.9rem}td,th{border-bottom:1p
 <div class="karte">
   <p><b>1. Paket</b> <span id="paket-info" class="grau">wird gesucht …</span><br><input type="file" id="paket" accept=".json"></p>
   <p><b>2. Ergebnis-Dateien</b> (vom Kunden per E-Mail): <input type="file" id="ergebnis" accept=".json" multiple></p>
+  <p><b>oder Stand aus Netlify einfügen</b> (Netlify → Forms → „ergebnis“ → Eintrag öffnen → Inhalt von <i>daten</i> kopieren):<br>
+  <textarea id="einfuegen" rows="3" style="width:100%" placeholder='{"art":"auditvorbereitung-ergebnis", …}'></textarea><button class="knopf" id="einfuegen-los">Anzeigen</button></p>
 </div>
 <div id="aus"></div>
 </main>
@@ -34,6 +36,7 @@ try { const r = await fetch('../kunde/paket.json', { cache: 'no-store' }); if (r
 $('#paket-info').textContent = paket ? '✓ ' + paket.kunde.name + ' (Stand ' + paket.erstellt.slice(0, 10) + ')' : 'bitte paket.json wählen';
 $('#paket').onchange = async (e) => { paket = await lies(e.target.files[0]); $('#paket-info').textContent = '✓ ' + paket.kunde.name; zeichne(); };
 $('#ergebnis').onchange = async (e) => { ergebnisse = []; for (const f of e.target.files) ergebnisse.push(await lies(f)); zeichne(); };
+$('#einfuegen-los').onclick = () => { try { ergebnisse = [JSON.parse($('#einfuegen').value.trim())]; zeichne(); } catch (e) { alert('Das ist kein gültiger Inhalt. Bitte nur das Feld „daten“ kopieren.'); } };
 
 function zeichne() {
   if (!paket || !ergebnisse.length) return;

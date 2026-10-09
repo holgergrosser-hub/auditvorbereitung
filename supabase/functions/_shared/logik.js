@@ -241,8 +241,8 @@ function dokumenteAusFundstelle(text, dokumente) {
 /** Fahrplan -> Zeilen fuer die Tabelle "fragen" (art 'zeig_mal'): Der Kunde soll das Dokument finden und zeigen. */
 function zeigMalFragen(fahrplan, dokumente) {
   return fahrplan.map((f, i) => ({
-    art: 'zeig_mal', planpunkt_id: null, pruefpunkt_id: f.pruefpunkt_ids[0] || null, bereich: '', normen: f.normen,
-    frage: f.normpunkt === '0' ? 'Zeigen Sie mir Ihre Managementsystem-Dokumentation: Welche Dokumente gibt es und welchen Stand haben sie?' : f.frage,
+    art: 'zeig_mal', planpunkt_id: null, pruefpunkt_id: f.pruefpunkt_ids[0] || null, bereich: '', normen: f.normen, titel: f.normpunkt === '0' ? 'Überblick Dokumentation' : (f.titel || ''),
+    frage: f.normpunkt === '0' ? 'Zum Einstieg will der Auditor einen Überblick: Welche Dokumente gehören zu Ihrem Managementsystem, und welchen Stand haben sie? Zeigen Sie Ihre Dokumentenübersicht.' : f.frage,
     hilfe: klarnamen(f.fundstelle, dokumente), dokument_ids: dokumenteAusFundstelle(f.fundstelle, dokumente), normkapitel: f.normpunkt === '0' ? '' : f.normpunkt, reihenfolge: i + 1
   }));
 }
@@ -666,6 +666,109 @@ function erklaerungAuswerten(erklaerung, prozess) {
     note: !hinweise.length ? 'gut' : p < 0.35 && fb.beispiel ? 'ok' : 'ueben', hinweise };
 }
 
+/** Ablaufschritte aus einer Prozessbeschreibung (Tabelle "2. Prozessablauf": Taetigkeit · Verantwortlich · Hilfsmittel) */
+const ROLLEN = /^(Geschäftsleitung|Geschäftsführung|GF|GL|QMB.*|UMB|QMB\/UMB|Mitarbeiter(\/in)?|Einkauf|Vertrieb|Büro|Disposition|Einsatzleitung|Alle|Inhaber.*|Fachkraft.*|Verwaltung|Buchhaltung|Lager)$/;
+function prozessSchritte(p) {
+  const t = String(p.text || '');
+  const ver = (t.match(/Verantwortlich\n([^\n]+)/) || [])[1] || '';
+  const abl = (t.split(/\d\.\s*Prozessablauf/)[1] || '').split(/\d\.\s*Input/)[0];
+  const zeilen = abl.split('\n').map(s => s.trim()).filter(s => s && !/^(Nr\.?|Tätigkeit|Verantwortlich|Hilfsmittel \/|Hilfsmittel|Dokument|---)$/.test(s) && !/^\d+$/.test(s));
+  const schritte = []; let tat = [], akt = null;
+  if (/Swimlane/.test(t)) { // nummerierte Schritte, Fortsetzungszeilen beginnen klein oder folgen auf , / (
+    const z2 = abl.split('\n').map(x => x.trim()).filter(Boolean); let cur = null;
+    z2.forEach(z => {
+      const m = z.match(/^(\d+)\.\s+(.+)$/);
+      if (m) { cur = { tat: m[2], wer: '', mittel: [] }; schritte.push(cur); return; }
+      if (cur && (/^[a-zäöüß(]/.test(z) || /([,(\/;]|\s(bei|und|mit|von|für|zum|zur|im|in|oder|der|die|das|den|dem|auf|an))$/.test(cur.tat) || (cur.tat.split('(').length > cur.tat.split(')').length))) cur.tat += ' ' + z;
+      else cur = cur && null;
+    });
+    schritte.forEach(x => { x.tat = x.tat.replace(/\s+/g, ' ').trim(); });
+  } else {
+  const kurz = (s) => s.split(/\s+/).length <= 2 && !/[:.]$/.test(s) && !/\s[a-zäöüß]+en$/.test(s);
+  zeilen.forEach(z => {
+    if (ROLLEN.test(z)) { if (tat.length) { akt = { tat: tat.join(' ').replace(/\s+/g, ' '), wer: z, mittel: [] }; schritte.push(akt); tat = []; } else if (akt) akt.wer = z; return; }
+    if (akt && !tat.length && kurz(z) && akt.mittel.length < 3) {
+      const m = z.replace(/^([A-Za-zÄÖÜäöüß-]+)\s([a-zäöüß]{1,4})$/, '$1$2').replace(/\s*\/$/, '').replace(/^\/\s*/, '');
+      const letzte = akt.mittel[akt.mittel.length - 1];
+      if (letzte && /-(und)?$/.test(letzte)) akt.mittel[akt.mittel.length - 1] = letzte.replace(/-und$/, '- und ') + m; else akt.mittel.push(m);
+      return;
+    }
+    tat.push(z);
+  });
+  }
+  const norm = (t.match(/Normbezug:\s*([^\n]+)/) || [])[1] || '';
+  return { schritte: schritte.filter(s => s.tat.length > 5).slice(0, 10), verantwortlich: ver, normbezug: norm.replace(/\.$/, '') };
+}
+/** Musterloesung fuer "Erklaer es dem Azubi": aus dem Handbuch in gesprochene Sprache, mit Platz fuer das eigene Beispiel */
+function musterErklaerung(p, dokTitel) {
+  const s = prozessSchritte(p);
+  const woerter_ = ['Zuerst', 'Dann', 'Danach', 'Anschließend', 'Außerdem', 'Und', 'Dazu', 'Weiter', 'Dann'];
+  const ablauf = s.schritte.map((x, i) => (i === s.schritte.length - 1 && i > 0 ? 'Zum Schluss' : woerter_[i] || 'Dann') + ': ' + x.tat.replace(/\.$/, '') + '.').join(' ');
+  const mittel = [...new Set(s.schritte.flatMap(x => x.mittel))].filter(m => m.length > 2).slice(0, 5);
+  return {
+    text: '„Bei uns läuft ' + p.name + ' so: ' + (ablauf || 'Das ist im Handbuch beschrieben.') + (s.verantwortlich ? ' Verantwortlich ist die ' + s.verantwortlich + '.' : '')
+      + (mittel.length ? ' Dafür nutzen wir: ' + mittel.join(', ') + '.' : '') + ' Das steht in unserem ' + (dokTitel || 'Handbuch') + ' auf Seite ' + p.von + '. '
+      + 'Ein Beispiel vom letzten Mal: [Ihr eigenes Beispiel – was war los, was haben Sie gemacht, wie ging es aus?]“',
+    schritte: s.schritte, normbezug: s.normbezug
+  };
+}
+
+/* ================================================================ Spickzettel je Programmpunkt des Auditplans */
+function kapitelZahl(k) { return String(k).split('.').map(Number); }
+function kapitelVergleich(a, b) { const x = kapitelZahl(a), y = kapitelZahl(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; }
+/** Liegt Normkapitel k in einer Angabe wie "9001: 4.1–8.7, 10 · 14001: 4.1–8.2, 10"? (Hauptkapitel "10" deckt 10.x ab) */
+function kapitelImBereich(k, angabe) {
+  if (!k) return false;
+  const teile = String(angabe || '').replace(/(9001|14001|45001|27001):/g, ' ').split(/[,·;]/).map(s => s.trim()).filter(Boolean);
+  return teile.some(t => {
+    const m = t.match(/^(\d+(?:\.\d+)*)\s*[–-]\s*(\d+(?:\.\d+)*)$/);
+    if (m) return kapitelVergleich(k, m[1]) >= 0 && (kapitelVergleich(k, m[2]) <= 0 || String(k).startsWith(m[2] + '.'));
+    const e = (t.match(/^(\d+(?:\.\d+)*)$/) || [])[1];
+    return e ? (k === e || String(k).startsWith(e + '.')) : false;
+  });
+}
+/** Fundstellen einer Hilfe je Dokument: {dokument_id: ['S. 3', 'Reiter „Risiken“']} */
+function orteJeDokument(hilfe, dokumente) {
+  const out = {}; let akt = null;
+  String(hilfe || '').split(/[;·]|\)\s*(?=[A-ZÄÖÜ])/).forEach(seg => {
+    const s = seg.trim(); if (!s) return;
+    const d = (dokumente || []).map(x => ({ x, i: Math.min(...[x.titel, x.kurzname].filter(Boolean).map(n => { const j = s.indexOf(n); return j < 0 ? 1e9 : j; })) })).filter(y => y.i < 1e9).sort((a, b) => a.i - b.i)[0];
+    if (d) akt = d.x.id;
+    if (!akt) return;
+    const liste = out[akt] = out[akt] || [];
+    (s.match(/Seiten?\s+\d+(?:\s*[–-]\s*\d+)?/g) || []).forEach(x => liste.push(x.replace(/^Seiten?\s+/, 'S. ')));
+    const reiter = (((dokumente || []).find(x => x.id === akt) || {}).inhalt_kurz || {}).reiter || [];
+    (s.match(/„[^“]+“/g) || []).filter(x => reiter.indexOf(x.slice(1, -1)) >= 0).forEach(x => liste.push('Reiter ' + x));
+  });
+  Object.keys(out).forEach(k => { out[k] = [...new Set(out[k])].sort((a, b) => (parseInt(a.replace(/\D+/, '')) || 999) - (parseInt(b.replace(/\D+/, '')) || 999)); });
+  return out;
+}
+/** Bloecke fuer Spickzettel und Auditplan-Durchgang: je Programmpunkt die passenden Fragen und was zu zeigen ist */
+function auditplanBloecke(planpunkte, fragen, dokumente) {
+  const rest = new Set((fragen || []).map(f => f.id));
+  const ableiten = (p) => p.normkapitel || (/intern\w*\s+audit|managementbewertung/i.test(p.thema || '') ? '9.1–9.3' : /dokumentation|system|norm/i.test(p.thema || '') ? '4.1–8.7, 10' : '');
+  const bloecke = (planpunkte || []).map(p0 => {
+    const p = Object.assign({}, p0, { normkapitel: ableiten(p0) });
+    const fr = (fragen || []).filter(f => rest.has(f.id) && (kapitelImBereich(f.normkapitel, p.normkapitel) || (!f.normkapitel && /dokumentation/i.test(p.thema || ''))));
+    fr.forEach(f => rest.delete(f.id));
+    return { punkt: p, fragen: fr };
+  });
+  const uebrig = (fragen || []).filter(f => rest.has(f.id));
+  if (uebrig.length) bloecke.push({ punkt: { id: 'weitere', zeit: '', thema: 'Weitere Punkte der Prüfliste' }, fragen: uebrig });
+  return bloecke.map(b => {
+    const zeigen = {};
+    b.fragen.forEach(f => { const o = orteJeDokument(f.hilfe, dokumente); Object.keys(o).forEach(k => { zeigen[k] = [...new Set((zeigen[k] || []).concat(o[k]))]; }); });
+    Object.keys(zeigen).forEach(k => { zeigen[k].sort((a, c) => (parseInt(a.replace(/\D+/, '')) || 999) - (parseInt(c.replace(/\D+/, '')) || 999)); });
+    return Object.assign(b, { zeigen });
+  });
+}
+
+/** Stufe 1 und Stufe 2 in einem Satz (fuer "Heute" und den Ablauf) */
+const STUFEN = {
+  1: { titel: 'Stufe 1: Sind die Dokumente da?', was: 'Der Auditor prüft Ihre Dokumentation: Gibt es Handbuch, Ziele, Risiken, Lieferantenbewertung, internes Audit, Managementbewertung …?', ueben: 'Üben: Dokumente schnell finden und zeigen. Nichts auswendig lernen.' },
+  2: { titel: 'Stufe 2: Wird es gelebt?', was: 'Der Auditor prüft vor Ort oder online an echten Vorgängen: ein Auftrag von Anfrage bis Rechnung, Prüfnachweise, Schulungen, Reklamationen.', ueben: 'Üben: Abläufe in eigenen Worten erklären und echte Beispielvorgänge zeigen.' }
+};
+
 /* ================================================================ Fehlerbuch mit Ursache */
 const URSACHEN = {
   wissen: { name: 'Wusste ich nicht', symbol: '📖', uebung: 'Lesen Sie den Auszug aus Ihrer Dokumentation und erklären Sie ihn danach in eigenen Worten.' },
@@ -730,12 +833,12 @@ const Logik = { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelL
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
-  prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
+  prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, prozessSchritte, musterErklaerung, kapitelImBereich, orteJeDokument, auditplanBloecke, STUFEN, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
   stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
 export default Logik;
 export { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
-  prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
+  prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, prozessSchritte, musterErklaerung, kapitelImBereich, orteJeDokument, auditplanBloecke, STUFEN, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
   stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };

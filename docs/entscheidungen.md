@@ -23,3 +23,9 @@
 **E-A11 „Erklär es dem Azubi“ zuerst ohne KI.** Prozesse aus den Handbuch-Auszügen, Nachplappern über gleiche Wortfolgen, feste Anfänger-Nachfragen, Beispielkiste für den Spickzettel. Das echte Gespräch mit Nachbohren kommt mit der KI-Funktion nach der Supabase-Einrichtung. Verworfen: vier neue Tabellen und Avatar.
 
 **E-A12 Stadion-Modus erst nach Supabase, freiwillig, ab 60 % Prüfungsreife, nicht in den letzten 3 Tagen.** Grund: Holgers Botschaft „Der Auditor ist ein Gespräch und hilft“ darf nicht untergraben werden. Verworfen: Vergessenskurve als Ersatz für den Ruhemodus.
+
+**E-A13 Testfassung: Stand per Netlify-Formular an den Berater.** Der Kunde klickt „Stand senden“, der Berater sieht ihn in Netlify (Forms) und kann sich per Mail benachrichtigen lassen. Ohne Fotos. Verworfen: nur Datei-Download per Mail (zu umständlich), automatisches Senden ohne Klick.
+
+**E-A14 PDF-Kopien der Kundendokumente im Paket.** Falls der Kunde keinen Zugriff auf die Originale hat, öffnet „PDF-Kopie“ die richtige Seite bzw. den richtigen Reiter. Verworfen: nur Google-Links.
+
+**E-A15 Spickzettel je Programmpunkt des Auditplans.** Je Punkt: Normkapitel, Thema, Dokument mit Seite/Reiter – zum Danebenlegen, nicht zum Lernen. Verworfen: Liste aller Fundstellen nach Dokument (unübersichtlich).
