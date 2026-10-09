@@ -16,6 +16,8 @@ header .firma{font-size:1.45rem;font-weight:700}
 header .info{opacity:.9;font-size:.95rem}
 .kopfzeile{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start}
 .reife{display:inline-block;background:#fff;color:var(--blau);font-weight:700;border-radius:99px;padding:4px 12px;font-size:.95rem}
+.teilen-leiste{position:fixed;left:0;right:0;bottom:0;z-index:20;padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))!important;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#B42318;color:#fff;padding:6px 16px;font-size:.92rem}.teilen-leiste .knopf{background:#fff;color:#B42318}
+.senden-leiste{border:2px solid var(--blau);background:#EEF4FF}
 .kopf-senden{margin-left:8px;background:#fff;color:var(--blau);border:0;border-radius:99px;padding:5px 14px;font-weight:700;font-size:.95rem;cursor:pointer}.kopf-senden:hover{background:#E7F0FF}
 .senden-panel textarea{width:100%;margin:6px 0;font:inherit;padding:8px;border:1px solid var(--rand);border-radius:8px;box-sizing:border-box}
 .reife.bereit{background:#D3F9D8;color:#1B5E20}.reife.fast{background:#FFF3BF;color:#7A5A00}
@@ -66,6 +68,8 @@ textarea{width:100%;min-height:70px;padding:8px;border:1px solid var(--rand);bor
 #trainer{position:fixed;inset:0;background:rgba(15,30,45,.55);display:none;align-items:center;justify-content:center;z-index:20;padding:12px}
 #trainer .box{background:#fff;border-radius:14px;max-width:680px;width:100%;padding:18px;max-height:94vh;overflow:auto}
 video.vorschau{width:100%;max-height:200px;background:#000;border-radius:8px}
+.foto-wahl{display:flex;flex-direction:column;gap:10px}.foto-weg{display:grid;grid-template-columns:170px 1fr;gap:10px;align-items:center}.foto-weg .knopf{text-align:center}.fw-kbd{cursor:default}kbd{border:1px solid var(--rand);border-bottom-width:2px;border-radius:4px;padding:0 5px;font:inherit;font-size:.85em;background:#fff}
+@media (max-width:640px){.foto-weg{grid-template-columns:1fr}}
 img.foto{max-width:100%;border:1px solid var(--rand);border-radius:8px}
 img.mini{max-width:160px;max-height:110px;border:1px solid var(--rand);border-radius:6px;margin-top:6px}
 .pruef.ja{color:var(--gruen);font-weight:600}.pruef.nein{color:var(--rot);font-weight:600}.pruef.teilweise{color:#9A6B00;font-weight:600}

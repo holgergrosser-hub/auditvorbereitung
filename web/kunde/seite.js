@@ -50,7 +50,9 @@ const KAPITEL = { '0': 'Zum Einstieg: Überblick über Ihre Dokumentation', '4':
 const datumDe = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Termin noch offen';
 const kurzDatum = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE') : 'offen';
 
-function fehler(e) { $('#main').innerHTML = '<div class="karte"><h2>Das hat nicht geklappt</h2><p>' + esc(e.message || e) + '</p><p class="grau">Bitte melden Sie sich bei Ihrem Berater.</p></div>'; }
+/* Name des Beraters statt "Ihr Berater" (aus dem Paket: kunde.berater_name) */
+function bn(fall) { const n = S.start && S.start.kunde && S.start.kunde.berater_name; return n || { nom: 'Ihr Berater', dat: 'Ihrem Berater', akk: 'Ihren Berater', kurz: 'Berater' }[fall]; }
+function fehler(e) { $('#main').innerHTML = '<div class="karte"><h2>Das hat nicht geklappt</h2><p>' + esc(e.message || e) + '</p><p class="grau">Bitte melden Sie sich bei ' + esc(bn('dat')) + '.</p></div>'; }
 function hinweisBox(t, art) { const d = document.createElement('div'); d.className = art === 'ok' ? 'ok-box' : 'hinweis'; d.textContent = t; $('#main').prepend(d); setTimeout(() => d.remove(), 9000); }
 
 async function start() {
@@ -69,7 +71,7 @@ async function start() {
   $('#wahl').hidden = false;
   $('#sel-audit').onchange = $('#sel-ma').onchange = () => { merken(); laden(); };
   if (st.demo) $('#modus').textContent = 'Demo – nichts wird gespeichert.';
-  else if (api.lokal) $('#modus').textContent = 'Testfassung – Ihr Fortschritt wird nur in diesem Browser gespeichert.';
+  else if (api.lokal) $('#modus').textContent = 'Wo wird gespeichert? Alle Eingaben bleiben hier im Browser auf diesem Gerät (immer denselben Laptop und Browser nutzen). ' + bn('nom') + ' sieht sie erst, wenn Sie „✉ An ' + bn('kurz') + ' senden“ klicken.';
   laden();
 }
 function merken() { try { localStorage.setItem('av_wahl', JSON.stringify({ audit: $('#sel-audit').value, ma: $('#sel-ma').value })); } catch (e) { /* egal */ } }
@@ -108,7 +110,7 @@ function reife() {
 function zeichneKopf() {
   const r = reife();
   $('#reife').innerHTML = '<span class="reife ' + r.stufe + '" title="' + esc(r.teile.map(t => t.name + ' ' + t.prozent + ' %').join(' · ')) + '">Prüfungsreife ' + r.prozent + ' %</span>'
-    + (api.lokal && !S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an Ihren Berater schicken">✉ An Berater senden</button>' : '');
+    + (api.lokal && !S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an ' + esc(bn('akk')) + ' schicken">✉ An ' + esc(bn('kurz')) + ' senden</button>' : '');
   const ks = $('#kopf-senden'); if (ks) ks.onclick = sendenPanel;
   zeichneNav();
 }
@@ -197,25 +199,25 @@ const WEGWEISER = [
 ];
 function wegweiserHtml() {
   const da = tabs().map(t => t[0]);
-  return '<h3>Was finden Sie wo?</h3><div class="karte wegweiser">' + WEGWEISER.filter(w => da.indexOf(w[0]) >= 0).map(w => '<div class="weiter" data-k="' + w[0] + '"><b>' + esc(w[1]) + '</b> – <span>' + esc(w[2]) + '</span></div>').join('') + '</div>';
+  return '<h3>Was finden Sie wo?</h3><div class="karte wegweiser">' + WEGWEISER.filter(w => da.indexOf(w[0]) >= 0).map(w => '<div class="weiter" data-k="' + w[0] + '"><b>' + esc(w[1]) + '</b> – <span>' + esc(w[2].replace('an den Berater', 'an ' + bn('akk'))) + '</span></div>').join('') + '</div>';
 }
 /* Ergebnis an den Berater: in der Testfassung per Netlify-Formular (Berater sieht es in Netlify), sonst liegt alles in der Datenbank */
 function sendenHtml() {
   if (!api.lokal || S.start.demo) return '';
   const zuletzt = (() => { try { return localStorage.getItem('av_gesendet') || ''; } catch (e) { return ''; } })();
-  return '<h3>Ihr Stand an den Berater</h3><div class="karte"><p>Ihr Berater sieht Ihren Übungsstand erst, wenn Sie ihn senden. Den Knopf <b>✉ An Berater senden</b> finden Sie jederzeit oben in der Kopfzeile – auch für Änderungswünsche an Ihren Dokumenten vor dem Audit.</p><div class="zeile"><button class="knopf" id="senden">Jetzt senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
+  return '<h3>Ihr Stand an ' + esc(bn('akk')) + '</h3><div class="karte"><p>' + esc(bn('nom')) + ' sieht Ihren Übungsstand erst, wenn Sie ihn senden. Den Knopf <b>✉ An ' + esc(bn('kurz')) + ' senden</b> finden Sie jederzeit oben in der Kopfzeile – auch für Änderungswünsche an Ihren Dokumenten vor dem Audit.</p><div class="zeile"><button class="knopf" id="senden">Jetzt senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
 }
 function sendenKnopf() { const b = $('#senden'); if (b) b.onclick = sendenPanel; }
 /* Fenster zum Senden: Nachricht (z. B. Änderungswunsch vor dem Audit) + Übungsstand. Geht nur an den Berater, nie an Dritte. */
-function sendenPanel() {
-  const alt = $('#senden-panel'); if (alt) { alt.remove(); return; }
+function sendenPanel(vorText) {
+  const alt = $('#senden-panel'); if (alt) { alt.remove(); if (typeof vorText !== 'string') return; }
   const d = document.createElement('div'); d.id = 'senden-panel'; d.className = 'karte senden-panel kein-druck';
-  d.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>An Ihren Berater senden</b><button class="link" id="sp-zu">schließen</button></div>'
+  d.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>An ' + esc(bn('akk')) + ' senden</b><button class="link" id="sp-zu">schließen</button></div>'
     + '<label for="sp-text">Nachricht (freiwillig) – z. B. „Bitte im Handbuch Kapitel 5 die Geschäftsführung korrigieren“ oder eine Frage vor dem Audit:</label>'
-    + '<textarea id="sp-text" rows="4" placeholder="Ihre Nachricht an den Berater"></textarea>'
-    + '<p class="grau">Mitgeschickt wird Ihr Übungsstand (ohne Fotos). Ihr Berater liest alles selbst, es geht keine Mail automatisch an andere.</p>'
+    + '<textarea id="sp-text" rows="4" placeholder="Ihre Nachricht an ' + esc(bn('akk')) + '"></textarea>'
+    + '<p class="grau">Mitgeschickt wird Ihr Übungsstand (ohne Fotos). ' + esc(bn('nom')) + ' liest alles selbst, es geht keine Mail automatisch an andere.</p>'
     + '<div class="zeile"><button class="knopf" id="sp-los">Senden</button><button class="knopf zweit" id="sp-datei">Stattdessen als Datei herunterladen</button></div>';
-  $('#main').prepend(d); window.scrollTo(0, 0); $('#sp-text').focus();
+  $('#main').prepend(d); window.scrollTo(0, 0); if (typeof vorText === 'string') $('#sp-text').value = vorText; $('#sp-text').focus();
   $('#sp-zu').onclick = () => d.remove();
   $('#sp-datei').onclick = () => herunterladen();
   $('#sp-los').onclick = async () => { const ok = await senden($('#sp-los'), $('#sp-text').value.trim()); if (ok) d.remove(); };
@@ -233,10 +235,10 @@ async function senden(knopf, nachricht) {
     if (!res.ok) throw new Error('Status ' + res.status);
     const jetzt = new Date().toLocaleString('de-DE'); try { localStorage.setItem('av_gesendet', jetzt); } catch (e) { /* */ }
     if ($('#senden-info')) $('#senden-info').textContent = '✓ Gesendet am ' + jetzt;
-    hinweisBox('Ist bei Ihrem Berater angekommen' + (nachricht ? ' – mit Ihrer Nachricht' : '') + '. Danke!', 'ok');
+    hinweisBox('Ist bei ' + bn('dat') + ' angekommen' + (nachricht ? ' – mit Ihrer Nachricht' : '') + '. Danke!', 'ok');
     return true;
   } catch (e) {
-    hinweisBox('Senden hat nicht geklappt. Bitte „Stattdessen als Datei herunterladen“ wählen und die Datei per E-Mail an Ihren Berater schicken.');
+    hinweisBox('Senden hat nicht geklappt. Bitte „Stattdessen als Datei herunterladen“ wählen und die Datei per E-Mail an ' + bn('akk') + ' schicken.');
     return false;
   } finally { if (knopf) { knopf.disabled = false; knopf.textContent = vorher; } }
 }
@@ -253,7 +255,7 @@ ANSICHT.technik = () => {
     + zeile('laptop', 'Ich mache das Audit am Laptop oder PC', 'Nicht am Handy oder Tablet.', '<button class="knopf klein" data-c="laptop" ' + (handy ? 'disabled' : '') + '>' + (c.laptop ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
     + zeile('chrome', 'Browser Google Chrome', chrome ? 'Sie nutzen Chrome bzw. Edge. Gut.' : 'Bitte Google Chrome installieren und diese Seite darin öffnen.', '<button class="knopf klein" data-c="chrome" ' + (chrome ? '' : 'disabled') + '>' + (c.chrome ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
     + zeile('dokument_offen', 'Ihre Dokumente öffnen sich am Laptop', 'Öffnen Sie testweise Ihr Handbuch. Kommt eine Anmeldung, melden Sie sich mit dem Konto an, über das Sie die Dokumente bekommen haben. Bearbeiten Sie Dokumente nur dort, nicht in Word/Excel auf dem eigenen Rechner – sonst entstehen zwei Versionen.', '<button class="knopf klein" id="dok-test">Handbuch öffnen</button> <button class="knopf klein zweit" data-c="dokument_offen">Hat geklappt</button>')
-    + zeile('bildschirm', 'Bildschirm teilen klappt', 'Klicken Sie auf „Testen“, wählen Sie <b>Gesamter Bildschirm</b> und dann „Teilen“. So zeigen Sie dem Auditor im Online-Audit Ihre Dokumente – und im Fahrplan macht das Programm damit Ihr Übungsfoto.', '<button class="knopf klein" id="teilen-test">Bildschirm teilen testen</button><div id="teilen-erg"></div>')
+    + zeile('bildschirm', 'Bildschirm teilen klappt', 'Klicken Sie auf „Testen“, wählen Sie <b>Gesamter Bildschirm</b> und dann „Teilen“. So zeigen Sie dem Auditor im Online-Audit Ihre Dokumente – und im Fahrplan macht das Programm damit Ihr Übungsfoto. <span class="grau">Am Mac einmalig nötig: Systemeinstellungen → Datenschutz &amp; Sicherheit → Bildschirmaufnahme → Chrome einschalten, Chrome neu starten. Klappt das Teilen nicht, können Sie im Fahrplan auch ein eigenes Bildschirmfoto einfügen.</span>', '<button class="knopf klein" id="teilen-test">Bildschirm teilen testen</button><div id="teilen-erg"></div>')
     + '</div>';
   $$('[data-c]').forEach(b => b.onclick = () => technik(b.dataset.c));
   $('#dok-test').onclick = () => { const d = S.start.dokumente.find(x => /handbuch/i.test(x.titel)) || S.start.dokumente[0]; if (d) oeffne(d.id); };
@@ -273,9 +275,17 @@ async function teilen() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { hinweisBox('Ihr Browser kann den Bildschirm nicht teilen. Bitte Google Chrome am Laptop verwenden.'); return null; }
   try {
     S.stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: false });
-    S.stream.getVideoTracks()[0].addEventListener('ended', () => { S.stream = null; });
-    return S.stream;
+    S.stream.getVideoTracks()[0].addEventListener('ended', () => { S.stream = null; teilenAnzeige(); });
+    teilenAnzeige(); return S.stream;
   } catch (e) { hinweisBox('Bildschirm teilen wurde abgebrochen. Kein Problem – einfach noch einmal versuchen und „Gesamter Bildschirm“ wählen.'); return null; }
+}
+/* Solange geteilt wird: rote Leiste oben mit "Teilen beenden" (Chrome zeigt zusätzlich unten "Freigabe beenden") */
+function teilenAnzeige() {
+  let el = $('#teilen-leiste');
+  if (!(S.stream && S.stream.active)) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'teilen-leiste'; el.className = 'teilen-leiste kein-druck'; document.body.append(el); }
+  el.innerHTML = '<span>● Ihr Bildschirm wird für das Übungsfoto geteilt. Es wird nichts aufgezeichnet oder verschickt – das Foto bleibt in diesem Browser.</span><button class="knopf klein" id="teilen-aus">Teilen beenden</button>';
+  $('#teilen-aus').onclick = () => { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; teilenAnzeige(); hinweisBox('Bildschirm teilen ist beendet.', 'ok'); };
 }
 function kopieUrl(d, ort) {
   if (!d || !d.kopie) return '';
@@ -295,13 +305,15 @@ async function oeffne(id) {
 
 /* ------------------------------------------------ Faktencheck (P05) */
 ANSICHT.fakten = () => {
-  const f = S.start.faktencheck;
-  $('#main').innerHTML = '<h2>Faktencheck: Stimmt das in Ihren Dokumenten?</h2><p>In der Vorbereitung fallen immer wieder Kleinigkeiten auf, die der Auditor sofort sieht: falsche Rollen, alter Zertifizierer, Platzhalter, Geräte, die es nicht gibt. Bitte jeden Punkt kurz bestätigen oder korrigieren. Ihre Korrektur geht an Ihren Berater, er passt die Dokumente an. <b>Bitte die Dokumente nicht selbst ändern.</b></p>'
+  const f = S.start.faktencheck, korrigiert = f.filter(x => x.antwort === 'stimmt_nicht' && x.korrektur);
+  $('#main').innerHTML = '<h2>Faktencheck: Stimmt das in Ihren Dokumenten?</h2><p>In der Vorbereitung fallen immer wieder Kleinigkeiten auf, die der Auditor sofort sieht: falsche Rollen, alter Zertifizierer, Platzhalter, Geräte, die es nicht gibt. Bitte jeden Punkt kurz bestätigen oder korrigieren. Ihre Korrektur geht an ' + esc(bn('akk')) + ', er passt die Dokumente an. <b>Bitte die Dokumente nicht selbst ändern.</b></p>'
     + (f.length ? f.map(x => '<div class="karte" data-id="' + esc(x.id) + '"><div class="zeile" style="justify-content:space-between"><b>' + esc(x.thema) + '</b>' + (x.antwort ? '<span class="chip">' + (x.antwort === 'stimmt' ? '✓ stimmt' : '✎ korrigiert') + '</span>' : '') + '</div>'
       + '<div>In den Dokumenten steht: <i>' + esc(x.angabe || '–') + '</i></div>' + (x.fundstelle ? '<div class="grau">Fundstelle: ' + esc(x.fundstelle) + '</div>' : '')
       + '<div class="zeile" style="margin-top:8px"><button class="knopf klein gruen" data-a="stimmt">Stimmt</button><button class="knopf klein zweit" data-a="stimmt_nicht">Stimmt nicht</button></div>'
       + '<div class="korr" ' + (x.antwort === 'stimmt_nicht' ? '' : 'hidden') + '><textarea placeholder="Wie ist es richtig?">' + esc(x.korrektur || '') + '</textarea><button class="knopf klein" data-a="speichern">Korrektur speichern</button></div></div>').join('')
-      : '<div class="karte grau">Für Sie ist noch kein Faktencheck angelegt.</div>');
+      : '<div class="karte grau">Für Sie ist noch kein Faktencheck angelegt.</div>')
+    + (korrigiert.length && api.lokal && !S.start.demo ? '<div class="karte senden-leiste"><b>' + korrigiert.length + (korrigiert.length === 1 ? ' Korrektur' : ' Korrekturen') + ' gespeichert.</b> Damit ' + esc(bn('nom')) + ' die Dokumente vor dem Audit anpassen kann, schicken Sie sie jetzt ab.<div class="zeile" style="margin-top:8px"><button class="knopf" id="fk-senden">✉ Korrekturen an ' + esc(bn('akk')) + ' senden</button></div></div>' : '');
+  const fs = $('#fk-senden'); if (fs) fs.onclick = () => sendenPanel('Korrekturen aus dem Faktencheck:\n' + korrigiert.map(x => '– ' + x.thema + ': ' + x.korrektur).join('\n') + '\n');
   $$('.karte[data-id]').forEach(k => $$('[data-a]', k).forEach(b => b.onclick = async () => {
     const x = f.find(y => y.id === k.dataset.id);
     if (b.dataset.a === 'stimmt_nicht') { $('.korr', k).hidden = false; $('textarea', k).focus(); return; }
@@ -334,7 +346,7 @@ ANSICHT.finden = async () => {
   const a = await auszuege();
   const kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), finden = S.start.dokumente.filter(d => d.wichtigkeit !== 'kennen');
   $('#main').innerHTML = '<h2>Wo steht das?</h2><p>Geben Sie ein Stichwort ein – Sie sehen die Stelle in Ihrer eigenen Dokumentation. Diese Suche dürfen Sie auch im Audit offen nutzen, wie eine ausgedruckte Liste.</p>'
-    + '<p class="grau">Kein Zugriff auf die Originaldateien (z. B. Google-Anmeldung klappt nicht)? Nutzen Sie die <b>PDF-Kopie</b> – und sagen Sie Ihrem Berater Bescheid, damit es bis zum Audit klappt.</p>'
+    + '<p class="grau">Kein Zugriff auf die Originaldateien (z. B. Google-Anmeldung klappt nicht)? Nutzen Sie die <b>PDF-Kopie</b> – und sagen Sie ' + esc(bn('dat')) + ' Bescheid, damit es bis zum Audit klappt.</p>'
     + '<div class="karte"><div class="zeile"><input id="suche" type="search" placeholder="z. B. Lieferantenbewertung, Feuerlöscher, Politik, Notfall" style="flex:1"><button class="knopf" id="suchen">Suchen</button><button class="knopf zweit klein" id="sprich" title="Frage sprechen">🎤</button></div></div>'
     + '<div id="ergebnis"></div>'
     + pdfSicherungHtml()
@@ -370,7 +382,7 @@ function pdfSicherungHtml() {
   return '<h3>Alle Unterlagen – live und als PDF</h3><div class="karte"><p><b>Zur Sicherheit:</b> Klappt am Audittag der Zugang zu Ihren Dateien nicht (Internet, Anmeldung, EDV), öffnen Sie die <b>PDF-Kopie</b>. Am besten laden Sie heute schon alle PDFs auf Ihren Laptop herunter.</p>'
     + (S.start.pdf_zip ? '<p><a class="knopf" href="' + esc(S.start.pdf_zip) + '" download>Alle PDFs als Zip herunterladen</a></p>' : '')
     + '<table class="spick">' + doks.map(d => '<tr><td class="np">' + esc(d.d_nr || '') + '</td><td>' + esc(d.titel) + (d.stand ? ' <span class="grau">(' + esc(d.stand) + ')</span>' : '') + '</td><td class="zeile">' + (d.link ? '<button class="knopf klein zweit" data-d="' + esc(d.id) + '">live öffnen</button>' : '') + kopieKnopf(d.id, '') + '</td></tr>').join('') + '</table>'
-    + '<p class="grau">Die PDF-Kopie zeigt den Stand vom ' + esc(new Date().toLocaleDateString('de-DE')) + ' der Vorbereitung. Wenn Ihr Berater Dokumente ändert, bekommen Sie eine neue Fassung.</p></div>';
+    + '<p class="grau">Die PDF-Kopie zeigt den Stand vom ' + esc(new Date().toLocaleDateString('de-DE')) + ' der Vorbereitung. Wenn ' + esc(bn('nom')) + ' Dokumente ändert, bekommen Sie eine neue Fassung.</p></div>';
 }
 function orteKurz(f) { const o = L.orteJeDokument(f.hilfe, S.start.dokumente); return Object.keys(o).map(k => kurzName(k) + (o[k].length ? ' ' + o[k].slice(0, 3).join(', ') : '')).join(' · '); }
 function planDurchgangHtml() {
@@ -506,7 +518,7 @@ function beispielVorschlag(f) {
 
 async function trainer(f, modus) {
   const zeig = f.art === 'zeig_mal' || S.audit.stufe === 1, box = $('#trainer-box');
-  let start = Date.now(), hilfe = false, foto = null;
+  let start = Date.now(), hilfe = false, foto = null, gefundenBei = 0;
   const typ = ((eintrag('auditor', 'typ') || {}).daten || {}).typ;
   const wer = zeig ? 'Zeig mal' : (typ ? L.AUDITOR_TYPEN[typ].name : ((S.start.level || {})[S.audit.auditor_level] || {}).name || 'Übungsauditor');
   box.innerHTML = kopfTrainer((f.normkapitel || '') + ' · ' + wer)
@@ -520,7 +532,7 @@ async function trainer(f, modus) {
       : '<textarea id="t-text" placeholder="Ihre Antwort, wie Sie sie im Audit sagen würden"></textarea><div class="zeile"><button class="knopf klein zweit" id="t-diktat">🎤 Diktieren</button><span class="grau" id="t-dstat"></span><span class="uhr klein" id="t-uhr">0:00</span></div>')
     + '<div class="hilfe" id="t-hilfe" hidden></div><div id="t-foto"></div>'
     + '<div class="zeile" style="margin-top:12px" id="t-knoepfe">'
-    + (zeig ? '<button class="knopf gruen" id="t-gefunden">Gefunden – Foto machen</button>' : '<button class="knopf gruen" id="t-fertig">Fertig – Rückmeldung</button>')
+    + (zeig ? '<button class="knopf gruen" id="t-gefunden">Gefunden!</button>' : '<button class="knopf gruen" id="t-fertig">Fertig – Rückmeldung</button>')
     + '<button class="knopf zweit" id="t-hilfe-k">Hilfe: Wo steht das?</button><button class="knopf rot" data-s="weiss_nicht">Weiß ich nicht</button></div>'
     + '<div id="t-erg"></div>';
   $('#trainer').style.display = 'flex';
@@ -538,14 +550,14 @@ async function trainer(f, modus) {
   if (zeig) {
     const t = $('#t-teilen');
     if (!(S.stream && S.stream.active)) {
-      t.innerHTML = '<div class="hinweis">Für das Übungsfoto bitte einmal den Bildschirm teilen („Gesamter Bildschirm“). <button class="knopf klein" id="t-share">Bildschirm teilen</button> <span class="grau">Ohne Teilen üben Sie nur mit der Stoppuhr.</span></div>';
+      t.innerHTML = '<p class="grau">Tipp: Wenn Sie einmal den Bildschirm teilen, macht das Programm das Übungsfoto selbst. <button class="link" id="t-share">Bildschirm teilen</button> Es geht auch ohne – dann fügen Sie ein eigenes Bildschirmfoto ein.</p>';
       $('#t-share').onclick = async () => { if (await teilen()) { t.innerHTML = '<p class="grau">✓ Bildschirm wird geteilt.</p>'; start = Date.now(); } };
     } else t.innerHTML = '<p class="grau">✓ Bildschirm wird geteilt.</p>';
   } else diktat($('#t-diktat'), (txt) => { $('#t-text').value += ($('#t-text').value ? ' ' : '') + txt; });
 
   const fertig = async (sicherheit, gefunden, pruefung) => {
     clearInterval(uhr);
-    const sek = Math.round((Date.now() - start) / 1000);
+    const sek = Math.round(((gefundenBei || Date.now()) - start) / 1000);
     let s = zeig ? L.zeigMalErgebnis(sek, hilfe, gefunden) : sicherheit;
     if (pruefung && pruefung.passt === 'nein' && s === 'sicher') s = 'unsicher';
     $('#t-knoepfe').innerHTML = '';
@@ -556,7 +568,7 @@ async function trainer(f, modus) {
     const farbe = s === 'sicher' && !hilfe ? 'gruen' : s === 'weiss_nicht' ? 'rot' : 'gelb';
     if (S.queue) S.queue.ergebnis.push(farbe);
     await zeigeHilfe();
-    $('#t-erg').innerHTML = '<div class="karte"><span class="dot ' + farbe + '"></span> <b>' + (farbe === 'gruen' ? 'Sehr gut – ' + (zeig ? 'gefunden in ' + sek + ' Sekunden.' : 'sicher beantwortet.') : farbe === 'gelb' ? (zeig ? 'Gefunden' + (hilfe ? ' mit Hilfe' : '') + ' in ' + sek + ' Sekunden. Merken Sie sich die Fundstelle oben.' : 'Gespeichert. Schauen Sie sich die Fundstelle oben noch einmal an.') : 'Kein Problem – genau dafür üben wir. Die Fundstelle steht oben.') + '</b></div>'
+    $('#t-erg').innerHTML = '<div class="karte"><span class="dot ' + farbe + '"></span> <b>' + (farbe === 'gruen' ? 'Sehr gut – ' + (zeig ? 'gefunden in ' + sek + (sek === 1 ? ' Sekunde.' : ' Sekunden.') : 'sicher beantwortet.') : farbe === 'gelb' ? (zeig ? 'Gefunden' + (hilfe ? ' mit Hilfe' : '') + ' in ' + sek + ' Sekunden. Merken Sie sich die Fundstelle oben.' : 'Gespeichert. Schauen Sie sich die Fundstelle oben noch einmal an.') : 'Kein Problem – genau dafür üben wir. Die Fundstelle steht oben.') + '</b></div>'
       + '<div class="zeile"><button class="knopf" id="t-weiter">' + (S.queue && S.queue.pos < S.queue.items.length ? 'Weiter' : (S.queue && S.queue.einzel ? 'Nächste Frage' : 'Abschließen')) + '</button><button class="knopf zweit" id="t-ende">Pause</button></div>';
     $('#t-weiter').onclick = () => {
       if (S.queue && S.queue.einzel) { const i = S.fragen.indexOf(f); const n = S.fragen.slice(i + 1).concat(S.fragen.slice(0, i)).find(x => L.ampel(antwortenZu(x.id)) !== 'gruen'); if (n) { S.queue.items.push({ art: 'frage', item: n }); } }
@@ -578,29 +590,60 @@ async function trainer(f, modus) {
     $$('[data-s2]', box).forEach(b => b.onclick = () => fertig(b.dataset.s2, true));
   };
   const g = $('#t-gefunden');
-  if (g) g.onclick = async () => {
-    const sekBeimKlick = Date.now(); let pruefung = null;
-    if (S.stream && S.stream.active) {
-      foto = await bildschirmfoto(S.stream);
-      if (foto) {
-        $('#t-foto').innerHTML = '<p class="grau">Ihr Übungsfoto:</p><img class="foto" src="' + foto + '" alt="Bildschirmfoto"><div id="t-pruef" class="grau">Ich prüfe, ob das die richtige Stelle ist … <button class="link" id="t-ohne">ohne Prüfung weiter</button></div>';
-        clearInterval(uhr); start = start + (Date.now() - sekBeimKlick); // Pruefzeit zaehlt nicht
-        let abbruch = false; $('#t-ohne').onclick = () => { abbruch = true; };
-        try {
-          const text = await Promise.race([ocr(foto), new Promise(r => setTimeout(() => r(null), 45000)), new Promise(r => { const iv = setInterval(() => { if (abbruch) { clearInterval(iv); r(null); } }, 200); })]);
-          if (text) {
-            const erw = L.auszuegeZurFundstelle(f.hilfe, f.frage, S.start.dokumente, await auszuege(), 4);
-            pruefung = L.fotoPruefen(text, erw, await auszuege(), S.start.dokumente);
-            $('#t-pruef').innerHTML = '<span class="pruef ' + pruefung.passt + '">' + ({ ja: '✓ ', teilweise: '≈ ', nein: '✗ ', unklar: '? ' }[pruefung.passt]) + esc(pruefung.hinweis) + '</span>';
-          } else $('#t-pruef').textContent = 'Foto gespeichert (ohne Prüfung).';
-          const k = await ki('foto_pruefen', { bild: await verkleinern(foto, 1400), frage: f.frage, hilfe: f.hilfe });
-          if (k && k.hinweis) { pruefung = { passt: k.passt, hinweis: k.hinweis }; $('#t-pruef').innerHTML = '<span class="pruef ' + esc(k.passt) + '">KI: ' + esc(k.hinweis) + '</span>'; }
-        } catch (e) { $('#t-pruef').textContent = 'Foto gespeichert (Prüfung nicht möglich).'; }
-      }
-    }
-    fertig('sicher', true, pruefung);
+  if (g) g.onclick = () => {
+    gefundenBei = Date.now(); clearInterval(uhr); // Zeit stoppt beim Finden, das Foto zaehlt nicht mit
+    $('#t-knoepfe').innerHTML = ''; $('#t-teilen').innerHTML = '';
+    fotoWaehlen($('#t-foto'), async (bild) => {
+      foto = bild; let pruefung = null;
+      if (!foto) return fertig('sicher', true, null);
+      $('#t-foto').innerHTML = '<p class="grau">Ihr Übungsfoto:</p><img class="foto" src="' + foto + '" alt="Bildschirmfoto"><div id="t-pruef" class="grau">Ich prüfe, ob das die richtige Stelle ist … <button class="link" id="t-ohne">ohne Prüfung weiter</button></div>';
+      let abbruch = false; $('#t-ohne').onclick = () => { abbruch = true; };
+      try {
+        const text = await Promise.race([ocr(foto), new Promise(r => setTimeout(() => r(null), 45000)), new Promise(r => { const iv = setInterval(() => { if (abbruch) { clearInterval(iv); r(null); } }, 200); })]);
+        if (text) {
+          const erw = L.auszuegeZurFundstelle(f.hilfe, f.frage, S.start.dokumente, await auszuege(), 4);
+          pruefung = L.fotoPruefen(text, erw, await auszuege(), S.start.dokumente);
+          $('#t-pruef').innerHTML = '<span class="pruef ' + pruefung.passt + '">' + ({ ja: '✓ ', teilweise: '≈ ', nein: '✗ ', unklar: '? ' }[pruefung.passt]) + esc(pruefung.hinweis) + '</span>';
+        } else $('#t-pruef').textContent = 'Foto gespeichert (ohne Prüfung).';
+        const k = await ki('foto_pruefen', { bild: await verkleinern(foto, 1400), frage: f.frage, hilfe: f.hilfe });
+        if (k && k.hinweis) { pruefung = { passt: k.passt, hinweis: k.hinweis }; $('#t-pruef').innerHTML = '<span class="pruef ' + esc(k.passt) + '">KI: ' + esc(k.hinweis) + '</span>'; }
+      } catch (e) { $('#t-pruef').textContent = 'Foto gespeichert (Prüfung nicht möglich).'; }
+      fertig('sicher', true, pruefung);
+    });
   };
 }
+/* Übungsfoto: drei Wege, weil das Teilen nicht überall klappt (Mac-Freigabe, nur ein Bildschirm, Firmen-Laptop).
+   1) Foto in 5 Sekunden (Bildschirm wird geteilt, Kunde wechselt zum Dokument)  2) eigenes Bildschirmfoto mit Strg+V einfügen  3) Bilddatei wählen */
+function fotoWaehlen(ziel, weiter) {
+  const mac = /Mac/.test(navigator.platform || navigator.userAgent);
+  const tasten = mac ? '<kbd>⌘</kbd> + <kbd>Ctrl</kbd> + <kbd>⇧</kbd> + <kbd>4</kbd>, Bereich aufziehen' : '<kbd>Windows</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>, Bereich aufziehen';
+  ziel.innerHTML = '<div class="karte foto-wahl"><b>Gut gefunden! Jetzt das Übungsfoto von der Stelle:</b>'
+    + '<div class="foto-weg"><button class="knopf" id="fw-countdown">⏱ Foto in 5 Sekunden</button><span class="grau">Klicken, dann sofort zum Dokument wechseln. Nach dem Piepton zurückkommen.</span></div>'
+    + '<div class="foto-weg"><button class="knopf zweit" id="fw-einf">📋 Einfügen</button><span class="grau">Eigenes Bildschirmfoto: ' + tasten + ', dann hier <kbd>' + (mac ? '⌘' : 'Strg') + '</kbd> + <kbd>V</kbd> drücken.</span></div>'
+    + '<div class="foto-weg"><label class="knopf zweit">📁 Bild wählen<input type="file" accept="image/*" id="fw-datei" hidden></label><span class="grau">Gespeichertes Bildschirmfoto oder Handyfoto vom Bildschirm.</span></div>'
+    + '<div id="fw-status" class="grau"></div><button class="link" id="fw-ohne">Ohne Foto weiter</button></div>';
+  let fertig = false;
+  const ende = (bild) => { if (fertig) return; fertig = true; document.removeEventListener('paste', einf); weiter(bild); };
+  const ausDatei = (datei) => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(datei); });
+  const einf = async (e) => { const it = [...((e.clipboardData || {}).items || [])].find(x => /^image\//.test(x.type)); if (!it) { $('#fw-status').textContent = 'In der Zwischenablage ist kein Bild. Erst das Bildschirmfoto machen, dann einfügen.'; return; } e.preventDefault(); ende(await verkleinern(await ausDatei(it.getAsFile()), 1600)); };
+  document.addEventListener('paste', einf);
+  $('#fw-datei').onchange = async (e) => { const d = e.target.files[0]; if (d) ende(await verkleinern(await ausDatei(d), 1600)); };
+  $('#fw-ohne').onclick = () => ende(null);
+  $('#fw-einf').onclick = () => { $('#fw-status').innerHTML = 'Machen Sie jetzt das Bildschirmfoto (' + tasten + ') und drücken Sie danach hier <kbd>' + (mac ? '⌘' : 'Strg') + '</kbd> + <kbd>V</kbd>.'; };
+  $('#fw-countdown').onclick = async () => {
+    const st = await teilen(); if (!st) { $('#fw-status').textContent = 'Bildschirm teilen hat nicht geklappt. Nehmen Sie den Weg „Einfügen“ darunter.'; return; }
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = st; v.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0;pointer-events:none'; document.body.appendChild(v); v.play().catch(() => {});
+    const titel = document.title;
+    for (let i = 5; i > 0; i--) { $('#fw-status').innerHTML = '<b>Foto in ' + i + ' …</b> Jetzt zum Dokument wechseln.'; document.title = '📸 ' + i + ' …'; await new Promise(r => setTimeout(r, 1000)); }
+    let bild = null;
+    try { if (window.ImageCapture) { const bm = await new ImageCapture(st.getVideoTracks()[0]).grabFrame(); const c = document.createElement('canvas'); const f = Math.min(1, 1600 / bm.width); c.width = Math.round(bm.width * f); c.height = Math.round(bm.height * f); c.getContext('2d').drawImage(bm, 0, 0, c.width, c.height); bild = c.toDataURL('image/jpeg', 0.85); } } catch (e) { /* weiter mit Video */ }
+    if (!bild) bild = await bildschirmfoto(st);
+    v.srcObject = null; v.remove(); piep(); document.title = '✓ Foto gemacht – zurück zur Übung'; setTimeout(() => { document.title = titel; }, 8000);
+    if (!bild) { $('#fw-status').textContent = 'Das Foto ist leer. Am Mac: Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme → Chrome erlauben. Oder den Weg „Einfügen“ nehmen.'; return; }
+    ende(bild);
+  };
+}
+function piep() { try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + 0.25); } catch (e) { /* ohne Ton */ } }
 async function verkleinern(dataUrl, breite) {
   const img = new Image(); img.src = dataUrl; await img.decode().catch(() => {});
   const f = Math.min(1, breite / (img.width || breite)), c = document.createElement('canvas'); c.width = Math.round((img.width || breite) * f); c.height = Math.round((img.height || breite * 0.6) * f);
@@ -806,10 +849,10 @@ ANSICHT.danach = () => {
     + '<label><b>Wo war es schwer?</b><textarea id="r-schwer">' + esc(r.schwer || '') + '</textarea></label>'
     + '<label><b>Was hat der Auditor festgestellt?</b> <span class="grau">(Hinweise, Abweichungen)</span><textarea id="r-fest">' + esc(r.fest || '') + '</textarea></label>'
     + '<button class="knopf" id="r-speichern">Speichern</button></div>'
-    + '<h3>Ergebnis an Ihren Berater</h3><div class="karte">'
-    + (api.lokal && !S.start.demo ? '<p>Ihr Fortschritt liegt nur in diesem Browser. Schicken Sie ihn Ihrem Berater: Datei herunterladen und an die E-Mail anhängen.</p><div class="zeile"><button class="knopf" id="r-export">Datei herunterladen</button>'
+    + '<h3>Ergebnis an ' + esc(bn('akk')) + '</h3><div class="karte">'
+    + (api.lokal && !S.start.demo ? '<p>Ihr Fortschritt liegt nur in diesem Browser. Schicken Sie ihn ' + esc(bn('dat')) + ': Datei herunterladen und an die E-Mail anhängen.</p><div class="zeile"><button class="knopf" id="r-export">Datei herunterladen</button>'
       + (k.berater_email ? '<a class="knopf zweit" id="r-mail" href="#">E-Mail vorbereiten</a>' : '') + '</div><p class="grau">Es wird nichts automatisch verschickt.</p>'
-      : S.start.demo ? '<p class="grau">Demo – hier würde der Kunde sein Ergebnis an den Berater schicken.</p>' : '<p>Ihre Angaben sind gespeichert – Ihr Berater sieht sie.</p>') + '</div>';
+      : S.start.demo ? '<p class="grau">Demo – hier würde der Kunde sein Ergebnis an den Berater schicken.</p>' : '<p>Ihre Angaben sind gespeichert – ' + esc(bn('nom')) + ' sieht sie.</p>') + '</div>';
   $('#r-speichern').onclick = async () => {
     await speichereEintrag('rueckmeldung', 'audit', { typ: $('#r-typ').value, fragen: $('#r-fragen').value, gut: $('#r-gut').value, schwer: $('#r-schwer').value, fest: $('#r-fest').value });
     if ($('#r-typ').value) await speichereEintrag('auditor', 'typ', { typ: $('#r-typ').value, quelle: 'rueckmeldung' });
