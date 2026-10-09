@@ -224,6 +224,7 @@ function sendenPanel(vorText) {
 }
 async function senden(knopf, nachricht) {
   const daten = api.export(); daten.nachweise = (daten.nachweise || []).map(n => Object.assign({}, n, { bild: '' }));
+  daten.eintraege = (daten.eintraege || []).map(e => e.daten && e.daten.foto ? Object.assign({}, e, { daten: Object.assign({}, e.daten, { foto: '(Foto im Browser)' }) }) : e); // klein halten: keine Bilder im Formular
   if (nachricht) daten.nachricht = nachricht;
   const r = reife(), z = stand();
   const felder = { 'form-name': 'ergebnis', kunde: S.start.kunde.name, mitarbeiter: S.ma ? S.ma.name : '', stufe: String(S.audit.stufe), nachricht: nachricht || '',
