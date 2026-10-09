@@ -850,8 +850,8 @@ ANSICHT.danach = () => {
     + '<label><b>Was hat der Auditor festgestellt?</b> <span class="grau">(Hinweise, Abweichungen)</span><textarea id="r-fest">' + esc(r.fest || '') + '</textarea></label>'
     + '<button class="knopf" id="r-speichern">Speichern</button></div>'
     + '<h3>Ergebnis an ' + esc(bn('akk')) + '</h3><div class="karte">'
-    + (api.lokal && !S.start.demo ? '<p>Ihr Fortschritt liegt nur in diesem Browser. Schicken Sie ihn ' + esc(bn('dat')) + ': Datei herunterladen und an die E-Mail anhängen.</p><div class="zeile"><button class="knopf" id="r-export">Datei herunterladen</button>'
-      + (k.berater_email ? '<a class="knopf zweit" id="r-mail" href="#">E-Mail vorbereiten</a>' : '') + '</div><p class="grau">Es wird nichts automatisch verschickt.</p>'
+    + (api.lokal && !S.start.demo ? '<p>Ihre Rückmeldung und Ihr Übungsstand liegen nur in diesem Browser. Ein Klick schickt beides direkt an ' + esc(bn('akk')) + '.</p><div class="zeile"><button class="knopf" id="r-senden">✉ Ergebnis an ' + esc(bn('akk')) + ' senden</button></div>'
+      + '<p class="grau">Nur falls das Senden nicht klappt: <button class="link" id="r-export">Datei herunterladen</button> und per E-Mail schicken.</p>'
       : S.start.demo ? '<p class="grau">Demo – hier würde der Kunde sein Ergebnis an den Berater schicken.</p>' : '<p>Ihre Angaben sind gespeichert – ' + esc(bn('nom')) + ' sieht sie.</p>') + '</div>';
   $('#r-speichern').onclick = async () => {
     await speichereEintrag('rueckmeldung', 'audit', { typ: $('#r-typ').value, fragen: $('#r-fragen').value, gut: $('#r-gut').value, schwer: $('#r-schwer').value, fest: $('#r-fest').value });
@@ -859,12 +859,7 @@ ANSICHT.danach = () => {
     hinweisBox('Gespeichert. Danke!', 'ok');
   };
   const ex = $('#r-export'); if (ex) ex.onclick = () => herunterladen();
-  const ml = $('#r-mail'); if (ml) ml.onclick = (e) => {
-    e.preventDefault(); herunterladen();
-    const re = reife(), z = stand();
-    const text = 'Hallo ' + (k.berater_name || '') + ',\n\nanbei mein Stand der Auditvorbereitung (Datei im Anhang).\n\nPrüfungsreife: ' + re.prozent + ' %\nFahrplan/Fragen: ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen\n\nViele Grüße\n' + (S.ma ? S.ma.name : '');
-    location.href = 'mailto:' + encodeURIComponent(k.berater_email) + '?subject=' + encodeURIComponent('Auditvorbereitung ' + k.name) + '&body=' + encodeURIComponent(text);
-  };
+  const rs = $('#r-senden'); if (rs) rs.onclick = async () => { $('#r-speichern').click(); sendenPanel(''); };
 };
 function herunterladen() {
   const daten = api.export(); const blob = new Blob([JSON.stringify(daten, null, 1)], { type: 'application/json' });
