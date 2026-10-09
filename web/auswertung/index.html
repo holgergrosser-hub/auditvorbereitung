@@ -29,6 +29,7 @@ table{border-collapse:collapse;width:100%;font-size:.9rem}td,th{border-bottom:1p
 </main>
 <script type="module">
 import L from '../logik.js';
+import { berichtHtml, csvKnoepfe } from './bericht.js';
 const $ = (s) => document.querySelector(s); const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 let paket = null, ergebnisse = [];
 const lies = (f) => new Promise((ok, nein) => { const r = new FileReader(); r.onload = () => { try { ok(JSON.parse(r.result)); } catch (e) { nein(e); } }; r.readAsText(f); });
@@ -40,69 +41,8 @@ $('#einfuegen-los').onclick = () => { try { ergebnisse = [JSON.parse($('#einfueg
 
 function zeichne() {
   if (!paket || !ergebnisse.length) return;
-  const ma = Object.fromEntries(paket.mitarbeiter.map(m => [m.id, m.name]));
-  $('#aus').innerHTML = ergebnisse.map(e => {
-    const ein = (art) => (e.eintraege || []).filter(x => x.art === art);
-    let html = '<h2>' + esc(e.kunde) + ' · exportiert ' + esc(String(e.exportiert).slice(0, 16).replace('T', ' ')) + '</h2>';
-    if (e.nachricht) html += '<div class="karte" style="border-left:4px solid #C2410C"><b>Nachricht vom Kunden</b><p style="white-space:pre-wrap">' + esc(e.nachricht) + '</p></div>';
-    // Kennzahlen je Audit
-    paket.audits.forEach(a => {
-      const fr = paket.fragenJe[a.id] || [], an = (e.antworten || []).filter(x => x.audit_id === a.id);
-      const fallen = (paket.stolperfallen || []).filter(f => !f.stufe || f.stufe <= a.stufe);
-      const spur = L.spurPruefen(ein('spur').map(x => Object.assign({ k: x.schluessel }, x.daten)));
-      const r = L.pruefungsreife({ fragen: fr, antworten: an, technik_check: e.technik, faktencheck: e.faktencheck, fallen: fallen.length, fallen_geuebt: fallen.filter(f => ein('falle').some(x => x.schluessel === f.id)).length, spur_stationen: spur.von, spur_fertig: spur.fertig, stufe: a.stufe });
-      const leute = [...new Set(an.map(x => x.mitarbeiter_id))].filter(Boolean);
-      const m = L.ampelMatrix(fr, an, leute.map(id => ({ id })));
-      html += '<div class="karte"><b>Stufe ' + a.stufe + ' · ' + esc(a.datum || 'offen') + '</b><div class="kacheln"><div class="kachel"><div class="zahl">' + r.prozent + ' %</div>Prüfungsreife</div>'
-        + r.teile.map(t => '<div class="kachel"><div class="zahl">' + t.prozent + ' %</div>' + esc(t.name) + '</div>').join('') + '</div>'
-        + (leute.length ? '<table><tr><th>Punkt</th><th>Frage</th>' + leute.map(id => '<th>' + esc(ma[id] || id) + '</th>').join('') + '</tr>'
-          + m.zeilen.filter(z => leute.some(id => z.je[id] !== 'offen')).map(z => '<tr><td>' + esc(z.normkapitel) + '</td><td>' + esc(String(z.frage).slice(0, 90)) + '</td>' + leute.map(id => '<td><span class="dot ' + z.je[id] + '"></span></td>').join('') + '</tr>').join('')
-          + '<tr><td></td><td><b>Summe</b> (grün / gelb / rot / offen)</td>' + leute.map(id => { const s = m.summe[id]; return '<td>' + s.gruen + ' / ' + s.gelb + ' / ' + s.rot + ' / ' + s.offen + '</td>'; }).join('') + '</tr></table>' : '<p class="grau">Noch keine Antworten.</p>')
-        + '</div>';
-    });
-    // Fotopruefungen, die nicht passten
-    const falsch = (e.antworten || []).filter(x => x.pruefung && x.pruefung.passt !== 'ja');
-    if (falsch.length) html += '<div class="karte"><b>Zeig mal: gezeigtes Dokument passte nicht</b><ul>' + falsch.map(x => { const f = Object.values(paket.fragenJe).flat().find(y => y.id === x.frage_id) || {}; return '<li>' + esc(f.normkapitel || '') + ' – ' + esc(x.pruefung.hinweis) + '</li>'; }).join('') + '</ul></div>';
-    // Faktencheck
-    html += '<div class="karte"><b>Faktencheck</b><table>' + (e.faktencheck || []).map(f => '<tr class="' + (f.antwort === 'stimmt_nicht' ? 'korr' : '') + '"><td>' + esc(f.thema) + '</td><td>' + esc(f.angabe) + '</td><td>' + (f.antwort === 'stimmt' ? '<span class="fein">✓ stimmt</span>' : f.antwort === 'stimmt_nicht' ? '<b>Korrektur:</b> ' + esc(f.korrektur) : '<span class="grau">offen</span>') + '</td></tr>').join('') + '</table></div>';
-    // Stolperfallen
-    const fa = ein('falle'); if (fa.length) html += '<div class="karte"><b>Stolperfallen</b><table>' + fa.map(x => { const f = (paket.stolperfallen || []).find(y => y.id === x.schluessel) || {}; return '<tr><td>' + esc(f.thema) + '</td><td>' + (x.daten.sicherheit === 'sicher' ? '<span class="fein">sicher</span>' : '<b>unsicher</b>') + '</td><td>' + esc(x.daten.text || '') + '</td></tr>'; }).join('') + '</table></div>';
-    // Fehlerbuch: Ursachen und schwer auffindbare Fundstellen (Hinweis auf die eigene Dokumentation)
-    const urs = {}; ein('lernen').filter(x => /^ursache:/.test(x.schluessel)).forEach(x => { urs[x.schluessel.slice(8)] = x.daten.ursache; });
-    const alleFragen = Object.values(paket.fragenJe).flat();
-    const buch = L.fehlerbuch(alleFragen, e.antworten || [], urs);
-    if (buch.length) {
-      const z = {}; buch.forEach(b => { const k = b.ursache || b.vorschlag || 'offen'; z[k] = (z[k] || 0) + 1; });
-      const haupt = Object.entries(z).filter(([k]) => k !== 'offen').sort((a, b) => b[1] - a[1])[0];
-      const hot = L.fundstellenHotspots(buch);
-      html += '<div class="karte"><b>Fehlerbuch: ' + buch.length + ' offene Baustellen</b><p>' + Object.entries(z).map(([k, n]) => (L.URSACHEN[k] ? L.URSACHEN[k].symbol + ' ' + L.URSACHEN[k].name : '❓ ohne Ursache') + ': ' + n).join(' · ') + '</p>'
-        + (haupt ? '<p><b>Diagnose:</b> Der Kunde scheitert vor allem an „' + esc(L.URSACHEN[haupt[0]].name) + '“ (' + Math.round(haupt[1] / buch.length * 100) + ' %). Empfehlung: ' + esc(L.URSACHEN[haupt[0]].uebung) + '</p>' : '')
-        + (hot.length && hot[0].anzahl > 1 ? '<p><b>Schwer auffindbare Fundstellen</b> (Verweis im Dokument verbessern?):</p><ul>' + hot.slice(0, 5).map(h => '<li>' + esc(h.ort) + ' – ' + h.anzahl + '×</li>').join('') + '</ul>' : '') + '</div>';
-    }
-    // Erklaer es dem Azubi + Beispielkiste
-    const az = ein('lernen').filter(x => /^azubi:/.test(x.schluessel));
-    if (az.length) html += '<div class="karte"><b>Erklär es dem Azubi</b><table>' + az.map(x => '<tr><td>' + esc(x.schluessel.split(':').pop()) + '</td><td>' + (x.daten.note === 'gut' ? '<span class="fein">gut</span>' : esc(x.daten.note)) + '</td><td>eigene Worte ' + Math.round((1 - (x.daten.nachplappern || 0)) * 100) + ' %</td><td>' + (x.daten.beispiel ? 'mit Beispiel' : 'ohne Beispiel') + '</td></tr>').join('') + '</table></div>';
-    const kiste = ein('lernen').filter(x => /^beispiel:/.test(x.schluessel));
-    if (kiste.length) html += '<div class="karte"><b>Beispielkiste</b> – eigene Beispiele des Kunden für das Audit<ul>' + kiste.map(x => '<li><b>' + esc(x.daten.prozess || '') + ':</b> ' + esc(x.daten.text) + '</li>').join('') + '</ul></div>';
-    // Spur + Rundgang
-    const sp = ein('spur'); if (sp.length) { const pr = L.spurPruefen(sp.map(x => Object.assign({ k: x.schluessel }, x.daten))); html += '<div class="karte"><b>Beispielauftrag: ' + pr.fertig + ' von ' + pr.von + ' Stationen</b>' + (pr.hinweise.length ? '<ul>' + pr.hinweise.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : ' – roter Faden hält') + '</div>'; }
-    const rg = ein('rundgang'); if (rg.length) html += '<div class="karte"><b>Rundgang</b><table>' + rg.map(x => { const it = (paket.rundgang || []).find(y => y.k === x.schluessel) || {}; const s = L.rundgangStatus(Object.assign({ intervall_monate: it.intervall_monate }, x.daten)); return '<tr><td>' + esc(it.name || x.schluessel) + '</td><td>' + esc(s.status) + '</td><td>' + esc(s.naechste) + '</td><td>' + (/^data:image\//.test(x.daten.foto || '') ? '<img class="mini" src="' + x.daten.foto + '">' : '') + '</td></tr>'; }).join('') + '</table></div>';
-    // Rueckmeldung + Fragenbank
-    const rm = ein('rueckmeldung')[0];
-    if (rm) {
-      const fragen = String(rm.daten.fragen || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
-      html += '<div class="karte"><b>Rückmeldung nach dem Audit</b><p>Auditor: ' + esc((L.AUDITOR_TYPEN[rm.daten.typ] || {}).name || '–') + '</p>'
-        + (fragen.length ? '<p><b>Fragen aus dem echten Audit</b></p><ol>' + fragen.map(f => '<li>' + esc(f) + '</li>').join('') + '</ol><button class="knopf" data-csv="' + encodeURIComponent(JSON.stringify(fragen)) + '">Fragenbank (CSV) herunterladen</button>' : '')
-        + ['gut', 'schwer', 'fest'].map(k => rm.daten[k] ? '<p><b>' + ({ gut: 'Gut', schwer: 'Schwer', fest: 'Feststellungen' }[k]) + ':</b> ' + esc(rm.daten[k]) + '</p>' : '').join('') + '</div>';
-    }
-    if ((e.nachweise || []).length) html += '<div class="karte"><b>Übungsfotos</b><br>' + e.nachweise.filter(n => n.bild).map(n => '<img class="mini" title="' + esc(n.notiz) + '" src="' + n.bild + '">').join('') + '</div>';
-    return html;
-  }).join('');
-  document.querySelectorAll('[data-csv]').forEach(b => b.onclick = () => {
-    const fragen = JSON.parse(decodeURIComponent(b.dataset.csv)); const a0 = paket.audits[0] || {};
-    const csv = 'zertifizierer;norm;stufe;frage;quelle\n' + fragen.map(f => [a0.zertifizierer || '', a0.normen || '', a0.stufe || '', f, 'Rückmeldung'].map(x => '"' + String(x).replace(/"/g, '""') + '"').join(';')).join('\n');
-    const l = document.createElement('a'); l.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); l.download = 'Fragenbank_' + new Date().toISOString().slice(0, 10) + '.csv'; l.click();
-  });
+  $('#aus').innerHTML = ergebnisse.map(e => berichtHtml(L, paket, e)).join('');
+  csvKnoepfe(paket);
 }
 </script>
 </body>

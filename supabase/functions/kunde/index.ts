@@ -11,6 +11,8 @@
 //   auszuege                      alle Textstellen der gueltigen Dokumente (Suche "Wo steht das?" laeuft im Browser)
 //   eintrag  {audit_id?, mitarbeiter_id?, art, schluessel, daten}   Spurensuche, Rundgang, Fallen, Lernstand, Rueckmeldung
 //   eintraege {audit_id?}         eigene Eintraege lesen
+//   dokument {dokument_id, pdf:true}  10 Minuten gueltiger Link auf die PDF-Kopie (Seitenbetrachter pdf.html)
+//   nachricht {mitarbeiter_id?, text, zusammenfassung}  "✉ An … senden": landet im Backoffice, nie als automatische Mail
 // Bereitstellen: supabase functions deploy kunde --no-verify-jwt   (Kunden haben kein Supabase-Login)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import L from '../_shared/logik.js';
@@ -34,7 +36,10 @@ async function kundeZumToken(t: string) {
 }
 // deno-lint-ignore no-explicit-any
 const pflicht = (r: { data: any; error: unknown }) => { if (r.error) throw r.error; return r.data; };
-const DOK_FELDER = 'id, d_nr, titel, kurzname, normkapitel, bereich, stand, wichtigkeit, link, inhalt_kurz';
+const DOK_FELDER = 'id, d_nr, titel, kurzname, normkapitel, bereich, stand, wichtigkeit, link, inhalt_kurz, kopie_pfad, kopie_seiten';
+// Fuer den Kunden: Speicherpfad nie herausgeben, nur "es gibt eine PDF-Kopie"
+// deno-lint-ignore no-explicit-any
+const dokFuerKunde = (x: any) => { const o = Object.assign({}, x, { kopie: x.kopie_pfad ? 'ja' : '' }); delete o.kopie_pfad; return o; };
 
 Deno.serve(async (req) => {
   const h = cors(req.headers.get('origin'));
@@ -46,16 +51,33 @@ Deno.serve(async (req) => {
     if (!kundeId) return antwort({ fehler: 'Link ungültig oder abgelaufen. Bitte bei QM-Dienstleistungen einen neuen Link anfordern.' }, 401);
 
     if (d.aktion === 'start') {
-      const [kunde, audits, mitarbeiter, dokumente, fakten, fallen] = await Promise.all([
-        db.from('kunden').select('name, ort, technik_check, berater_email').eq('id', kundeId).single(),
+      const [kunde, audits, mitarbeiter, dokumente, fakten, fallen, aufgaben] = await Promise.all([
+        db.from('kunden').select('name, ort, technik_check, berater_email, berater_name, rundgang, pdf_zip_pfad, firma_laut_zertifizierer').eq('id', kundeId).single(),
         db.from('audits').select('id, stufe, datum, zertifizierer, auditor, normen, auditor_level, ruhemodus_tage, status').eq('kunde_id', kundeId).order('stufe'),
         db.from('mitarbeiter').select('id, name, bereich, funktion').eq('kunde_id', kundeId).order('bereich'),
         db.from('dokumente').select(DOK_FELDER).eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr'),
         db.from('faktencheck').select('id, reihenfolge, thema, angabe, fundstelle, antwort, korrektur').eq('kunde_id', kundeId).order('reihenfolge'),
-        db.from('stolperfallen').select('id, stufe, reihenfolge, thema, frage, warum, antwortlinie').eq('kunde_id', kundeId).eq('freigegeben', true).order('reihenfolge')
+        db.from('stolperfallen').select('id, stufe, reihenfolge, thema, frage, warum, antwortlinie').eq('kunde_id', kundeId).eq('freigegeben', true).order('reihenfolge'),
+        db.from('aufgaben').select('id, todo, bis_stufe, verantwortlich, termin, reihenfolge').eq('kunde_id', kundeId).order('reihenfolge')
       ]);
-      return antwort({ kunde: pflicht(kunde), audits: pflicht(audits).filter((a: any) => a.status === 'fragen_bereit'),
-        mitarbeiter: pflicht(mitarbeiter), dokumente: pflicht(dokumente), faktencheck: pflicht(fakten), stolperfallen: pflicht(fallen), level: L.AUDITOR_LEVEL });
+      const k = pflicht(kunde);
+      let pdfZip = '';
+      if (k.pdf_zip_pfad) { const z = await db.storage.from('dokumente').createSignedUrl(k.pdf_zip_pfad, 12 * 3600, { download: true }); if (!z.error) pdfZip = z.data.signedUrl; }
+      const rundgang = Array.isArray(k.rundgang) && k.rundgang.length ? k.rundgang : L.RUNDGANG_STANDARD;
+      delete k.pdf_zip_pfad; delete k.rundgang;
+      return antwort({ kunde: k, audits: pflicht(audits).filter((a: any) => a.status === 'fragen_bereit'),
+        mitarbeiter: pflicht(mitarbeiter), dokumente: pflicht(dokumente).map(dokFuerKunde), faktencheck: pflicht(fakten), stolperfallen: pflicht(fallen),
+        aufgaben: pflicht(aufgaben), rundgang, pdf_zip: pdfZip, level: L.AUDITOR_LEVEL });
+    }
+
+    if (d.aktion === 'nachricht') { // Kostenbremse: hoechstens 30 Nachrichten je Kunde und Tag
+      const heute = new Date().toISOString().slice(0, 10);
+      const { count } = await db.from('nachrichten').select('id', { count: 'exact', head: true }).eq('kunde_id', kundeId).gte('gesendet_am', heute);
+      if ((count || 0) >= 30) return antwort({ fehler: 'Heute schon sehr viele Nachrichten – bitte morgen wieder.' }, 429);
+      let maId = null;
+      if (d.mitarbeiter_id) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
+      pflicht(await db.from('nachrichten').insert({ kunde_id: kundeId, mitarbeiter_id: maId, text: String(d.text || '').slice(0, 4000), zusammenfassung: String(d.zusammenfassung || '').slice(0, 500) }));
+      return antwort({ ok: true });
     }
 
     if (d.aktion === 'auszuege') {
@@ -99,9 +121,16 @@ Deno.serve(async (req) => {
     }
 
     if (d.aktion === 'dokument') {
-      const dok = pflicht(await db.from('dokumente').select('pfad, kunde_id, titel, gueltig, link').eq('id', d.dokument_id).maybeSingle());
+      const dok = pflicht(await db.from('dokumente').select('pfad, kopie_pfad, kunde_id, titel, gueltig, link').eq('id', d.dokument_id).maybeSingle());
       if (!dok || dok.kunde_id !== kundeId || !dok.gueltig) return antwort({ fehler: 'Dokument nicht gefunden' }, 404);
+      if (d.pdf) { // Seitenbetrachter: immer die PDF-Kopie
+        if (!dok.kopie_pfad) return antwort({ fehler: 'Keine PDF-Kopie' }, 404);
+        const { data, error } = await db.storage.from('dokumente').createSignedUrl(dok.kopie_pfad, 600);
+        if (error) throw error;
+        return antwort({ url: data.signedUrl, titel: dok.titel });
+      }
       if (dok.link) return antwort({ url: dok.link, titel: dok.titel });
+      if (!dok.pfad) return antwort({ fehler: 'Keine Datei hinterlegt' }, 404);
       const { data, error } = await db.storage.from('dokumente').createSignedUrl(dok.pfad, 600);
       if (error) throw error;
       return antwort({ url: data.signedUrl, titel: dok.titel });
@@ -115,7 +144,7 @@ Deno.serve(async (req) => {
 
     if (d.aktion === 'fragen') {
       const [fragen, punkte, doks] = await Promise.all([
-        db.from('fragen').select('id, planpunkt_id, pruefpunkt_id, art, normen, reihenfolge, bereich, frage, hilfe, dokument_ids').eq('audit_id', audit.id).order('reihenfolge'),
+        db.from('fragen').select('id, planpunkt_id, pruefpunkt_id, art, normen, reihenfolge, bereich, normkapitel, titel, frage, hilfe, dokument_ids').eq('audit_id', audit.id).order('reihenfolge'),
         db.from('planpunkte').select('id, reihenfolge, zeit, thema, normkapitel, bereich, mitarbeiter_ids, gespraechspartner, nachweise').eq('audit_id', audit.id).order('reihenfolge'),
         db.from('dokumente').select(DOK_FELDER).eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr')
       ]);

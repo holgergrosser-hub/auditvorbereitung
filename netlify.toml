@@ -1,0 +1,12 @@
+# Eine Netlify-Site fuer alle Kunden (Lektion A15): veroeffentlicht den Ordner web/ ohne Build.
+# Kunden: /kunde/?t=<persoenlicher Link>   Backoffice: /backoffice/
+[build]
+  publish = "web"
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"

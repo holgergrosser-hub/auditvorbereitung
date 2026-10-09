@@ -1,0 +1,10 @@
+# Minimale Supabase-Konfiguration fuer das automatische Ausspielen (Lektion A14).
+# Das echte Projekt wird ueber das GitHub-Geheimnis SUPABASE_PROJECT_REF verknuepft.
+project_id = "auditvorbereitung"
+
+# Kunden haben kein Supabase-Login: die Functions pruefen selbst (persoenlicher Link bzw. Backoffice-Anmeldung)
+[functions.kunde]
+verify_jwt = false
+
+[functions.ki]
+verify_jwt = false

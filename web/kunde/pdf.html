@@ -37,12 +37,22 @@ body{margin:0;background:#E9EEF3;color:var(--text);font:15px/1.4 system-ui,"Sego
 </div>
 <div id="seiten"></div>
 <div id="meldung" hidden></div>
+<script src="../config.js"></script>
 <script src="pdfjs/pdf.min.js"></script>
 <script>
 (async function () {
   const q = new URLSearchParams(location.search);
-  const datei = q.get('d') || '';
-  if (!/^dok\/[A-Za-z0-9_.-]+\.pdf$/.test(datei)) return melden('Kein gültiges Dokument angegeben.');
+  let datei = q.get('d') || '';
+  const cfg = window.AV_CONFIG || {};
+  if (q.get('k') && cfg.supabaseUrl) { // Servermodus: zeitlich begrenzten Link auf die PDF-Kopie holen (persoenlicher Link z)
+    try {
+      const h = { 'content-type': 'application/json', apikey: cfg.anonKey }; if (/^eyJ/.test(cfg.anonKey || '')) h.authorization = 'Bearer ' + cfg.anonKey;
+      const r = await fetch(cfg.supabaseUrl + '/functions/v1/kunde', { method: 'POST', headers: h, body: JSON.stringify({ t: q.get('z') || '', aktion: 'dokument', dokument_id: q.get('k'), pdf: true }) });
+      const j = await r.json(); if (!r.ok || j.fehler || !j.url) return melden(j.fehler || 'Das Dokument ist nicht verfügbar.');
+      datei = j.url;
+    } catch (e) { return melden('Keine Verbindung. Bitte später noch einmal versuchen.'); }
+    if (datei.indexOf(cfg.supabaseUrl) !== 0) return melden('Kein gültiges Dokument angegeben.');
+  } else if (!/^dok\/[A-Za-z0-9_.-]+\.pdf$/.test(datei)) return melden('Kein gültiges Dokument angegeben.');
   const von = Math.max(1, parseInt(q.get('s') || '1', 10) || 1), bisRoh = parseInt(q.get('b') || '', 10);
   const titel = q.get('t') || 'Dokument';
   document.title = titel + (q.get('s') ? ' – Seite ' + von : '');

@@ -1,0 +1,33 @@
+# Lektion A14: Bei jedem Push nach main, der etwas unter supabase/ aendert, spielt GitHub
+# die neuen Migrationen und die Edge Functions in das Supabase-Projekt ein.
+# Benoetigt drei Geheimnisse (Repository → Settings → Secrets and variables → Actions):
+#   SUPABASE_ACCESS_TOKEN  (supabase.com → Account → Access Tokens)
+#   SUPABASE_DB_PASSWORD   (Datenbank-Passwort beim Anlegen des Projekts)
+#   SUPABASE_PROJECT_REF   (Project Settings → General → Reference ID)
+name: Supabase ausspielen
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/**', '.github/workflows/supabase.yml']
+  workflow_dispatch:
+
+jobs:
+  ausspielen:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJEKT: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Projekt verknüpfen
+        run: supabase link --project-ref "$PROJEKT"
+      - name: Neue Migrationen einspielen
+        run: supabase db push
+      - name: Edge Functions ausspielen
+        run: |
+          supabase functions deploy kunde --project-ref "$PROJEKT" --no-verify-jwt
+          supabase functions deploy ki --project-ref "$PROJEKT" --no-verify-jwt

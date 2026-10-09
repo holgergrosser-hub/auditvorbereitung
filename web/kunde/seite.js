@@ -26,7 +26,7 @@ async function verbinden() {
   }
   const f = async (aktion, daten) => {
     const r = await fetch(cfg.supabaseUrl + '/functions/v1/kunde', { method: 'POST',
-      headers: { 'content-type': 'application/json', apikey: cfg.anonKey, authorization: 'Bearer ' + cfg.anonKey },
+      headers: kopfzeilen(),
       body: JSON.stringify(Object.assign({}, daten, { t: token, aktion })) });
     const j = await r.json().catch(() => ({ fehler: 'Keine Verbindung' }));
     if (!r.ok || j.fehler) throw new Error(j.fehler || ('Fehler ' + r.status));
@@ -35,11 +35,13 @@ async function verbinden() {
   return f;
 }
 
+// Neue Supabase-Schlüssel (sb_publishable_…) sind kein JWT: dann nur "apikey" senden, sonst zusätzlich "authorization"
+function kopfzeilen() { const h = { 'content-type': 'application/json', apikey: cfg.anonKey }; if (/^eyJ/.test(cfg.anonKey || '')) h.authorization = 'Bearer ' + cfg.anonKey; return h; }
 /* KI nur im Servermodus und wenn eingeschaltet (config.js: ki: true); sonst laufen die Regeln ohne KI */
 async function ki(aktion, daten) {
   if (!cfg.supabaseUrl || !cfg.ki || !token) return null;
   try {
-    const r = await fetch(cfg.supabaseUrl + '/functions/v1/ki', { method: 'POST', headers: { 'content-type': 'application/json', apikey: cfg.anonKey, authorization: 'Bearer ' + cfg.anonKey },
+    const r = await fetch(cfg.supabaseUrl + '/functions/v1/ki', { method: 'POST', headers: kopfzeilen(),
       body: JSON.stringify(Object.assign({}, daten, { t: token, aktion })) });
     const j = await r.json(); return r.ok && !j.fehler ? j : null;
   } catch (e) { return null; }
@@ -71,6 +73,7 @@ async function start() {
   $('#wahl').hidden = false;
   $('#sel-audit').onchange = $('#sel-ma').onchange = () => { merken(); laden(); };
   if (st.demo) $('#modus').textContent = 'Demo – nichts wird gespeichert.';
+  else if (!api.lokal) $('#modus').textContent = 'Ihre Eingaben werden gespeichert – Sie können mit diesem Link auf jedem Gerät weiterüben. ' + bn('nom') + ' sieht Ihren Stand.';
   else if (api.lokal) $('#modus').textContent = 'Ihre Eingaben bleiben auf diesem Gerät (immer denselben Laptop und Browser nutzen). ' + bn('nom') + ' sieht sie, wenn Sie oben rechts senden.';
   laden();
 }
@@ -110,7 +113,7 @@ function reife() {
 function zeichneKopf() {
   const r = reife();
   $('#reife').innerHTML = '<span class="reife ' + r.stufe + '" title="' + esc(r.teile.map(t => t.name + ' ' + t.prozent + ' %').join(' · ')) + '">Prüfungsreife ' + r.prozent + ' %</span>'
-    + (api.lokal && !S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an ' + esc(bn('akk')) + ' schicken">✉ An ' + esc(bn('kurz')) + ' senden</button>' : '');
+    + (!S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an ' + esc(bn('akk')) + ' schicken">✉ An ' + esc(bn('kurz')) + ' senden</button>' : '');
   const ks = $('#kopf-senden'); if (ks) ks.onclick = sendenPanel;
   zeichneNav();
 }
@@ -266,7 +269,7 @@ function wegweiserHtml() {
 }
 /* Ergebnis an den Berater: in der Testfassung per Netlify-Formular (Berater sieht es in Netlify), sonst liegt alles in der Datenbank */
 function sendenHtml() {
-  if (!api.lokal || S.start.demo) return '';
+  if (S.start.demo) return '';
   const zuletzt = (() => { try { return localStorage.getItem('av_gesendet') || ''; } catch (e) { return ''; } })();
   return '<h3>Ihr Stand an ' + esc(bn('akk')) + '</h3><div class="karte"><p>' + esc(bn('nom')) + ' sieht Ihren Übungsstand erst, wenn Sie ihn senden. Den Knopf <b>✉ An ' + esc(bn('kurz')) + ' senden</b> finden Sie jederzeit oben in der Kopfzeile – auch für Änderungswünsche an Ihren Dokumenten vor dem Audit.</p><div class="zeile"><button class="knopf" id="senden">Jetzt senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
 }
@@ -278,18 +281,30 @@ function sendenPanel(vorText) {
   d.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>An ' + esc(bn('akk')) + ' senden</b><button class="link" id="sp-zu">schließen</button></div>'
     + '<label for="sp-text">Nachricht (freiwillig) – z. B. „Bitte im Handbuch Kapitel 5 die Geschäftsführung korrigieren“ oder eine Frage vor dem Audit:</label>'
     + '<textarea id="sp-text" rows="4" placeholder="Ihre Nachricht an ' + esc(bn('akk')) + '"></textarea>'
-    + '<p class="grau">Mitgeschickt wird Ihr Übungsstand (ohne Fotos). ' + esc(bn('nom')) + ' liest alles selbst, es geht keine Mail automatisch an andere.</p>'
-    + '<div class="zeile"><button class="knopf" id="sp-los">Senden</button><button class="knopf zweit" id="sp-datei">Stattdessen als Datei herunterladen</button></div>';
+    + '<p class="grau">' + (api.lokal ? 'Mitgeschickt wird Ihr Übungsstand (ohne Fotos). ' : 'Ihr Übungsstand ist ohnehin gespeichert, mitgeschickt wird eine Kurzfassung. ') + esc(bn('nom')) + ' liest alles selbst, es geht keine Mail automatisch an andere.</p>'
+    + '<div class="zeile"><button class="knopf" id="sp-los">Senden</button>' + (api.lokal ? '<button class="knopf zweit" id="sp-datei">Stattdessen als Datei herunterladen</button>' : '') + '</div>';
   $('#main').prepend(d); window.scrollTo(0, 0); if (typeof vorText === 'string') $('#sp-text').value = vorText; $('#sp-text').focus();
   $('#sp-zu').onclick = () => d.remove();
-  $('#sp-datei').onclick = () => herunterladen();
+  if ($('#sp-datei')) $('#sp-datei').onclick = () => herunterladen();
   $('#sp-los').onclick = async () => { const ok = await senden($('#sp-los'), $('#sp-text').value.trim()); if (ok) d.remove(); };
 }
 async function senden(knopf, nachricht) {
+  const r = reife(), z = stand();
+  if (!api.lokal) { // Servermodus: Stand liegt ohnehin in der Datenbank – nur Nachricht + Kurzfassung ins Backoffice
+    const vorher = knopf ? knopf.textContent : '';
+    if (knopf) { knopf.disabled = true; knopf.textContent = 'Sende …'; }
+    try {
+      await api('nachricht', { mitarbeiter_id: S.ma ? S.ma.id : null, text: nachricht || '', zusammenfassung: 'Stufe ' + S.audit.stufe + ' · Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen' });
+      const jetzt = new Date().toLocaleString('de-DE'); try { localStorage.setItem('av_gesendet', jetzt); } catch (e) { /* */ }
+      if ($('#senden-info')) $('#senden-info').textContent = '✓ Gesendet am ' + jetzt;
+      hinweisBox('Ist bei ' + bn('dat') + ' angekommen' + (nachricht ? ' – mit Ihrer Nachricht' : '') + '. Danke!', 'ok');
+      return true;
+    } catch (e) { hinweisBox('Senden hat nicht geklappt: ' + e.message); return false; }
+    finally { if (knopf) { knopf.disabled = false; knopf.textContent = vorher; } }
+  }
   const daten = api.export(); daten.nachweise = (daten.nachweise || []).map(n => Object.assign({}, n, { bild: '' }));
   daten.eintraege = (daten.eintraege || []).map(e => e.daten && e.daten.foto ? Object.assign({}, e, { daten: Object.assign({}, e.daten, { foto: '(Foto im Browser)' }) }) : e); // klein halten: keine Bilder im Formular
   if (nachricht) daten.nachricht = nachricht;
-  const r = reife(), z = stand();
   const felder = { 'form-name': 'ergebnis', kunde: S.start.kunde.name, mitarbeiter: S.ma ? S.ma.name : '', stufe: String(S.audit.stufe), nachricht: nachricht || '',
     zusammenfassung: (nachricht ? 'MIT NACHRICHT · ' : '') + 'Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen' };
   // Übungsstand als Datei-Anhang statt als langes Textfeld: lange JSON-Texte sortiert Netlifys Spamfilter aus
@@ -359,7 +374,9 @@ function kopieUrl(d, ort) { // eigener Seitenbetrachter (pdf.html) statt #page: 
   if (!d || !d.kopie) return '';
   let von = 0, bis = 0; const m = String(ort || '').match(/Seite\s+(\d+)(?:\s*[–-]\s*(\d+))?/); if (m) { von = Number(m[1]); bis = Number(m[2] || m[1]); }
   const r = String(ort || '').match(/„([^“]+)“/); if (r && d.kopie_seiten && d.kopie_seiten[r[1]]) von = bis = d.kopie_seiten[r[1]];
-  return 'pdf.html?d=' + encodeURIComponent(d.kopie) + (von ? '&s=' + von + '&b=' + bis : '') + '&t=' + encodeURIComponent(d.titel);
+  const seite = (von ? '&s=' + von + '&b=' + bis : '') + '&t=' + encodeURIComponent(d.titel);
+  if (api && !api.lokal && token) return 'pdf.html?k=' + encodeURIComponent(d.id) + seite + '&z=' + encodeURIComponent(token); // Servermodus: signierter Link holt pdf.html selbst
+  return 'pdf.html?d=' + encodeURIComponent(d.kopie) + seite;
 }
 function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
 async function oeffne(id, ort) {
@@ -383,7 +400,7 @@ ANSICHT.fakten = () => {
       + '<div class="zeile" style="margin-top:8px"><button class="knopf klein gruen" data-a="stimmt">Stimmt</button><button class="knopf klein zweit" data-a="stimmt_nicht">Stimmt nicht</button></div>'
       + '<div class="korr" ' + (x.antwort === 'stimmt_nicht' ? '' : 'hidden') + '><textarea placeholder="Wie ist es richtig?">' + esc(x.korrektur || '') + '</textarea><button class="knopf klein" data-a="speichern">Korrektur speichern</button></div></div>').join('')
       : '<div class="karte grau">Für Sie ist noch kein Faktencheck angelegt.</div>')
-    + (korrigiert.length && api.lokal && !S.start.demo ? '<div class="karte senden-leiste"><b>' + korrigiert.length + (korrigiert.length === 1 ? ' Korrektur' : ' Korrekturen') + ' gespeichert.</b> Damit ' + esc(bn('nom')) + ' die Dokumente vor dem Audit anpassen kann, schicken Sie sie jetzt ab.<div class="zeile" style="margin-top:8px"><button class="knopf" id="fk-senden">✉ Korrekturen an ' + esc(bn('akk')) + ' senden</button></div></div>' : '');
+    + (korrigiert.length && !S.start.demo ? '<div class="karte senden-leiste"><b>' + korrigiert.length + (korrigiert.length === 1 ? ' Korrektur' : ' Korrekturen') + ' gespeichert.</b> Damit ' + esc(bn('nom')) + ' die Dokumente vor dem Audit anpassen kann, schicken Sie sie jetzt ab.<div class="zeile" style="margin-top:8px"><button class="knopf" id="fk-senden">✉ Korrekturen an ' + esc(bn('akk')) + ' senden</button></div></div>' : '');
   const fs = $('#fk-senden'); if (fs) fs.onclick = () => sendenPanel('Korrekturen aus dem Faktencheck:\n' + korrigiert.map(x => '– ' + x.thema + ': ' + x.korrektur).join('\n') + '\n');
   $$('.karte[data-id]').forEach(k => $$('[data-a]', k).forEach(b => b.onclick = async () => {
     const x = f.find(y => y.id === k.dataset.id);
@@ -940,8 +957,8 @@ ANSICHT.danach = () => {
     + '<label><b>Was hat der Auditor festgestellt?</b> <span class="grau">(Hinweise, Abweichungen)</span><textarea id="r-fest">' + esc(r.fest || '') + '</textarea></label>'
     + '<button class="knopf" id="r-speichern">Speichern</button></div>'
     + '<h3>Ergebnis an ' + esc(bn('akk')) + '</h3><div class="karte">'
-    + (api.lokal && !S.start.demo ? '<p>Ihre Rückmeldung und Ihr Übungsstand liegen nur in diesem Browser. Ein Klick schickt beides direkt an ' + esc(bn('akk')) + '.</p><div class="zeile"><button class="knopf" id="r-senden">✉ Ergebnis an ' + esc(bn('akk')) + ' senden</button></div>'
-      + '<p class="grau">Nur falls das Senden nicht klappt: <button class="link" id="r-export">Datei herunterladen</button> und per E-Mail schicken.</p>'
+    + (!S.start.demo ? '<p>' + (api.lokal ? 'Ihre Rückmeldung und Ihr Übungsstand liegen nur in diesem Browser. Ein Klick schickt beides direkt an ' + esc(bn('akk')) + '.' : 'Ihre Rückmeldung ist gespeichert. Mit einem Klick bekommt ' + esc(bn('nom')) + ' zusätzlich Ihre Nachricht.') + '</p><div class="zeile"><button class="knopf" id="r-senden">✉ Ergebnis an ' + esc(bn('akk')) + ' senden</button></div>'
+      + (api.lokal ? '<p class="grau">Nur falls das Senden nicht klappt: <button class="link" id="r-export">Datei herunterladen</button> und per E-Mail schicken.</p>' : '')
       : S.start.demo ? '<p class="grau">Demo – hier würde der Kunde sein Ergebnis an den Berater schicken.</p>' : '<p>Ihre Angaben sind gespeichert – ' + esc(bn('nom')) + ' sieht sie.</p>') + '</div>';
   $('#r-speichern').onclick = async () => {
     await speichereEintrag('rueckmeldung', 'audit', { typ: $('#r-typ').value, fragen: $('#r-fragen').value, gut: $('#r-gut').value, schwer: $('#r-schwer').value, fest: $('#r-fest').value });

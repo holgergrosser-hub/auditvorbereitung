@@ -35,3 +35,13 @@
 **E-A17 Senden jederzeit aus der Kopfzeile, mit Nachricht.** Änderungswünsche vor dem Audit dürfen nicht erst „nach dem Audit“ abgeschickt werden. Faktencheck-Korrekturen haben einen eigenen Senden-Knopf mit vorausgefülltem Text. Verworfen: „E-Mail vorbereiten“ (leere Mail, Anhang von Hand).
 
 **E-A18 Übersicht zuerst, Farben je Bereich.** „Heute“ zeigt oben Termin (Tage bis zum Audit), Prüfungsreife als Ring und *einen* großen nächsten Schritt; darunter Kacheln je Bereich mit Stand und Fortschrittsbalken. Farben: Einrichten violett, Üben petrol, Audit-Tag blau, Nachschlagen orange – Grün/Gelb/Rot bleiben allein für den Ampel-Stand. Jede Detailseite trägt die Farbe ihres Bereichs und hat „‹ Übersicht“. Verworfen: lange Seite mit allen Karten untereinander (Holger: „Moderne Apps sind übersichtlich“).
+
+**E-A19 Supabase statt Netlify Drop je Kunde.** Holger erwartet viele Kunden; je Kunde eine Zip bauen und eine Netlify-Site anlegen macht keinen Spaß und skaliert nicht. Jetzt: ein eigenes Supabase-Projekt (Frankfurt), eine Netlify-Site aus GitHub für alle Kunden, Backoffice mit Übersicht. Verworfen: OnlineCert-Projekt mitnutzen (Kundendaten und Rechte zweier Systeme vermischt).
+
+**E-A20 Ausspielen per GitHub Action.** Migrationen und Edge Functions kommen bei jedem Push automatisch nach Supabase (drei GitHub-Geheimnisse). Verworfen: SQL von Hand in den SQL Editor kopieren (fehleranfällig, bei jeder Änderung erneut).
+
+**E-A21 Kunden zuerst per Paket-Import.** Das Backoffice importiert die Zip der Testfassung (paket.json + PDFs). Claude baut das Paket aus den Unterlagen (Auszüge, Fahrplan, Faktencheck, Stolperfallen) – die erprobte Kette bleibt. Selbst-Upload mit Texterkennung im Browser folgt als nächster Schritt. Verworfen: sofort alles im Browser nachbauen (größeres Risiko vor den nächsten Audits).
+
+**E-A22 Nachrichten statt Netlify-Formular.** „✉ An … senden“ schreibt im Servermodus in die Tabelle `nachrichten`; Holger sieht sie im Backoffice (orange Zahl). Keine automatische Mail, kein Spamfilter. Höchstens 30 Nachrichten je Kunde und Tag.
+
+**E-A23 Testen ohne Internet: Mini-Supabase.** `test/mini-supabase/` startet Datenbank mit allen Migrationen, PostgREST, die Edge Function „kunde“ (Deno) und einen kleinen Server für Anmeldung und Speicher. So laufen Import, Link, Kundenseite und Seitenbetrachter Ende-zu-Ende, bevor etwas zu Supabase geht.
