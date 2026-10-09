@@ -228,11 +228,15 @@ async function senden(knopf, nachricht) {
   if (nachricht) daten.nachricht = nachricht;
   const r = reife(), z = stand();
   const felder = { 'form-name': 'ergebnis', kunde: S.start.kunde.name, mitarbeiter: S.ma ? S.ma.name : '', stufe: String(S.audit.stufe), nachricht: nachricht || '',
-    zusammenfassung: (nachricht ? 'MIT NACHRICHT · ' : '') + 'Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen', daten: JSON.stringify(daten) };
+    zusammenfassung: (nachricht ? 'MIT NACHRICHT · ' : '') + 'Prüfungsreife ' + r.prozent + ' % · ' + z.gruen + ' sicher, ' + z.gelb + ' mit Hilfe, ' + z.rot + ' weiß nicht, ' + z.offen + ' offen' };
+  // Übungsstand als Datei-Anhang statt als langes Textfeld: lange JSON-Texte sortiert Netlifys Spamfilter aus
+  const fd = new FormData(); Object.keys(felder).forEach(k => fd.append(k, felder[k]));
+  const dateiname = 'Auditvorbereitung_' + S.start.kunde.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 30) + '_' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+  fd.append('datei', new Blob([JSON.stringify(daten)], { type: 'application/json' }), dateiname);
   const vorher = knopf ? knopf.textContent : '';
   if (knopf) { knopf.disabled = true; knopf.textContent = 'Sende …'; }
   try {
-    const res = await fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(felder).toString() });
+    const res = await fetch('/', { method: 'POST', body: fd });
     if (!res.ok) throw new Error('Status ' + res.status);
     const jetzt = new Date().toLocaleString('de-DE'); try { localStorage.setItem('av_gesendet', jetzt); } catch (e) { /* */ }
     if ($('#senden-info')) $('#senden-info').textContent = '✓ Gesendet am ' + jetzt;

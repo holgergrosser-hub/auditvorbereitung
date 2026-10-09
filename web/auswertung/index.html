@@ -21,8 +21,8 @@ table{border-collapse:collapse;width:100%;font-size:.9rem}td,th{border-bottom:1p
 <main>
 <div class="karte">
   <p><b>1. Paket</b> <span id="paket-info" class="grau">wird gesucht …</span><br><input type="file" id="paket" accept=".json"></p>
-  <p><b>2. Ergebnis-Dateien</b> (vom Kunden per E-Mail): <input type="file" id="ergebnis" accept=".json" multiple></p>
-  <p><b>oder Stand aus Netlify einfügen</b> (Netlify → Forms → „ergebnis“ → Eintrag öffnen → Inhalt von <i>daten</i> kopieren):<br>
+  <p><b>2. Ergebnis-Dateien</b> (Netlify → Forms → „ergebnis“ → Eintrag → Anhang <i>datei</i> herunterladen, oder vom Kunden per E-Mail): <input type="file" id="ergebnis" accept=".json" multiple></p>
+  <p><b>oder Inhalt einfügen</b> (ältere Einsendungen: Inhalt des Feldes <i>daten</i> kopieren):<br>
   <textarea id="einfuegen" rows="3" style="width:100%" placeholder='{"art":"auditvorbereitung-ergebnis", …}'></textarea><button class="knopf" id="einfuegen-los">Anzeigen</button></p>
 </div>
 <div id="aus"></div>
@@ -86,7 +86,7 @@ function zeichne() {
     if (kiste.length) html += '<div class="karte"><b>Beispielkiste</b> – eigene Beispiele des Kunden für das Audit<ul>' + kiste.map(x => '<li><b>' + esc(x.daten.prozess || '') + ':</b> ' + esc(x.daten.text) + '</li>').join('') + '</ul></div>';
     // Spur + Rundgang
     const sp = ein('spur'); if (sp.length) { const pr = L.spurPruefen(sp.map(x => Object.assign({ k: x.schluessel }, x.daten))); html += '<div class="karte"><b>Beispielauftrag: ' + pr.fertig + ' von ' + pr.von + ' Stationen</b>' + (pr.hinweise.length ? '<ul>' + pr.hinweise.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : ' – roter Faden hält') + '</div>'; }
-    const rg = ein('rundgang'); if (rg.length) html += '<div class="karte"><b>Rundgang</b><table>' + rg.map(x => { const it = (paket.rundgang || []).find(y => y.k === x.schluessel) || {}; const s = L.rundgangStatus(Object.assign({ intervall_monate: it.intervall_monate }, x.daten)); return '<tr><td>' + esc(it.name || x.schluessel) + '</td><td>' + esc(s.status) + '</td><td>' + esc(s.naechste) + '</td><td>' + (x.daten.foto ? '<img class="mini" src="' + x.daten.foto + '">' : '') + '</td></tr>'; }).join('') + '</table></div>';
+    const rg = ein('rundgang'); if (rg.length) html += '<div class="karte"><b>Rundgang</b><table>' + rg.map(x => { const it = (paket.rundgang || []).find(y => y.k === x.schluessel) || {}; const s = L.rundgangStatus(Object.assign({ intervall_monate: it.intervall_monate }, x.daten)); return '<tr><td>' + esc(it.name || x.schluessel) + '</td><td>' + esc(s.status) + '</td><td>' + esc(s.naechste) + '</td><td>' + (/^data:image\//.test(x.daten.foto || '') ? '<img class="mini" src="' + x.daten.foto + '">' : '') + '</td></tr>'; }).join('') + '</table></div>';
     // Rueckmeldung + Fragenbank
     const rm = ein('rueckmeldung')[0];
     if (rm) {
