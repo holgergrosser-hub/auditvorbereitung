@@ -27,7 +27,7 @@ export function lokaleApi(L, paket, opt) {
       const kunde = Object.assign({}, paket.kunde, { technik_check: Object.assign({}, paket.kunde.technik_check, st.technik) });
       const fakten = (paket.faktencheck || []).map(f => Object.assign({}, f, st.fakten[f.id] || {}));
       return kopie({ kunde, audits: paket.audits, mitarbeiter: paket.mitarbeiter, dokumente: paket.dokumente, faktencheck: fakten,
-        stolperfallen: paket.stolperfallen || [], aufgaben: paket.aufgaben || [], rundgang: paket.rundgang || L.RUNDGANG_STANDARD, level: L.AUDITOR_LEVEL, lokal: true, demo: !!opt.demo });
+        pdf_zip: paket.pdf_zip || '', stolperfallen: paket.stolperfallen || [], aufgaben: paket.aufgaben || [], rundgang: paket.rundgang || L.RUNDGANG_STANDARD, level: L.AUDITOR_LEVEL, lokal: true, demo: !!opt.demo });
     }
     if (aktion === 'technik') { Object.keys(d.check || {}).forEach(k => { st.technik[k] = d.check[k] ? new Date().toISOString() : null; }); sichern(); return { ok: true, technik_check: Object.assign({}, paket.kunde.technik_check, st.technik) }; }
     if (aktion === 'fakt') { st.fakten[d.fakt_id] = { antwort: d.antwort, korrektur: d.korrektur || '', beantwortet_am: new Date().toISOString() }; sichern(); return { ok: true }; }

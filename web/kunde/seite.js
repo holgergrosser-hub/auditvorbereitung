@@ -317,6 +317,7 @@ ANSICHT.finden = async () => {
     + '<p class="grau">Kein Zugriff auf die Originaldateien (z. B. Google-Anmeldung klappt nicht)? Nutzen Sie die <b>PDF-Kopie</b> – und sagen Sie Ihrem Berater Bescheid, damit es bis zum Audit klappt.</p>'
     + '<div class="karte"><div class="zeile"><input id="suche" type="search" placeholder="z. B. Lieferantenbewertung, Feuerlöscher, Politik, Notfall" style="flex:1"><button class="knopf" id="suchen">Suchen</button><button class="knopf zweit klein" id="sprich" title="Frage sprechen">🎤</button></div></div>'
     + '<div id="ergebnis"></div>'
+    + pdfSicherungHtml()
     + '<h3>Ihre Dokumente</h3><div class="karte">' + kennen.map(d => '<div class="zeile"><span class="chip">kennen</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span>' + kopieKnopf(d.id, '') + '</div>').join('')
     + finden.map(d => '<div class="zeile"><span class="chip grau">finden</span><button class="link" data-d="' + d.id + '">' + esc(d.titel) + '</button><span class="grau">' + (d.stand ? 'Stand ' + esc(d.stand) : '') + '</span>' + kopieKnopf(d.id, '') + '</div>').join('') + '</div>';
   dokKnoepfe($('#main'));
@@ -338,6 +339,19 @@ function diktat(knopf, fertig) {
 /* Auditplan durchgehen: je Programmpunkt, was der Auditor sehen will – Dokument oeffnen und abhaken */
 function bloecke() { return L.auditplanBloecke(S.planpunkte, S.fragen, S.start.dokumente).filter(b => b.fragen.length || /eröffnung|abschluss|planung/i.test(b.punkt.thema || '')); }
 function kurzName(id) { const d = S.start.dokumente.find(x => x.id === id); return d ? (d.kurzname && d.kurzname.length <= 14 ? (d.kurzname === 'UPH' ? 'Handbuch (UPH)' : d.kurzname) : d.titel) : id; }
+function orteLinks(f) { // gleiche Angabe wie orteKurz, aber Seiten/Reiter als Link auf die PDF-Kopie
+  const o = L.orteJeDokument(f.hilfe, S.start.dokumente);
+  return Object.keys(o).map(k => { const d = S.start.dokumente.find(x => x.id === k);
+    const teile = o[k].slice(0, 3).map(ort => { const u = kopieUrl(d, ort.replace(/^S\. /, 'Seite ')); return u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(ort) + '</a>' : esc(ort); });
+    const u0 = kopieUrl(d, ''); return (u0 ? '<a href="' + esc(u0) + '" target="_blank" rel="noopener">' + esc(kurzName(k)) + '</a>' : esc(kurzName(k))) + (teile.length ? ' ' + teile.join(', ') : ''); }).join(' · ');
+}
+function pdfSicherungHtml() {
+  const doks = S.start.dokumente.filter(d => d.kopie || d.link); if (!doks.length) return '';
+  return '<h3>Alle Unterlagen – live und als PDF</h3><div class="karte"><p><b>Zur Sicherheit:</b> Klappt am Audittag der Zugang zu Ihren Dateien nicht (Internet, Anmeldung, EDV), öffnen Sie die <b>PDF-Kopie</b>. Am besten laden Sie heute schon alle PDFs auf Ihren Laptop herunter.</p>'
+    + (S.start.pdf_zip ? '<p><a class="knopf" href="' + esc(S.start.pdf_zip) + '" download>Alle PDFs als Zip herunterladen</a></p>' : '')
+    + '<table class="spick">' + doks.map(d => '<tr><td class="np">' + esc(d.d_nr || '') + '</td><td>' + esc(d.titel) + (d.stand ? ' <span class="grau">(' + esc(d.stand) + ')</span>' : '') + '</td><td class="zeile">' + (d.link ? '<button class="knopf klein zweit" data-d="' + esc(d.id) + '">live öffnen</button>' : '') + kopieKnopf(d.id, '') + '</td></tr>').join('') + '</table>'
+    + '<p class="grau">Die PDF-Kopie zeigt den Stand vom ' + esc(new Date().toLocaleDateString('de-DE')) + ' der Vorbereitung. Wenn Ihr Berater Dokumente ändert, bekommen Sie eine neue Fassung.</p></div>';
+}
 function orteKurz(f) { const o = L.orteJeDokument(f.hilfe, S.start.dokumente); return Object.keys(o).map(k => kurzName(k) + (o[k].length ? ' ' + o[k].slice(0, 3).join(', ') : '')).join(' · '); }
 function planDurchgangHtml() {
   const B = bloecke(); if (!B.length) return '';
@@ -745,17 +759,19 @@ ANSICHT.tag = () => {
   const ma = S.ma, meine = S.planpunkte.filter(p => !ma || !(p.mitarbeiter_ids || []).length || p.mitarbeiter_ids.indexOf(ma.id) >= 0);
   $('#main').innerHTML = (S.ruhe ? '<div class="ruhe"><b>Ruhemodus.</b> ' + esc(L.ABLAUF.ruhe) + ' <button class="link" id="trotz">Trotzdem weiter üben</button></div>' : '')
     + '<div class="kein-druck"><h2>' + esc(ab.titel) + '</h2><div class="karte"><p><b>' + esc(st.titel) + '</b> ' + esc(ab.kurz) + '</p><ul>' + ab.regeln.map(r => '<li>' + esc(r) + '</li>').join('') + '</ul></div></div>'
-    + '<div class="kein-druck"><h2>Spickzettel</h2><p><b>Wozu?</b> Den Zettel legen Sie im Audit neben den Laptop. <b>Lernen müssen Sie ihn nicht.</b> Er zeigt je Programmpunkt des Auditplans, welche Dokumente Sie aufmachen – so finden Sie alles schnell, auch wenn Sie nervös sind.</p><button class="knopf" id="drucken">Drucken / als PDF speichern</button></div>'
+    + '<div class="kein-druck">' + pdfSicherungHtml() + '</div>'
+    + '<div class="kein-druck"><h2>Spickzettel</h2><p><b>Wozu?</b> Den Zettel legen Sie im Audit neben den Laptop. <b>Lernen müssen Sie ihn nicht.</b> Er zeigt je Programmpunkt des Auditplans, welche Dokumente Sie aufmachen – so finden Sie alles schnell, auch wenn Sie nervös sind. Die Seitenangaben sind anklickbar und öffnen die PDF-Kopie direkt an der Stelle.</p><button class="knopf" id="drucken">Drucken / als PDF speichern</button></div>'
     + '<div class="karte spickzettel"><div class="spick-kopf"><b>' + esc(S.start.kunde.name) + '</b> · Stufe ' + a.stufe + ' · ' + esc(datumDe(a.datum)) + (a.auditor ? ' · Auditor ' + esc(a.auditor) : '') + (ma ? ' · für ' + esc(ma.name) : '') + '</div>'
     + '<div class="spick-box"><b>Diese Dokumente den ganzen Tag offen haben:</b> ' + kennen.map(d => esc(d.titel) + (d.stand ? ' <span class="grau">(' + esc(d.stand) + ')</span>' : '')).join(' · ')
     + (abk.length ? '<br><span class="grau">Abkürzungen: ' + abk.map(d => esc(d.kurzname) + ' = ' + esc(d.titel)).join(' · ') + '</span>' : '') + '</div>'
     + (B.length ? B.map(b => '<div class="spick-block"><div class="spick-zeit"><b>' + esc(b.punkt.zeit || '') + '</b> ' + esc(b.punkt.thema) + '</div>'
-        + (b.fragen.length ? '<table class="spick">' + b.fragen.map(f => '<tr><td class="np">' + esc(f.normkapitel || '') + '</td><td>' + esc(f.titel || String(f.frage).slice(0, 60)) + '</td><td>' + esc(orteKurz(f)) + '</td></tr>').join('') + '</table>'
+        + (b.fragen.length ? '<table class="spick">' + b.fragen.map(f => '<tr><td class="np">' + esc(f.normkapitel || '') + '</td><td>' + esc(f.titel || String(f.frage).slice(0, 60)) + '</td><td>' + orteLinks(f) + '</td></tr>').join('') + '</table>'
           : '<div class="grau">' + (/eröffnung/i.test(b.punkt.thema) ? 'Sich vorstellen: Firma, Entwicklung, Mitarbeiter. Geltungsbereich: Handbuch Seite 3.' : /abschluss/i.test(b.punkt.thema) ? 'Zuhören, mitschreiben, Fragen stellen.' : '') + '</div>') + '</div>').join('')
       : '<div class="spick-block"><div class="spick-zeit"><b>Ablauf</b></div>' + meine.map(p => '<div>' + esc(p.zeit || '') + ' · ' + esc(p.thema) + '</div>').join('') + '</div>')
     + (bsp.length ? '<div class="spick-box"><b>Meine Beispiele:</b>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(x.prozess || f.titel || f.normkapitel || '') + ':</b> ' + esc(x.text) + '</div>'; }).join('') + '</div>' : '')
     + '<div class="spick-box"><b>Merksätze:</b> Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen · „Das schaue ich nach“ ist erlaubt</div></div>';
   $('#drucken').onclick = () => window.print();
+  dokKnoepfe($('#main'));
   const t = $('#trotz'); if (t) t.onclick = () => { S.trotzRuhe = true; laden(); };
 };
 

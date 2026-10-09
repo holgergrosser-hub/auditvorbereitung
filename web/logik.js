@@ -247,6 +247,26 @@ function zeigMalFragen(fahrplan, dokumente) {
   }));
 }
 
+/**
+ * Fehlende eigene Dokumente in der Fundstelle ergaenzen: Nennt die Frage ein Dokument, das es als eigene Datei gibt
+ * (z. B. "Auditprogramm", "Notfallplan"), kommt diese Datei an den Anfang der Fundstelle.
+ */
+function dokumenteErgaenzen(fragen, dokumente) {
+  const aend = [];
+  (fragen || []).forEach(f => {
+    const text = norm((f.titel || '') + ' ' + f.frage);
+    (dokumente || []).forEach(d => {
+      const kern = norm(String(d.titel).replace(/\s*\d{4}.*$/, '')).split(' ').filter(w => w.length >= 8);
+      if (!kern.length || !kern.every(w => text.indexOf(w) >= 0)) return;
+      if (String(f.hilfe || '').indexOf(d.titel) === 0) return; // steht schon vorne
+      f.hilfe = d.titel + ' · ' + (f.hilfe || '');
+      if ((f.dokument_ids || []).indexOf(d.id) < 0) f.dokument_ids = [d.id].concat(f.dokument_ids || []);
+      aend.push({ normkapitel: f.normkapitel, dokument: d.titel });
+    });
+  });
+  return aend;
+}
+
 /** Ampel aus den Antworten zu einer Frage (letzte zaehlt): gruen sicher ohne Hilfe, gelb mit Hilfe/unsicher/zu langsam, rot weiss nicht */
 function ampel(antworten) {
   const a = (antworten || []).filter(x => !x.ist_beispiel).slice().sort((x, y) => String(x.beantwortet_am || '').localeCompare(String(y.beantwortet_am || ''))).pop();
@@ -834,11 +854,11 @@ const Logik = { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelL
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
   prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, prozessSchritte, musterErklaerung, kapitelImBereich, orteJeDokument, auditplanBloecke, STUFEN, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
-  stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
+  dokumenteErgaenzen, stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
 export default Logik;
 export { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
   KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
   prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, prozessSchritte, musterErklaerung, kapitelImBereich, orteJeDokument, auditplanBloecke, STUFEN, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
-  stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
+  dokumenteErgaenzen, stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };

@@ -67,6 +67,8 @@ Q.audits.forEach(a => {
     const punkte = [];
     a.prueflisten.forEach(f => { const r = F.lies(docXml(f)); if (r.art !== 'pruefliste') throw new Error('Keine Pruefliste: ' + f); r.daten.punkte.forEach((p, i) => punkte.push(Object.assign({ id: path.basename(f) + '#' + i, norm: r.daten.norm }, p))); });
     fr = L.zeigMalFragen(L.fahrplanAusPrueflisten(punkte), dokumente);
+    // eigene Dokumente, die die Frage nennt (z. B. Auditprogramm), an den Anfang der Fundstelle
+    L.dokumenteErgaenzen(fr, dokumente).forEach(x => console.log('  ergänzt:', x.normkapitel, '→', x.dokument));
     // Seitenzahlen gegen die aktuelle Fassung pruefen (Fundstellen stammen oft aus einer aelteren Fassung)
     fr.forEach(f => { const k = L.seitenKorrigieren(f.hilfe, f.frage, dokumente, A.auszuege); if (k.aenderungen.length) { seitenHinweise.push({ normkapitel: f.normkapitel, aenderungen: k.aenderungen }); f.hilfe = k.text; } });
   }
@@ -94,6 +96,16 @@ fs.writeFileSync(path.join(ziel, 'config.js'), '// Testfassung ohne Server: Date
 fs.writeFileSync(path.join(ziel, 'kunde', 'paket.json'), JSON.stringify(paket));
 fs.mkdirSync(path.join(ziel, 'kunde', 'dok'), { recursive: true });
 kopien.forEach(k => fs.copyFileSync(k.quelle, path.join(ziel, 'kunde', 'dok', k.id + '.pdf')));
+// Alle PDFs in einer Zip-Datei mit sprechenden Namen (Sicherheitskopie fuer den Audittag, auch ohne EDV-Zugang)
+if (kopien.length) {
+  const tmpZip = path.join(ordner, '.zip-tmp'); fs.rmSync(tmpZip, { recursive: true, force: true }); fs.mkdirSync(tmpZip);
+  kopien.forEach(k => { const d = dokumente.find(x => x.id === k.id); fs.copyFileSync(k.quelle, path.join(tmpZip, ((d.d_nr ? d.d_nr + ' ' : '') + d.titel).replace(/[^A-Za-z0-9ÄÖÜäöüß .–-]+/g, '_') + '.pdf')); });
+  const zipName = 'Dokumente_' + Q.kunde.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 40) + '.zip';
+  execFileSync('zip', ['-qj', path.join(ziel, 'kunde', 'dok', zipName)].concat(fs.readdirSync(tmpZip).map(f => path.join(tmpZip, f))));
+  fs.rmSync(tmpZip, { recursive: true, force: true });
+  paket.pdf_zip = 'dok/' + zipName;
+  fs.writeFileSync(path.join(ziel, 'kunde', 'paket.json'), JSON.stringify(paket));
+}
 // Netlify-Formular "ergebnis": Netlify erkennt es beim Hochladen (Formularerkennung muss in Netlify eingeschaltet sein)
 fs.writeFileSync(path.join(ziel, 'formular.html'), '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Formular</title>'
   + '<form name="ergebnis" method="POST" data-netlify="true" hidden><input name="kunde"><input name="mitarbeiter"><input name="stufe"><input name="zusammenfassung"><textarea name="daten"></textarea></form>');
