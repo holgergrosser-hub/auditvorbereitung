@@ -1,6 +1,13 @@
 // Edge Function "kunde": die einzige Tuer fuer Kunden. Prueft den persoenlichen Link (Token) und liefert
-// genau die Daten dieses Kunden. Schreibt Antworten und Bildschirmfotos. Nie Mails, nie fremde Daten.
-// Aufruf: POST {t, aktion, ...}  aktionen: start | fragen | dokument | antwort | nachweis
+// genau die Daten dieses Kunden. Schreibt Antworten, Bildschirmfotos, Technik-Check und Faktencheck. Nie Mails, nie fremde Daten.
+// Aufruf: POST {t, aktion, ...}
+//   start                         Firma, Audits, Mitarbeiter, gueltige Dokumente, Faktencheck, Technik-Check
+//   fragen   {audit_id, bereich, mitarbeiter_id}   Fragen/Fahrplan mit Dokumenten, Planpunkte, bisherige Antworten
+//   dokument {dokument_id}        Link zum Dokument (Google-Link oder 10 Minuten gueltiger Speicherlink)
+//   antwort  {audit_id, frage_id, mitarbeiter_id, text, sicherheit, hilfe_genutzt, dauer_sekunden, ist_beispiel}
+//   nachweis {audit_id, frage_id, mitarbeiter_id, bild (data:image/png;base64,…), notiz}
+//   technik  {check:{laptop, chrome, dokument_offen, bildschirm}}
+//   fakt     {fakt_id, antwort:'stimmt'|'stimmt_nicht', korrektur}
 // Bereitstellen: supabase functions deploy kunde --no-verify-jwt   (Kunden haben kein Supabase-Login)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import L from '../_shared/logik.js';
@@ -22,7 +29,9 @@ async function kundeZumToken(t: string) {
   if (!data || data.gesperrt || new Date(data.gueltig_bis + 'T23:59:59') < new Date()) return null;
   return data.kunde_id as string;
 }
-const pflicht = <T>(r: { data: T | null; error: unknown }) => { if (r.error) throw r.error; return r.data as T; };
+// deno-lint-ignore no-explicit-any
+const pflicht = (r: { data: any; error: unknown }) => { if (r.error) throw r.error; return r.data; };
+const DOK_FELDER = 'id, d_nr, titel, kurzname, normkapitel, bereich, stand, wichtigkeit, link, inhalt_kurz';
 
 Deno.serve(async (req) => {
   const h = cors(req.headers.get('origin'));
@@ -34,48 +43,75 @@ Deno.serve(async (req) => {
     if (!kundeId) return antwort({ fehler: 'Link ungültig oder abgelaufen. Bitte bei QM-Dienstleistungen einen neuen Link anfordern.' }, 401);
 
     if (d.aktion === 'start') {
-      const kunde = pflicht(await db.from('kunden').select('name, ort').eq('id', kundeId).single());
-      const audits = pflicht(await db.from('audits').select('id, stufe, datum, zertifizierer, normen, auditor_level, status').eq('kunde_id', kundeId).order('stufe'));
-      const mitarbeiter = pflicht(await db.from('mitarbeiter').select('id, name, bereich, funktion').eq('kunde_id', kundeId).order('bereich'));
-      return antwort({ kunde, audits: (audits as any[]).filter(a => a.status === 'fragen_bereit'), mitarbeiter, level: L.AUDITOR_LEVEL });
-    }
-
-    // alles Weitere gehoert zu einem Audit dieses Kunden
-    const audit = d.audit_id ? pflicht(await db.from('audits').select('id, kunde_id, stufe').eq('id', d.audit_id).maybeSingle()) as any : null;
-    if (d.aktion !== 'dokument' && (!audit || audit.kunde_id !== kundeId)) return antwort({ fehler: 'Audit nicht gefunden' }, 404);
-
-    if (d.aktion === 'fragen') {
-      const [fragen, punkte, doks] = await Promise.all([
-        db.from('fragen').select('id, planpunkt_id, reihenfolge, bereich, frage, hilfe, dokument_ids').eq('audit_id', audit.id).order('reihenfolge'),
-        db.from('planpunkte').select('id, zeit, thema, normkapitel, bereich, mitarbeiter_ids, nachweise').eq('audit_id', audit.id).order('reihenfolge'),
-        db.from('dokumente').select('id, d_nr, titel, kurzname, normkapitel, bereich, stand, wichtigkeit, link').eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr')
+      const [kunde, audits, mitarbeiter, dokumente, fakten] = await Promise.all([
+        db.from('kunden').select('name, ort, technik_check').eq('id', kundeId).single(),
+        db.from('audits').select('id, stufe, datum, zertifizierer, auditor, normen, auditor_level, ruhemodus_tage, status').eq('kunde_id', kundeId).order('stufe'),
+        db.from('mitarbeiter').select('id, name, bereich, funktion').eq('kunde_id', kundeId).order('bereich'),
+        db.from('dokumente').select(DOK_FELDER).eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr'),
+        db.from('faktencheck').select('id, reihenfolge, thema, angabe, fundstelle, antwort, korrektur').eq('kunde_id', kundeId).order('reihenfolge')
       ]);
-      const fr = pflicht(fragen) as any[], pp = pflicht(punkte) as any[], dk = pflicht(doks) as any[];
-      const auswahl = L.fragenFuerBereich(fr, pp, String(d.bereich || 'alle'), String(d.mitarbeiter_id || ''));
-      const bisher = d.mitarbeiter_id ? pflicht(await db.from('antworten').select('frage_id, sicherheit').eq('mitarbeiter_id', d.mitarbeiter_id).in('frage_id', auswahl.map(f => f.id))) as any[] : [];
-      return antwort({
-        fragen: auswahl.map(f => Object.assign({}, f, { dokumente: L.dokumenteFuerFrage(Object.assign({}, f, { normkapitel: (pp.find(p => p.id === f.planpunkt_id) || {}).normkapitel }), dk).map((x: any) => ({ id: x.id, d_nr: x.d_nr, titel: x.titel, stand: x.stand })) })),
-        planpunkte: pp.map(p => ({ id: p.id, zeit: p.zeit, thema: p.thema, nachweise: p.nachweise })),
-        beantwortet: bisher
-      });
+      return antwort({ kunde: pflicht(kunde), audits: pflicht(audits).filter((a: any) => a.status === 'fragen_bereit'),
+        mitarbeiter: pflicht(mitarbeiter), dokumente: pflicht(dokumente), faktencheck: pflicht(fakten), level: L.AUDITOR_LEVEL });
     }
 
-    if (d.aktion === 'dokument') { // zeitlich begrenzter Link (10 Minuten) auf ein Dokument dieses Kunden
-      const dok = pflicht(await db.from('dokumente').select('pfad, kunde_id, titel, gueltig').eq('id', d.dokument_id).maybeSingle()) as any;
+    if (d.aktion === 'technik') { // nur bekannte Felder, Zeitstempel vom Server
+      const c = d.check || {}; const alt = (pflicht(await db.from('kunden').select('technik_check').eq('id', kundeId).single()).technik_check) || {};
+      const neu = Object.assign({}, alt);
+      ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].forEach(k => { if (k in c) neu[k] = c[k] ? new Date().toISOString() : null; });
+      pflicht(await db.from('kunden').update({ technik_check: neu }).eq('id', kundeId));
+      return antwort({ ok: true, technik_check: neu });
+    }
+
+    if (d.aktion === 'fakt') {
+      const f = pflicht(await db.from('faktencheck').select('id, kunde_id').eq('id', d.fakt_id).maybeSingle());
+      if (!f || f.kunde_id !== kundeId) return antwort({ fehler: 'Nicht gefunden' }, 404);
+      if (!['stimmt', 'stimmt_nicht'].includes(d.antwort)) return antwort({ fehler: 'Antwort fehlt' }, 400);
+      pflicht(await db.from('faktencheck').update({ antwort: d.antwort, korrektur: String(d.korrektur || '').slice(0, 1000), beantwortet_am: new Date().toISOString() }).eq('id', f.id));
+      return antwort({ ok: true });
+    }
+
+    if (d.aktion === 'dokument') {
+      const dok = pflicht(await db.from('dokumente').select('pfad, kunde_id, titel, gueltig, link').eq('id', d.dokument_id).maybeSingle());
       if (!dok || dok.kunde_id !== kundeId || !dok.gueltig) return antwort({ fehler: 'Dokument nicht gefunden' }, 404);
+      if (dok.link) return antwort({ url: dok.link, titel: dok.titel });
       const { data, error } = await db.storage.from('dokumente').createSignedUrl(dok.pfad, 600);
       if (error) throw error;
       return antwort({ url: data.signedUrl, titel: dok.titel });
     }
 
-    const frage = pflicht(await db.from('fragen').select('id, audit_id').eq('id', d.frage_id).maybeSingle()) as any;
-    if (!frage || frage.audit_id !== audit.id) return antwort({ fehler: 'Frage nicht gefunden' }, 404);
-    const ma = d.mitarbeiter_id ? pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()) as any : null;
+    // ab hier: gehoert zu einem Audit dieses Kunden
+    const audit = d.audit_id ? pflicht(await db.from('audits').select('id, kunde_id, stufe').eq('id', d.audit_id).maybeSingle()) : null;
+    if (!audit || audit.kunde_id !== kundeId) return antwort({ fehler: 'Audit nicht gefunden' }, 404);
+    const ma = d.mitarbeiter_id ? pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()) : null;
     const mitarbeiterId = ma && ma.kunde_id === kundeId ? ma.id : null;
 
+    if (d.aktion === 'fragen') {
+      const [fragen, punkte, doks] = await Promise.all([
+        db.from('fragen').select('id, planpunkt_id, pruefpunkt_id, art, normen, reihenfolge, bereich, frage, hilfe, dokument_ids').eq('audit_id', audit.id).order('reihenfolge'),
+        db.from('planpunkte').select('id, reihenfolge, zeit, thema, normkapitel, bereich, mitarbeiter_ids, gespraechspartner, nachweise').eq('audit_id', audit.id).order('reihenfolge'),
+        db.from('dokumente').select(DOK_FELDER).eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr')
+      ]);
+      const fr = pflicht(fragen), pp = pflicht(punkte), dk = pflicht(doks);
+      const auswahl = L.fragenFuerBereich(fr, pp, String(d.bereich || 'alle'), String(mitarbeiterId || ''));
+      const bisher = mitarbeiterId && auswahl.length ? pflicht(await db.from('antworten')
+        .select('frage_id, text, sicherheit, hilfe_genutzt, dauer_sekunden, ist_beispiel, beantwortet_am').eq('mitarbeiter_id', mitarbeiterId).in('frage_id', auswahl.map((f: any) => f.id))) : [];
+      return antwort({
+        fragen: auswahl.map((f: any) => Object.assign({}, f, {
+          dokumente: L.dokumenteFuerFrage(Object.assign({}, f, { normkapitel: f.normkapitel || (pp.find((p: any) => p.id === f.planpunkt_id) || {}).normkapitel }), dk)
+            .map((x: any) => ({ id: x.id, d_nr: x.d_nr, titel: x.titel, stand: x.stand, wichtigkeit: x.wichtigkeit }))
+        })),
+        planpunkte: pp, antworten: bisher
+      });
+    }
+
+    const frage = pflicht(await db.from('fragen').select('id, audit_id').eq('id', d.frage_id).maybeSingle());
+    if (!frage || frage.audit_id !== audit.id) return antwort({ fehler: 'Frage nicht gefunden' }, 404);
+
     if (d.aktion === 'antwort') {
+      const sek = Number(d.dauer_sekunden);
       pflicht(await db.from('antworten').insert({ frage_id: frage.id, mitarbeiter_id: mitarbeiterId, text: String(d.text || '').slice(0, 4000),
-        sicherheit: ['sicher', 'unsicher', 'weiss_nicht'].includes(d.sicherheit) ? d.sicherheit : 'sicher', hilfe_genutzt: !!d.hilfe_genutzt }));
+        sicherheit: ['sicher', 'unsicher', 'weiss_nicht'].includes(d.sicherheit) ? d.sicherheit : 'sicher', hilfe_genutzt: !!d.hilfe_genutzt,
+        dauer_sekunden: Number.isFinite(sek) ? Math.max(0, Math.min(3600, Math.round(sek))) : null, ist_beispiel: !!d.ist_beispiel }));
       return antwort({ ok: true });
     }
 

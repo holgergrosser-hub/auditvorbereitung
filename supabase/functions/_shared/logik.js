@@ -161,11 +161,200 @@ function fragenAusKi(json, punkte, dokumente) {
 function fragenFuerBereich(fragen, planpunkte, bereich, mitarbeiterId) {
   if (!bereich || norm(bereich) === 'alle') return fragen.slice();
   const meine = new Set(planpunkte.filter(p => (p.mitarbeiter_ids || []).indexOf(mitarbeiterId) >= 0).map(p => p.id));
-  return fragen.filter(f => meine.has(f.planpunkt_id) || (f.bereich && bereichPasst(f.bereich, bereich)));
+  // Fahrplan-Punkte ohne Planpunkt und ohne Bereich (Stufe 1, Pruefliste) gehoeren allen
+  return fragen.filter(f => meine.has(f.planpunkt_id) || (f.bereich && bereichPasst(f.bereich, bereich)) || (!f.planpunkt_id && !f.bereich));
 }
 
+/* ================================================================ Stufe 1: Fahrplan aus der Pruefliste (Praxis P01–P16) */
+
+/**
+ * Pruefliste(n) des Zertifizierers -> ein Fahrplan. Gleiche Frage in ISO 9001 und 14001 erscheint nur einmal ("gilt fuer beide", P09).
+ * Eingang: pruefpunkte [{id, norm, normpunkt, titel, frage, bemerkung|fundstelle, status}], sortiert wie im Formular.
+ * Ausgang: [{schluessel, normpunkt, titel, frage, fundstelle, normen:[], pruefpunkt_ids:[], status}]
+ */
+function fahrplanAusPrueflisten(pruefpunkte) {
+  const out = []; const index = new Map();
+  const schl = (p) => norm(p.normpunkt).split(' ')[0].split('.').slice(0, 2).join('.') + '|' + norm(p.frage).replace(/\b(qms|ums|qualitats|umwelt|managementsystems?)\w*/g, '').replace(/\s+/g, ' ').slice(0, 60);
+  pruefpunkte.forEach(p => {
+    if (!p || !p.frage || p.status === 'NZ' || /^NZ$/i.test(p.bewertung || '')) return;
+    const k = p.normpunkt === '0' ? '0|system' : schl(p);
+    const fund = String(p.fundstelle || p.bemerkung || '').trim();
+    const da = index.get(k) || out.find(x => x.normpunkt.split('.')[0] === String(p.normpunkt).split('.')[0] && fund && x.fundstelle === fund);
+    if (da) {
+      if (p.norm && da.normen.indexOf(p.norm) < 0) da.normen.push(p.norm);
+      da.pruefpunkt_ids.push(p.id);
+      // zweite Norm: Fundstelle nur anhaengen, wenn sie wirklich Neues nennt (weniger als die Haelfte gleiche Woerter)
+      const alt = new Set(norm(da.fundstelle).split(' ')), w = norm(fund).split(' ').filter(x => x.length > 3);
+      if (w.length && w.filter(x => alt.has(x)).length / w.length < 0.5) da.fundstelle += ' · ' + fund;
+      return;
+    }
+    const neu = { schluessel: k, normpunkt: String(p.normpunkt), titel: p.titel || '', frage: String(p.frage).replace(/\s+/g, ' ').trim(), fundstelle: fund, normen: p.norm ? [p.norm] : [], pruefpunkt_ids: [p.id], status: p.status || '' };
+    index.set(k, neu); out.push(neu);
+  });
+  return out;
+}
+
+/**
+ * Fundstellen in Klarnamen (P02): "UPH S. 3" -> "Handbuch (UPH), Seite 3"; "Tab 7/8" -> "QM-Übersicht, Reiter „Risiken“ und „Chancen“".
+ * dokumente: [{titel, kurzname, inhalt_kurz:{reiter:[…], tab_versatz}}]. tab_versatz: Reiter vor "Tab 1" (z. B. 1 fuer ein Uebersichtsblatt).
+ * Ohne Reiterliste bleibt "Tab n" stehen, wird aber als "Reiter n" geschrieben.
+ */
+function reiterName(dok, n) {
+  const ik = (dok && dok.inhalt_kurz) || {}; const r = ik.reiter || [];
+  const versatz = ik.tab_versatz != null ? Number(ik.tab_versatz) : (r.length && /^(übersicht|uebersicht|inhalt|start|index|deckblatt)/i.test(r[0]) ? 1 : 0);
+  const name = r[n - 1 + versatz];
+  return name ? '„' + name + '“' : String(n);
+}
+function klarnamen(text, dokumente) {
+  let t = String(text || '');
+  const docs = dokumente || [];
+  const tabDok = docs.find(d => d.inhalt_kurz && (d.inhalt_kurz.reiter || []).length) || null;
+  const tabTitel = tabDok ? String(tabDok.titel).replace(/\s*\(.*$/, '').replace(/,.*$/, '') : '';
+  const tabWort = norm(tabTitel).split(' ')[0] || '#';
+  // Tab 7/8, Tab 4/5, Tab 11/12, Tab 18/19, Tab 1 -> Reiternamen; Dokumentname davor, wenn er nicht direkt davor steht
+  t = t.replace(/(D-?\d+\s+)?\b(?:Tabs?|Reiter)\s+(\d{1,2})(?:\s*(?:\/|und|–)\s*(\d{1,2}))?/g, (m, dnr, a, b, pos, ganz) => {
+    const teile = [reiterName(tabDok, Number(a))].concat(b ? [reiterName(tabDok, Number(b))] : []);
+    const wort = 'Reiter ' + teile.join(' und ');
+    const davor = norm(ganz.slice(Math.max(0, pos - 40), pos));
+    return tabDok && !davor.includes(tabWort) ? tabTitel + ', ' + wort : (dnr || '') + wort;
+  });
+  // Abkuerzungen der Kundendokumente ausschreiben (einmal je Text): "UPH S. 3" -> "Handbuch (UPH), Seite 3"
+  docs.filter(d => d.kurzname && !/^D-?\d/i.test(d.kurzname)).forEach(d => {
+    const re = new RegExp('\\b' + d.kurzname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b(?!\\))');
+    if (re.test(t) && t.indexOf(d.titel) < 0) t = t.replace(re, d.titel + ' (' + d.kurzname + ')');
+  });
+  return t.replace(/\bS\.\s*(\d)/g, 'Seite $1').replace(/\bKap\.\s*(\d)/g, 'Kapitel $1').replace(/\bMB\b/g, 'Managementbewertung');
+}
+
+/** Welche Kundendokumente nennt eine Fundstelle? (Kurzname, D-Nr. oder markante Titelwoerter) */
+function dokumenteAusFundstelle(text, dokumente) {
+  const n = ' ' + norm(text) + ' ';
+  return (dokumente || []).filter(d => {
+    if (d.kurzname && n.includes(' ' + norm(d.kurzname) + ' ')) return true;
+    if (d.d_nr && n.includes(' ' + norm(d.d_nr) + ' ')) return true;
+    if (d.inhalt_kurz && (d.inhalt_kurz.reiter || []).length && /\b(tabs?|reiter) \d/.test(n)) return true;
+    const w = norm(d.titel).split(' ').filter(x => x.length >= 7 && !/^(unternehmens|dokument|uebersicht|ubersicht)$/.test(x));
+    return w.length > 0 && w.some(x => n.includes(x));
+  }).map(d => d.id);
+}
+
+/** Fahrplan -> Zeilen fuer die Tabelle "fragen" (art 'zeig_mal'): Der Kunde soll das Dokument finden und zeigen. */
+function zeigMalFragen(fahrplan, dokumente) {
+  return fahrplan.map((f, i) => ({
+    art: 'zeig_mal', planpunkt_id: null, pruefpunkt_id: f.pruefpunkt_ids[0] || null, bereich: '', normen: f.normen,
+    frage: f.normpunkt === '0' ? 'Zeigen Sie mir Ihre Managementsystem-Dokumentation: Welche Dokumente gibt es und welchen Stand haben sie?' : f.frage,
+    hilfe: klarnamen(f.fundstelle, dokumente), dokument_ids: dokumenteAusFundstelle(f.fundstelle, dokumente), normkapitel: f.normpunkt === '0' ? '' : f.normpunkt, reihenfolge: i + 1
+  }));
+}
+
+/** Ampel aus den Antworten zu einer Frage (letzte zaehlt): gruen sicher ohne Hilfe, gelb mit Hilfe/unsicher/zu langsam, rot weiss nicht */
+function ampel(antworten) {
+  const a = (antworten || []).filter(x => !x.ist_beispiel).slice().sort((x, y) => String(x.beantwortet_am || '').localeCompare(String(y.beantwortet_am || ''))).pop();
+  if (!a) return 'offen';
+  if (a.sicherheit === 'weiss_nicht') return 'rot';
+  if (a.sicherheit === 'unsicher' || a.hilfe_genutzt) return 'gelb';
+  return 'gruen';
+}
+/** Zeig-mal: Ergebnis aus Zeit und Hilfe. Unter 60 s ohne Hilfe = sicher. */
+const ZEIG_MAL_SEKUNDEN = 60;
+function zeigMalErgebnis(sekunden, hilfe, gefunden) {
+  if (!gefunden) return 'weiss_nicht';
+  return !hilfe && sekunden <= ZEIG_MAL_SEKUNDEN ? 'sicher' : 'unsicher';
+}
+/** Matrix fuer Holger (Idee 1): je Frage und Mitarbeiter die Ampel, plus Summe je Mitarbeiter */
+function ampelMatrix(fragen, antworten, mitarbeiter) {
+  const zeilen = fragen.map(f => {
+    const je = {}; (mitarbeiter || []).forEach(m => { je[m.id] = ampel(antworten.filter(a => a.frage_id === f.id && a.mitarbeiter_id === m.id)); });
+    return { frage_id: f.id, normkapitel: f.normkapitel || '', frage: f.frage, je };
+  });
+  const summe = {}; (mitarbeiter || []).forEach(m => { const z = { gruen: 0, gelb: 0, rot: 0, offen: 0 }; zeilen.forEach(r => z[r.je[m.id]]++); summe[m.id] = z; });
+  return { zeilen, summe };
+}
+
+/** Tage bis zum Audit und Ruhemodus (P14): ab x Tagen vorher nur noch Spickzettel und Ablauf */
+function tageBis(datum, heute) {
+  if (!datum) return null;
+  const d = new Date(String(datum).slice(0, 10) + 'T00:00:00Z'), h = new Date(String(heute || new Date().toISOString()).slice(0, 10) + 'T00:00:00Z');
+  return Math.round((d - h) / 86400000);
+}
+function imRuhemodus(datum, tage, heute) { const t = tageBis(datum, heute); return t !== null && t >= 0 && t <= (tage == null ? 3 : tage); }
+
+/** Faktencheck (P05): Standardthemen, die in Praxisgespraechen falsch in den Dokumenten standen */
+const FAKTEN_STANDARD = [
+  { thema: 'Geschäftsführung', frage: 'Wer ist im Handelsregister als Geschäftsführer eingetragen?' },
+  { thema: 'Gesellschafter / weitere Rollen', frage: 'Wer ist Gesellschafter, wer ist QM- bzw. Umweltbeauftragter?' },
+  { thema: 'Firmenname', frage: 'Stimmt die Schreibweise des Firmennamens genau mit dem Handelsregister überein?' },
+  { thema: 'Mitarbeiterzahl', frage: 'Wie viele Personen arbeiten aktuell im Unternehmen (inkl. Geschäftsführung)?' },
+  { thema: 'Zertifizierer', frage: 'Welcher Zertifizierer macht das Audit?' },
+  { thema: 'Leistungen im Geltungsbereich', frage: 'Erbringen Sie alle genannten Leistungen auch aktuell? Was haben Sie zuletzt wann gemacht?' },
+  { thema: 'Standorte und Lager', frage: 'Welche Standorte, Lager, Garagen gibt es?' },
+  { thema: 'Geräte, Fahrzeuge, Leitern', frage: 'Welche prüfpflichtigen Geräte gibt es wirklich (Fahrzeuge, Leitern, Feuerlöscher, elektrische Geräte)? Was ist geliehen?' },
+  { thema: 'Arbeitssicherheit / Betriebsarzt', frage: 'Wer betreut Sie sicherheitstechnisch und betriebsärztlich (z. B. Berufsgenossenschaft)?' },
+  { thema: 'Gefahrstoffe / Reinigungsmittel', frage: 'Welche Gefahrstoffe bzw. Reinigungsmittel verwenden Sie aktuell?' }
+];
+/** Platzhalter und Widersprueche in Dokumenttexten finden (Idee 5, ohne KI): liefert To-do-Vorschlaege mit HA/OP */
+const PLATZHALTER = /(bitte vom kunden ergänzen|bitte ergänzen|noch zu klären|zu klären|platzhalter|\bentwurf\b|\bxx+\b|\?\?\?|\[[^\]]{0,30}\]|tbd|in auswahl)/i;
+function widerspruchsCheck(texte, stamm) {
+  // texte: [{d_nr, titel, text, stand}], stamm: {firma, zertifizierer, geltungsbereich}
+  const todo = []; const s = stamm || {};
+  (texte || []).forEach(d => {
+    String(d.text || '').split(/\n+/).forEach(z => {
+      const m = z.match(PLATZHALTER);
+      if (m) todo.push({ prio: /entwurf/i.test(m[0]) ? 'OP' : 'HA', todo: d.titel + ': „' + z.trim().slice(0, 140) + '“ klären bzw. ausfüllen', normbezug: '7.5', dokument: d.d_nr || '' });
+    });
+    if (s.zertifizierer) {
+      const andere = ['TÜV SÜD', 'TÜV NORD', 'TÜV Rheinland', 'DEKRA', 'DQS', 'SGS', 'DNV', 'Bureau Veritas', 'OnlineCert'].filter(z => norm(z) !== norm(s.zertifizierer) && new RegExp(z.replace(/ /g, '\\s*'), 'i').test(d.text || ''));
+      andere.forEach(z => todo.push({ prio: 'HA', todo: d.titel + ': nennt „' + z + '“, Zertifizierer ist ' + s.zertifizierer, normbezug: '7.5', dokument: d.d_nr || '' }));
+    }
+    if (s.firma) {
+      const kern = norm(s.firma).replace(/\b(gmbh|ug|kg|ag|e k|co)\b/g, '').trim();
+      const fremd = String(d.text || '').match(new RegExp(kern.split(' ')[0] + '[^\\n,;]{0,60}(GmbH|UG|KG|AG)', 'i'));
+      if (fremd && norm(fremd[0]).replace(/\s+/g, '') !== norm(s.firma).replace(/\s+/g, '')) todo.push({ prio: 'OP', todo: d.titel + ': Firmenname „' + fremd[0].trim() + '“ weicht ab von „' + s.firma + '“', normbezug: '4.3', dokument: d.d_nr || '' });
+    }
+  });
+  const staende = [...new Set((texte || []).map(d => d.stand).filter(Boolean))];
+  if (staende.length > 1) todo.push({ prio: 'OP', todo: 'Unterschiedliche Stände: ' + staende.join(', ') + ' – vor dem Audit vereinheitlichen oder bewusst so lassen', normbezug: '7.5', dokument: '' });
+  // doppelte entfernen
+  const seen = new Set(); return todo.filter(x => !seen.has(x.todo) && seen.add(x.todo));
+}
+
+/** "So laeuft Ihr Audit" (P08) – Holgers Regeln aus den Vorbereitungsgespraechen */
+const ABLAUF = {
+  1: {
+    titel: 'So läuft Stufe 1',
+    kurz: 'Der Auditor prüft, ob die Dokumente da sind. Er blättert, fragt nach und hakt seine Liste ab. Ins Detail geht es erst in Stufe 2.',
+    regeln: [
+      'Sie müssen nichts auswendig lernen. Sie müssen nur das richtige Dokument finden und zeigen.',
+      'Zeigen statt erzählen: Der Auditor fragt, Sie öffnen das Dokument. Sie müssen nicht von sich aus Vorträge halten.',
+      'Der Auditor hilft beim Finden. Niemand stoppt die Zeit.',
+      'Die Auditoren halten sich an die Uhrzeiten im Plan und nutzen die Zeit voll aus.',
+      'Kommen zwei Auditoren (z. B. ISO 9001 und 14001), fragt meist einer und der andere hakt ab. Gleiche Frage = gleiches Dokument.',
+      'Erfinden Sie nichts. Sagen Sie offen, was es nicht gibt (z. B. „Wir haben keine Mitarbeiter“).',
+      'Sagen Sie nicht, dass alles perfekt ist. Besser: „Wir haben das System aufgebaut und arbeiten uns ein.“',
+      'Diese Dokumente brauchen Sie den ganzen Tag: Handbuch, QM-Übersicht, Managementbewertung, Auditbericht. Alles andere öffnen Sie, wenn das Thema kommt.',
+      'Achten Sie darauf, wie der Auditor „tickt“ – davon hängt die Vorbereitung auf Stufe 2 ab.'
+    ]
+  },
+  2: {
+    titel: 'So läuft Stufe 2',
+    kurz: 'Der Auditor will sehen, dass das Beschriebene gelebt wird – an echten, abgeschlossenen Beispielen.',
+    regeln: [
+      'Legen Sie je ein abgeschlossenes Beispiel bereit: Angebot, Auftrag, Rechnung, Reklamation, Lieferantenbewertung, Schulungsnachweis.',
+      'Erzählen Sie Ihre eigenen Beispiele (z. B. wie Sie auf Hitze oder neue Reinigungsmittel reagiert haben). Das überzeugt mehr als Normtext.',
+      'Prüfnachweise (Leitern, Feuerlöscher, elektrische Geräte) werden jetzt angeschaut.',
+      'Erfinden Sie nichts. Wenn Sie etwas nicht wissen: „Das schaue ich nach“ und im Dokument nachsehen.',
+      'Der Auditor erklärt Feststellungen am Ende. Schreiben Sie mit, wir besprechen sie danach gemeinsam.'
+    ]
+  },
+  ruhe: 'Jetzt nichts mehr ändern, nichts mehr ausdrucken und nicht im Internet lesen – das bringt nur Fragezeichen. Sie haben die Antworten gefunden. Ruhen Sie sich aus und gehen Sie entspannt ins Audit.'
+};
+
 const Logik = { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
-  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich };
+  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
+  fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
+  tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF };
 export default Logik;
 export { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
-  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich };
+  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
+  fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
+  tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF };

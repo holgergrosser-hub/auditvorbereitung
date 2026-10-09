@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Auditvorbereitung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--blau:#1F4E79;--blau2:#2E6DA4;--hell:#EEF4FA;--rand:#D5E1EC;--text:#1B2733;--grau:#5B6B7A;--gruen:#2B8A3E;--gelb:#E0A800;--rot:#C92A2A;--weiss:#fff}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Public Sans",system-ui,sans-serif;color:var(--text);background:#F6F9FC;font-size:16px;line-height:1.5}
+header{background:var(--blau);color:#fff;padding:14px 16px}
+header .firma{font-size:1.45rem;font-weight:700;letter-spacing:.2px}
+header .info{opacity:.9;font-size:.95rem}
+.zeile{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.wahl{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px;background:var(--hell);border-bottom:1px solid var(--rand)}
+select,button,textarea,input{font:inherit}
+select{padding:8px 10px;border:1px solid var(--rand);border-radius:8px;background:#fff;max-width:100%}
+nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid var(--rand);position:sticky;top:0;z-index:5}
+nav button{border:0;background:none;padding:8px 12px;border-radius:8px;color:var(--grau);font-weight:600;white-space:nowrap;cursor:pointer}
+nav button.an{background:var(--blau);color:#fff}
+nav button .ok{color:var(--gruen)}nav button.an .ok{color:#B7F0C4}
+main{max-width:920px;margin:0 auto;padding:16px}
+h2{color:var(--blau);margin:6px 0 10px;font-size:1.3rem}
+h3{margin:18px 0 8px;font-size:1.05rem;color:var(--blau)}
+.karte{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px;margin:10px 0}
+.knopf{border:0;border-radius:8px;padding:9px 14px;background:var(--blau);color:#fff;font-weight:600;cursor:pointer}
+.knopf.zweit{background:#fff;color:var(--blau);border:1px solid var(--blau)}
+.knopf.gruen{background:var(--gruen)}.knopf.rot{background:var(--rot)}.knopf.klein{padding:5px 10px;font-size:.9rem}
+.knopf:disabled{opacity:.5;cursor:default}
+.hinweis{background:#FFF8E1;border:1px solid #F2D58A;border-radius:10px;padding:10px 12px;margin:10px 0}
+.ruhe{background:#E7F5EC;border:1px solid #9FD3B0;border-radius:12px;padding:16px;margin:10px 0;font-size:1.05rem}
+.grau{color:var(--grau);font-size:.92rem}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--hell);color:var(--blau);font-size:.8rem;font-weight:600;margin-right:4px}
+.np{display:inline-block;min-width:44px;font-weight:700;color:var(--blau)}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#CBD5E0;vertical-align:middle;flex:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.dot.gruen{background:var(--gruen)}.dot.gelb{background:var(--gelb)}.dot.rot{background:var(--rot)}
+.check{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--rand)}
+.check:last-child{border-bottom:0}
+.haken{width:28px;height:28px;border-radius:50%;border:2px solid var(--rand);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;color:#fff}
+.haken.ja{background:var(--gruen);border-color:var(--gruen)}
+.frage{display:flex;gap:10px;align-items:flex-start}
+.frage .text{flex:1}
+.hilfe{background:var(--hell);border-radius:8px;padding:10px;margin-top:8px}
+.doks{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.legende{display:flex;gap:14px;flex-wrap:wrap;font-size:.9rem;color:var(--grau);margin:6px 0}
+textarea{width:100%;min-height:70px;padding:8px;border:1px solid var(--rand);border-radius:8px}
+.uhr{font-size:3rem;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;color:var(--blau)}
+.uhr.vorbei{color:var(--rot)}
+#trainer{position:fixed;inset:0;background:rgba(15,30,45,.55);display:none;align-items:center;justify-content:center;z-index:20;padding:12px}
+#trainer .box{background:#fff;border-radius:14px;max-width:640px;width:100%;padding:18px;max-height:94vh;overflow:auto}
+video.vorschau{width:100%;max-height:200px;background:#000;border-radius:8px}
+img.foto{max-width:100%;border:1px solid var(--rand);border-radius:8px}
+.balken{height:10px;background:var(--rand);border-radius:99px;overflow:hidden;display:flex}
+.balken span{display:block;height:100%}
+table.spick{width:100%;border-collapse:collapse;font-size:.85rem}
+table.spick td,table.spick th{border-bottom:1px solid var(--rand);padding:4px 6px;vertical-align:top;text-align:left}
+.nur-druck{display:none}
+@media print{header,nav,.wahl,.kein-druck,#trainer{display:none!important}body{background:#fff;font-size:10.5pt}main{padding:0;max-width:none}.karte{border:0;padding:0;margin:4px 0}.nur-druck{display:block}table.spick{font-size:8.5pt}h2{font-size:13pt}h3{font-size:11pt;margin:8px 0 4px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="firma" id="firma">Auditvorbereitung</div>
+  <div class="info" id="audit-info">Wird geladen …</div>
+</header>
+<div class="wahl kein-druck" id="wahl" hidden>
+  <label>Audit <select id="sel-audit"></select></label>
+  <label>Wer übt? <select id="sel-ma"></select></label>
+</div>
+<nav id="nav" hidden></nav>
+<main id="main"><p class="grau">Einen Moment …</p></main>
+
+<div id="trainer"><div class="box" id="trainer-box"></div></div>
+
+<script src="../config.js"></script>
+<script type="module">
+import L from '../logik.js';
+import { erstelleDemo } from './demo.js';
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const p = new URLSearchParams(location.search);
+const cfg = window.AV_CONFIG || {};
+const token = p.get('t') || '';
+const demo = p.has('demo') || !cfg.supabaseUrl;
+let api;
+
+if (demo) api = await erstelleDemo(L, { lokal: p.get('demo') === 'lokal', ruhe: p.has('ruhe') });
+else api = async (aktion, daten) => {
+  const r = await fetch(cfg.supabaseUrl + '/functions/v1/kunde', { method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: cfg.anonKey, authorization: 'Bearer ' + cfg.anonKey },
+    body: JSON.stringify(Object.assign({}, daten, { t: token, aktion })) });
+  const j = await r.json().catch(() => ({ fehler: 'Keine Verbindung' }));
+  if (!r.ok || j.fehler) throw new Error(j.fehler || ('Fehler ' + r.status));
+  return j;
+};
+
+const S = { start: null, audit: null, ma: null, fragen: [], planpunkte: [], antworten: [], ansicht: 'technik', stream: null, filter: 'alle' };
+const KAPITEL = { '0': 'Dokumentation insgesamt', '4': '4 Kontext der Organisation', '5': '5 Führung', '6': '6 Planung', '7': '7 Unterstützung', '8': '8 Betrieb', '9': '9 Bewertung der Leistung', '10': '10 Verbesserung' };
+const datumDe = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Termin offen';
+
+function fehler(e) { $('#main').innerHTML = '<div class="karte"><h2>Das hat nicht geklappt</h2><p>' + esc(e.message || e) + '</p><p class="grau">Bitte melden Sie sich bei QM-Dienstleistungen Grosser.</p></div>'; }
+
+async function start() {
+  if (!demo && !token) return fehler(new Error('Bitte öffnen Sie den persönlichen Link aus Ihrer E-Mail.'));
+  try { S.start = await api('start'); } catch (e) { return fehler(e); }
+  const st = S.start;
+  $('#firma').textContent = st.kunde.name; document.title = 'Auditvorbereitung · ' + st.kunde.name;
+  if (!st.audits.length) { $('#audit-info').textContent = ''; return fehler(new Error('Ihre Vorbereitung wird gerade eingerichtet. Sie bekommen Bescheid, sobald es losgeht.')); }
+  $('#sel-audit').innerHTML = st.audits.map(a => '<option value="' + a.id + '">Stufe ' + a.stufe + ' · ' + (a.datum ? new Date(a.datum + 'T12:00:00').toLocaleDateString('de-DE') : 'offen') + '</option>').join('');
+  const gespeichert = (() => { try { return JSON.parse(localStorage.getItem('av_wahl') || '{}'); } catch (e) { return {}; } })();
+  const naechstes = st.audits.find(a => (L.tageBis(a.datum) ?? 99) >= 0) || st.audits[0];
+  $('#sel-audit').value = st.audits.some(a => a.id === gespeichert.audit) ? gespeichert.audit : naechstes.id;
+  $('#sel-ma').innerHTML = '<option value="">– bitte wählen –</option>' + st.mitarbeiter.map(m => '<option value="' + m.id + '">' + esc(m.name) + ' (' + esc(m.bereich) + ')</option>').join('');
+  if (st.mitarbeiter.some(m => m.id === gespeichert.ma)) $('#sel-ma').value = gespeichert.ma;
+  else if (st.mitarbeiter.length === 1) $('#sel-ma').value = st.mitarbeiter[0].id;
+  $('#wahl').hidden = false;
+  $('#sel-audit').onchange = $('#sel-ma').onchange = () => { merken(); laden(); };
+  if (demo) $('#audit-info').insertAdjacentHTML('afterend', '<div class="info">Demo – nichts wird gespeichert.</div>');
+  laden();
+}
+function merken() { try { localStorage.setItem('av_wahl', JSON.stringify({ audit: $('#sel-audit').value, ma: $('#sel-ma').value })); } catch (e) { /* egal */ } }
+
+async function laden() {
+  S.audit = S.start.audits.find(a => a.id === $('#sel-audit').value);
+  S.ma = S.start.mitarbeiter.find(m => m.id === $('#sel-ma').value) || null;
+  const a = S.audit, t = L.tageBis(a.datum);
+  $('#audit-info').textContent = 'Zertifizierungsaudit Stufe ' + a.stufe + ' · ' + datumDe(a.datum) + (t != null && t >= 0 ? ' · in ' + (t === 0 ? 'heute' : t === 1 ? '1 Tag' : t + ' Tagen') : '') + (a.zertifizierer ? ' · ' + a.zertifizierer : '');
+  try {
+    const j = await api('fragen', { audit_id: a.id, bereich: S.ma ? S.ma.bereich : 'alle', mitarbeiter_id: S.ma ? S.ma.id : '' });
+    S.fragen = j.fragen; S.planpunkte = j.planpunkte || []; S.antworten = j.antworten || [];
+  } catch (e) { return fehler(e); }
+  S.ruhe = L.imRuhemodus(a.datum, a.ruhemodus_tage);
+  if (S.ruhe && ['technik', 'fakten', 'fahrplan'].includes(S.ansicht)) S.ansicht = 'ablauf';
+  zeichneNav(); zeige(S.ansicht);
+}
+
+function technikFertig() { const c = S.start.kunde.technik_check || {}; return ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].every(k => c[k]); }
+function faktenFertig() { const f = S.start.faktencheck; return f.length > 0 && f.every(x => x.antwort); }
+function antwortenZu(fid) { return S.antworten.filter(a => a.frage_id === fid); }
+function stand() { const z = { gruen: 0, gelb: 0, rot: 0, offen: 0 }; S.fragen.forEach(f => z[L.ampel(antwortenZu(f.id))]++); return z; }
+
+function zeichneNav() {
+  const z = stand(), zeig = S.audit.stufe === 1;
+  const tabs = S.ruhe ? [['ablauf', 'So läuft Ihr Audit'], ['spick', 'Spickzettel']] : [
+    ['technik', '1 Technik-Check' + (technikFertig() ? ' <span class="ok">✓</span>' : '')],
+    ['fakten', '2 Faktencheck' + (faktenFertig() ? ' <span class="ok">✓</span>' : '')],
+    ['fahrplan', '3 ' + (zeig ? 'Fahrplan: Dokumente finden' : 'Fragen üben') + ' (' + (S.fragen.length - z.offen) + '/' + S.fragen.length + ')'],
+    ['ablauf', '4 So läuft Ihr Audit'], ['spick', '5 Spickzettel']];
+  $('#nav').innerHTML = tabs.map(([k, t]) => '<button data-k="' + k + '" class="' + (S.ansicht === k ? 'an' : '') + '">' + t + '</button>').join('');
+  $('#nav').hidden = false;
+  $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => zeige(b.dataset.k));
+}
+function zeige(k) { S.ansicht = k; zeichneNav(); ({ technik: zeigeTechnik, fakten: zeigeFakten, fahrplan: zeigeFahrplan, ablauf: zeigeAblauf, spick: zeigeSpick })[k](); window.scrollTo(0, 0); }
+
+/* ------------------------------------------------ 1 Technik-Check (P07) */
+function zeigeTechnik() {
+  const c = S.start.kunde.technik_check || {};
+  const handy = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || window.innerWidth < 700;
+  const chrome = !!(navigator.userAgentData && navigator.userAgentData.brands && navigator.userAgentData.brands.some(b => /Chrome|Chromium|Edge/.test(b.brand))) || /Chrome\//.test(navigator.userAgent);
+  const zeile = (k, titel, text, knopf) => '<div class="check"><div class="haken ' + (c[k] ? 'ja' : '') + '">' + (c[k] ? '✓' : '') + '</div><div style="flex:1"><b>' + titel + '</b><div class="grau">' + text + '</div>' + (knopf || '') + '</div></div>';
+  $('#main').innerHTML = '<h2>Technik-Check</h2><p>Bitte spätestens eine Woche vor dem Audit erledigen. Wer am Tag vorher noch installiert, wird im Audit nervös.</p>'
+    + (handy ? '<div class="hinweis">Sie sind gerade am Handy. Im Audit brauchen Sie einen Laptop oder PC – am Handy ist alles zu klein, und Bildschirm teilen klappt schlecht.</div>' : '')
+    + '<div class="karte">'
+    + zeile('laptop', 'Ich mache das Audit am Laptop oder PC', 'Nicht am Handy oder Tablet.', '<button class="knopf klein" data-c="laptop" ' + (handy ? 'disabled' : '') + '>' + (c.laptop ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
+    + zeile('chrome', 'Browser Google Chrome', chrome ? 'Sie nutzen Chrome bzw. Edge. Gut.' : 'Bitte Google Chrome installieren und diese Seite darin öffnen.', '<button class="knopf klein" data-c="chrome" ' + (chrome ? '' : 'disabled') + '>' + (c.chrome ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
+    + zeile('dokument_offen', 'Ihre Dokumente öffnen sich am Laptop', 'Öffnen Sie testweise Ihr Handbuch. Kommt eine Anmeldung, melden Sie sich mit dem Konto an, über das Sie die Dokumente bekommen haben. Bearbeiten Sie Dokumente bitte nur dort, nicht in Word/Excel auf dem eigenen Rechner – sonst entstehen zwei Versionen.', '<button class="knopf klein" id="dok-test">Handbuch öffnen</button> <button class="knopf klein zweit" data-c="dokument_offen">Hat geklappt</button>')
+    + zeile('bildschirm', 'Bildschirm teilen klappt', 'Klicken Sie auf „Testen“, wählen Sie <b>Gesamter Bildschirm</b> und dann „Teilen“. So zeigen Sie dem Auditor im Online-Audit Ihre Dokumente – und hier im Fahrplan macht das Programm damit Ihr Übungsfoto.', '<button class="knopf klein" id="teilen-test">Bildschirm teilen testen</button><div id="teilen-erg"></div>')
+    + '</div>' + (technikFertig() ? '<p><button class="knopf gruen" id="weiter">Weiter zum Faktencheck</button></p>' : '');
+  $('#main').querySelectorAll('[data-c]').forEach(b => b.onclick = () => technik(b.dataset.c));
+  $('#dok-test').onclick = () => { const d = S.start.dokumente.find(x => /handbuch/i.test(x.titel)) || S.start.dokumente[0]; if (d) oeffne(d.id); };
+  $('#teilen-test').onclick = async () => {
+    const s = await teilen(); if (!s) return;
+    const surf = s.getVideoTracks()[0].getSettings().displaySurface;
+    $('#teilen-erg').innerHTML = '<p>' + (surf && surf !== 'monitor' ? '⚠️ Sie haben nur ein Fenster oder einen Tab geteilt. Für das Audit besser „Gesamter Bildschirm“ – dann sieht der Auditor jedes Dokument, das Sie öffnen.' : '✓ Bildschirm wird geteilt.') + '</p><video class="vorschau" autoplay muted playsinline></video>';
+    $('#teilen-erg video').srcObject = s; technik('bildschirm');
+  };
+  const w = $('#weiter'); if (w) w.onclick = () => zeige('fakten');
+}
+async function technik(k) {
+  try { const j = await api('technik', { check: { [k]: true } }); S.start.kunde.technik_check = j.technik_check; } catch (e) { alert(e.message); return; }
+  if (S.ansicht === 'technik') zeigeTechnik(); zeichneNav();
+}
+async function teilen() {
+  if (S.stream && S.stream.active) return S.stream;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { hinweisBox('Ihr Browser kann den Bildschirm nicht teilen. Bitte Google Chrome am Laptop verwenden.'); return null; }
+  try {
+    S.stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: false });
+    S.stream.getVideoTracks()[0].addEventListener('ended', () => { S.stream = null; });
+    return S.stream;
+  } catch (e) { hinweisBox('Bildschirm teilen wurde abgebrochen. Kein Problem – einfach noch einmal versuchen und „Gesamter Bildschirm“ wählen.'); return null; }
+}
+function hinweisBox(t) { const d = document.createElement('div'); d.className = 'hinweis'; d.textContent = t; $('#main').prepend(d); setTimeout(() => d.remove(), 8000); }
+async function oeffne(id) {
+  const fenster = window.open('', '_blank');
+  try { const j = await api('dokument', { dokument_id: id }); if (j.demo) { fenster.document.write('<p style="font-family:sans-serif">Demo: Hier öffnet sich „' + esc(j.titel) + '“.</p>'); } else fenster.location = j.url; }
+  catch (e) { fenster.close(); alert(e.message); }
+}
+
+/* ------------------------------------------------ 2 Faktencheck (P05) */
+function zeigeFakten() {
+  const f = S.start.faktencheck;
+  $('#main').innerHTML = '<h2>Faktencheck: Stimmt das in Ihren Dokumenten?</h2><p>In der Vorbereitung fallen immer wieder Kleinigkeiten auf, die der Auditor sofort sieht: falsche Rollen, alter Zertifizierer, Platzhalter, Geräte, die es nicht gibt. Bitte jeden Punkt kurz bestätigen oder korrigieren. Ihre Korrektur geht an QM-Dienstleistungen, wir passen die Dokumente an. <b>Bitte die Dokumente nicht selbst ändern.</b></p>'
+    + (f.length ? f.map(x => '<div class="karte" data-id="' + x.id + '"><div class="zeile" style="justify-content:space-between"><b>' + esc(x.thema) + '</b>' + (x.antwort ? '<span class="chip">' + (x.antwort === 'stimmt' ? '✓ stimmt' : '✎ korrigiert') + '</span>' : '') + '</div>'
+      + '<div>In den Dokumenten steht: <i>' + esc(x.angabe || '–') + '</i></div>' + (x.fundstelle ? '<div class="grau">Fundstelle: ' + esc(x.fundstelle) + '</div>' : '')
+      + '<div class="zeile" style="margin-top:8px"><button class="knopf klein gruen" data-a="stimmt">Stimmt</button><button class="knopf klein zweit" data-a="stimmt_nicht">Stimmt nicht</button></div>'
+      + '<div class="korr" ' + (x.antwort === 'stimmt_nicht' ? '' : 'hidden') + '><textarea placeholder="Wie ist es richtig?">' + esc(x.korrektur || '') + '</textarea><button class="knopf klein" data-a="speichern">Korrektur senden</button></div></div>').join('')
+      : '<div class="karte grau">Für Sie ist noch kein Faktencheck angelegt.</div>')
+    + (faktenFertig() ? '<p><button class="knopf gruen" id="weiter">Weiter zum Fahrplan</button></p>' : '');
+  $('#main').querySelectorAll('.karte[data-id]').forEach(k => k.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+    const x = f.find(y => y.id === k.dataset.id);
+    if (b.dataset.a === 'stimmt_nicht') { k.querySelector('.korr').hidden = false; k.querySelector('textarea').focus(); return; }
+    const antwort = b.dataset.a === 'stimmt' ? 'stimmt' : 'stimmt_nicht', korrektur = antwort === 'stimmt' ? '' : k.querySelector('textarea').value.trim();
+    if (antwort === 'stimmt_nicht' && !korrektur) { k.querySelector('textarea').focus(); return; }
+    try { await api('fakt', { fakt_id: x.id, antwort, korrektur }); Object.assign(x, { antwort, korrektur }); zeigeFakten(); zeichneNav(); } catch (e) { alert(e.message); }
+  }));
+  const w = $('#weiter'); if (w) w.onclick = () => zeige('fahrplan');
+}
+
+/* ------------------------------------------------ 3 Fahrplan / Fragen (P01, P04, P09, Ideen 1, 3, 7) */
+function kapitelVon(f) { const k = String(f.normkapitel || '').split('.')[0]; return KAPITEL[k] ? k : (f.art === 'zeig_mal' ? '0' : '8'); }
+function zeigeFahrplan() {
+  const zeig = S.audit.stufe === 1, z = stand(), n = S.fragen.length || 1;
+  if (!S.ma) { $('#main').innerHTML = '<h2>' + (zeig ? 'Fahrplan' : 'Fragen üben') + '</h2><div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen. Dann sehen Sie Ihre Fragen und Ihren Stand.</div>'; return; }
+  const lv = (S.start.level || {})[S.audit.auditor_level] || {};
+  let html = '<h2>' + (zeig ? 'Fahrplan: Finden Sie die Dokumente' : 'Fragen üben') + '</h2>'
+    + (zeig ? '<p>Das ist die Prüfliste des Auditors. Er fragt diese Punkte ab – nicht unbedingt in dieser Reihenfolge. Üben Sie: <b>Frage lesen → Dokument öffnen → zeigen.</b> Sie müssen nichts auswendig lernen.</p>'
+      : '<p>So fragt der Auditor in Stufe 2. Antworten Sie, wie Sie es im Audit sagen würden, und zeigen Sie ein echtes Beispiel. Übungsauditor: <b>' + esc(lv.name || '') + '</b>.</p>')
+    + '<div class="karte"><div class="balken"><span style="width:' + (z.gruen / n * 100) + '%;background:var(--gruen)"></span><span style="width:' + (z.gelb / n * 100) + '%;background:var(--gelb)"></span><span style="width:' + (z.rot / n * 100) + '%;background:var(--rot)"></span></div>'
+    + '<div class="legende"><span><span class="dot gruen"></span> sicher (' + z.gruen + ')</span><span><span class="dot gelb"></span> mit Hilfe / langsam (' + z.gelb + ')</span><span><span class="dot rot"></span> weiß nicht (' + z.rot + ')</span><span><span class="dot"></span> offen (' + z.offen + ')</span></div>'
+    + '<div class="zeile"><label>Zeigen: <select id="filter"><option value="alle">alle</option><option value="offen">nur offene</option><option value="ueben">gelb und rot</option></select></label>'
+    + (zeig ? '<button class="knopf" id="naechste">▶ Nächste offene üben</button>' : '<button class="knopf" id="naechste">▶ Nächste Frage</button>') + '</div></div>';
+  const sicht = S.fragen.filter(f => { const a = L.ampel(antwortenZu(f.id)); return S.filter === 'alle' || (S.filter === 'offen' ? a === 'offen' : (a === 'gelb' || a === 'rot')); });
+  let kap = null;
+  sicht.forEach(f => {
+    const k = kapitelVon(f); if (k !== kap) { kap = k; html += '<h3>' + esc(KAPITEL[k]) + '</h3>'; }
+    const a = L.ampel(antwortenZu(f.id)), bsp = antwortenZu(f.id).filter(x => x.ist_beispiel).pop();
+    html += '<div class="karte" data-f="' + f.id + '"><div class="frage"><span class="dot ' + a + '" title="' + a + '"></span><div class="text">'
+      + '<div><span class="np">' + esc(f.normkapitel || '') + '</span>' + (f.normen || []).map(x => '<span class="chip">' + esc(x.replace('ISO ', '')) + '</span>').join('') + (f.normen && f.normen.length > 1 ? '<span class="grau">gleiches Dokument für beide Normen</span>' : '') + '</div>'
+      + '<div style="margin:4px 0">' + esc(f.frage) + '</div>'
+      + '<div class="zeile kein-druck"><button class="knopf klein" data-t="ueben">' + (zeig ? 'Zeig mal (60 s)' : 'Antworten') + '</button><button class="knopf klein zweit" data-t="hilfe">Wo steht das?</button><button class="knopf klein zweit" data-t="bsp">Mein Beispiel</button><button class="knopf klein zweit" data-t="vorlesen" title="Frage vorlesen">🔊</button></div>'
+      + '<div class="hilfe" hidden>' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '<div class="doks">' + (f.dokumente || []).map(d => '<button class="knopf klein zweit" data-d="' + d.id + '">' + esc((d.d_nr ? d.d_nr + ' ' : '') + d.titel) + (d.stand ? ' · ' + esc(d.stand) : '') + '</button>').join('') + '</div></div>'
+      + '<div class="bsp" ' + (bsp ? '' : 'hidden') + '><textarea placeholder="Ihr eigenes Beispiel dazu – das erzählen Sie im Audit (z. B. „Bei der Hitze im Sommer haben wir Kühlwesten angeschafft“)">' + esc(bsp ? bsp.text : '') + '</textarea><button class="knopf klein" data-t="bsp-speichern">Beispiel speichern</button></div>'
+      + '</div></div></div>';
+  });
+  if (!sicht.length) html += '<div class="karte grau">' + (S.fragen.length ? 'Keine Fragen in dieser Auswahl. 🎉' : 'Für Sie sind noch keine Fragen hinterlegt.') + '</div>';
+  $('#main').innerHTML = html;
+  $('#filter').value = S.filter; $('#filter').onchange = (e) => { S.filter = e.target.value; zeigeFahrplan(); };
+  $('#naechste').onclick = () => { const f = S.fragen.find(x => L.ampel(antwortenZu(x.id)) === 'offen') || S.fragen.find(x => /gelb|rot/.test(L.ampel(antwortenZu(x.id)))); if (f) trainer(f); else hinweisBox('Alles geübt. Super!'); };
+  $('#main').querySelectorAll('.karte[data-f]').forEach(k => {
+    const f = S.fragen.find(x => x.id === k.dataset.f);
+    k.querySelectorAll('[data-t]').forEach(b => b.onclick = async () => {
+      const t = b.dataset.t;
+      if (t === 'ueben') trainer(f);
+      if (t === 'hilfe') { k.querySelector('.hilfe').hidden = !k.querySelector('.hilfe').hidden; }
+      if (t === 'bsp') { k.querySelector('.bsp').hidden = false; k.querySelector('.bsp textarea').focus(); }
+      if (t === 'vorlesen') vorlesen(f.frage);
+      if (t === 'bsp-speichern') { const text = k.querySelector('.bsp textarea').value.trim(); if (!text) return; await speichereAntwort(f, { text, sicherheit: 'sicher', ist_beispiel: true }); b.textContent = 'Gespeichert ✓'; }
+    });
+    k.querySelectorAll('[data-d]').forEach(b => b.onclick = () => oeffne(b.dataset.d));
+  });
+}
+async function speichereAntwort(f, d) {
+  const daten = Object.assign({ audit_id: S.audit.id, frage_id: f.id, mitarbeiter_id: S.ma.id }, d);
+  await api('antwort', daten);
+  S.antworten.push(Object.assign({ beantwortet_am: new Date().toISOString() }, daten));
+}
+function vorlesen(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'de-DE'; u.rate = 0.95; speechSynthesis.speak(u); } catch (e) { /* ohne Ton */ } }
+
+/* Zeig-mal-Trainer: Frage, Stoppuhr, Bildschirmfoto (Idee 3) bzw. Antwort mit Sicherheit (Stufe 2) */
+let uhr = null;
+function trainer(f) {
+  const zeig = S.audit.stufe === 1, box = $('#trainer-box');
+  let start = Date.now(), hilfe = false, foto = null;
+  const lv = (S.start.level || {})[S.audit.auditor_level] || {};
+  box.innerHTML = '<div class="zeile" style="justify-content:space-between"><span class="grau">' + esc(f.normkapitel || '') + ' · ' + (zeig ? 'Zeig mal' : esc(lv.name || 'Übungsauditor')) + '</span><button class="knopf klein zweit" id="t-zu">Schließen</button></div>'
+    + '<h2 style="margin-top:8px">Der Auditor fragt:</h2><p style="font-size:1.15rem"><b>' + esc(f.frage) + '</b> <button class="knopf klein zweit" id="t-vor">🔊</button></p>'
+    + (zeig ? '<p>Öffnen Sie jetzt das passende Dokument auf Ihrem Bildschirm, so wie Sie es dem Auditor zeigen würden.</p><div class="uhr" id="t-uhr">60</div>'
+      + '<div id="t-teilen"></div>'
+      : '<textarea id="t-text" placeholder="Ihre Antwort, wie Sie sie im Audit sagen würden"></textarea><div class="zeile"><button class="knopf klein zweit" id="t-diktat">🎤 Diktieren</button><span class="grau" id="t-dstat"></span></div><div class="uhr" id="t-uhr" style="font-size:1.6rem">0:00</div>')
+    + '<div class="hilfe" id="t-hilfe" hidden>' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '<div class="doks">' + (f.dokumente || []).map(d => '<button class="knopf klein zweit" data-d="' + d.id + '">' + esc(d.titel) + '</button>').join('') + '</div></div>'
+    + '<div id="t-foto"></div>'
+    + '<div class="zeile" style="margin-top:12px" id="t-knoepfe">'
+    + (zeig ? '<button class="knopf gruen" id="t-gefunden">Gefunden – Foto machen</button>' : '<button class="knopf gruen" data-s="sicher">Sicher</button><button class="knopf" style="background:var(--gelb)" data-s="unsicher">Unsicher</button>')
+    + '<button class="knopf zweit" id="t-hilfe-k">Hilfe: Wo steht das?</button><button class="knopf rot" data-s="weiss_nicht">Weiß ich nicht</button></div>'
+    + '<div id="t-erg"></div>';
+  $('#trainer').style.display = 'flex';
+  const schliessen = () => { clearInterval(uhr); $('#trainer').style.display = 'none'; try { speechSynthesis.cancel(); } catch (e) { /* */ } zeigeFahrplan(); zeichneNav(); };
+  $('#t-zu').onclick = schliessen;
+  $('#t-vor').onclick = () => vorlesen(f.frage);
+  box.querySelectorAll('[data-d]').forEach(b => b.onclick = () => oeffne(b.dataset.d));
+  $('#t-hilfe-k').onclick = () => { hilfe = true; $('#t-hilfe').hidden = false; };
+  clearInterval(uhr);
+  uhr = setInterval(() => {
+    const s = Math.floor((Date.now() - start) / 1000), el = $('#t-uhr'); if (!el) return;
+    if (zeig) { const rest = L.ZEIG_MAL_SEKUNDEN - s; el.textContent = rest >= 0 ? rest : '+' + (-rest); el.classList.toggle('vorbei', rest < 0); if (rest === -1) el.title = 'Zeit vorbei – weitersuchen ist in Ordnung, im echten Audit stoppt niemand die Zeit.'; }
+    else el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }, 250);
+  if (zeig) {
+    const t = $('#t-teilen');
+    if (!(S.stream && S.stream.active)) {
+      t.innerHTML = '<div class="hinweis">Für das Übungsfoto bitte einmal den Bildschirm teilen („Gesamter Bildschirm“). <button class="knopf klein" id="t-share">Bildschirm teilen</button> <span class="grau">Ohne Teilen üben Sie nur mit der Stoppuhr.</span></div>';
+      $('#t-share').onclick = async () => { if (await teilen()) { t.innerHTML = '<p class="grau">✓ Bildschirm wird geteilt.</p>'; start = Date.now(); } };
+    } else t.innerHTML = '<p class="grau">✓ Bildschirm wird geteilt.</p>';
+  } else {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) $('#t-diktat').hidden = true;
+    else $('#t-diktat').onclick = () => { const r = new SR(); r.lang = 'de-DE'; r.interimResults = false; $('#t-dstat').textContent = 'Ich höre zu …'; r.onresult = (e) => { $('#t-text').value += (($('#t-text').value ? ' ' : '') + e.results[0][0].transcript); }; r.onend = () => { $('#t-dstat').textContent = ''; }; r.start(); };
+  }
+  const fertig = async (sicherheit, gefunden) => {
+    clearInterval(uhr);
+    const sek = Math.round((Date.now() - start) / 1000);
+    const s = zeig ? L.zeigMalErgebnis(sek, hilfe, gefunden) : sicherheit;
+    $('#t-knoepfe').innerHTML = '';
+    try {
+      await speichereAntwort(f, { text: zeig ? '' : ($('#t-text').value || '').trim(), sicherheit: s, hilfe_genutzt: hilfe, dauer_sekunden: sek });
+      if (foto) await api('nachweis', { audit_id: S.audit.id, frage_id: f.id, mitarbeiter_id: S.ma.id, bild: foto, notiz: 'Zeig mal, ' + sek + ' s' });
+    } catch (e) { $('#t-erg').innerHTML = '<div class="hinweis">Speichern hat nicht geklappt: ' + esc(e.message) + '</div>'; return; }
+    const farbe = s === 'sicher' && !hilfe ? 'gruen' : s === 'weiss_nicht' ? 'rot' : 'gelb';
+    $('#t-hilfe').hidden = false;
+    $('#t-erg').innerHTML = '<div class="karte"><span class="dot ' + farbe + '"></span> <b>' + (farbe === 'gruen' ? 'Sehr gut – gefunden in ' + sek + ' Sekunden.' : farbe === 'gelb' ? (zeig ? 'Gefunden' + (hilfe ? ' mit Hilfe' : '') + ' in ' + sek + ' Sekunden. Merken Sie sich die Fundstelle oben.' : 'Gespeichert. Schauen Sie sich die Fundstelle oben noch einmal an.') : 'Kein Problem – genau dafür üben wir. Die Fundstelle steht oben. Später noch einmal versuchen.') + '</b></div>'
+      + '<div class="zeile"><button class="knopf" id="t-weiter">Nächste Frage</button><button class="knopf zweit" id="t-ende">Pause</button></div>';
+    $('#t-weiter').onclick = () => { const i = S.fragen.indexOf(f); const n = S.fragen.slice(i + 1).concat(S.fragen.slice(0, i)).find(x => L.ampel(antwortenZu(x.id)) !== 'gruen'); if (n) trainer(n); else schliessen(); };
+    $('#t-ende').onclick = schliessen;
+  };
+  box.querySelectorAll('[data-s]').forEach(b => b.onclick = () => fertig(b.dataset.s, b.dataset.s !== 'weiss_nicht'));
+  const g = $('#t-gefunden');
+  if (g) g.onclick = async () => {
+    if (S.stream && S.stream.active) { foto = await bildschirmfoto(S.stream); if (foto) $('#t-foto').innerHTML = '<p class="grau">Ihr Übungsfoto:</p><img class="foto" src="' + foto + '" alt="Bildschirmfoto">'; }
+    fertig('sicher', true);
+  };
+}
+async function bildschirmfoto(stream) {
+  const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream;
+  await v.play().catch(() => {}); await new Promise(r => setTimeout(r, 250));
+  const w = v.videoWidth, h = v.videoHeight; if (!w || !h) return null;
+  const f = Math.min(1, 1600 / w), c = document.createElement('canvas'); c.width = Math.round(w * f); c.height = Math.round(h * f);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); v.srcObject = null;
+  return c.toDataURL('image/jpeg', 0.8);
+}
+
+/* ------------------------------------------------ 4 So läuft Ihr Audit (P08) */
+function zeigeAblauf() {
+  const a = S.audit, ab = L.ABLAUF[a.stufe] || L.ABLAUF[1], kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen'), abk = S.start.dokumente.filter(d => d.kurzname && d.kurzname !== d.titel);
+  $('#main').innerHTML = (S.ruhe ? '<div class="ruhe"><b>Ruhemodus.</b> ' + esc(L.ABLAUF.ruhe) + '</div>' : '')
+    + '<h2>' + esc(ab.titel) + '</h2><div class="karte"><p>' + esc(ab.kurz) + '</p><ul>' + ab.regeln.map(r => '<li>' + esc(r) + '</li>').join('') + '</ul></div>'
+    + '<h3>Ablauf laut Auditplan</h3><div class="karte">' + (S.planpunkte.length ? '<table class="spick">' + S.planpunkte.map(p => '<tr><td style="white-space:nowrap">' + esc(p.zeit || '') + '</td><td>' + esc(p.thema) + '</td></tr>').join('') + '</table>' : '<span class="grau">Der Plan wird noch eingetragen.</span>') + '</div>'
+    + '<h3>Diese Dokumente brauchen Sie den ganzen Tag (gut kennen)</h3><div class="karte">' + (kennen.length ? kennen.map(d => '<div>• <b>' + esc(d.titel) + '</b>' + (d.stand ? ' <span class="grau">Stand ' + esc(d.stand) + '</span>' : '') + '</div>').join('') + '<p class="grau">Alle anderen Dokumente müssen Sie nur finden können, wenn das Thema kommt.</p>' : '<span class="grau">–</span>') + '</div>'
+    + (abk.length ? '<h3>Abkürzungen</h3><div class="karte">' + abk.map(d => '<div><b>' + esc(d.kurzname) + '</b> = ' + esc(d.titel) + '</div>').join('') + '</div>' : '')
+    + '<h3>Nur gültige Dokumente verwenden</h3><div class="karte">Öffnen Sie im Audit nur die Dokumente aus dieser Vorbereitung. Ältere Fassungen (z. B. in einem Archiv-Ordner) sind nicht mehr aktuell.</div>';
+}
+
+/* ------------------------------------------------ 5 Spickzettel (Idee 2) */
+function zeigeSpick() {
+  const a = S.audit, ma = S.ma, kennen = S.start.dokumente.filter(d => d.wichtigkeit === 'kennen');
+  const meine = S.planpunkte.filter(p => !ma || !(p.mitarbeiter_ids || []).length || p.mitarbeiter_ids.indexOf(ma.id) >= 0);
+  const bsp = S.antworten.filter(x => x.ist_beispiel && x.text);
+  $('#main').innerHTML = '<div class="kein-druck zeile" style="justify-content:space-between"><h2>Spickzettel</h2><button class="knopf" id="drucken">Drucken / als PDF speichern</button></div>'
+    + '<div class="karte"><div class="nur-druck"><b style="font-size:13pt">' + esc(S.start.kunde.name) + '</b></div>'
+    + '<div><b>Stufe ' + a.stufe + ' · ' + esc(datumDe(a.datum)) + '</b>' + (a.auditor ? ' · Auditor ' + esc(a.auditor) : '') + (ma ? ' · für ' + esc(ma.name) : '') + '</div>'
+    + '<h3>Ihre Termine</h3>' + (meine.length ? meine.map(p => '<div>' + esc(p.zeit || '') + ' · ' + esc(p.thema) + '</div>').join('') : '<span class="grau">–</span>')
+    + '<h3>Offen haben</h3>' + kennen.map(d => esc(d.titel)).join(' · ')
+    + '<h3>' + (a.stufe === 1 ? 'Wo steht was?' : 'Fragen und wo die Antwort steht') + '</h3><table class="spick"><tr><th></th><th>Punkt</th><th>Frage</th><th>Wo steht es?</th></tr>'
+    + S.fragen.map(f => '<tr><td><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span></td><td>' + esc(f.normkapitel || '') + '</td><td>' + esc(String(f.frage).slice(0, 95)) + (String(f.frage).length > 95 ? ' …' : '') + '</td><td>' + esc(f.hilfe || '') + '</td></tr>').join('') + '</table>'
+    + (bsp.length ? '<h3>Meine Beispiele</h3>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(f.normkapitel || '') + '</b> ' + esc(x.text) + '</div>'; }).join('') : '')
+    + '<h3>Merksätze</h3><div>Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen</div></div>';
+  $('#drucken').onclick = () => window.print();
+}
+
+start();
+</script>
+</body>
+</html>
