@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       const [fragen, punkte, doks] = await Promise.all([
         db.from('fragen').select('id, planpunkt_id, reihenfolge, bereich, frage, hilfe, dokument_ids').eq('audit_id', audit.id).order('reihenfolge'),
         db.from('planpunkte').select('id, zeit, thema, normkapitel, bereich, mitarbeiter_ids, nachweise').eq('audit_id', audit.id).order('reihenfolge'),
-        db.from('dokumente').select('id, d_nr, titel, normkapitel, bereich, stand').eq('kunde_id', kundeId).order('d_nr')
+        db.from('dokumente').select('id, d_nr, titel, kurzname, normkapitel, bereich, stand, wichtigkeit, link').eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr')
       ]);
       const fr = pflicht(fragen) as any[], pp = pflicht(punkte) as any[], dk = pflicht(doks) as any[];
       const auswahl = L.fragenFuerBereich(fr, pp, String(d.bereich || 'alle'), String(d.mitarbeiter_id || ''));
@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
     }
 
     if (d.aktion === 'dokument') { // zeitlich begrenzter Link (10 Minuten) auf ein Dokument dieses Kunden
-      const dok = pflicht(await db.from('dokumente').select('pfad, kunde_id, titel').eq('id', d.dokument_id).maybeSingle()) as any;
-      if (!dok || dok.kunde_id !== kundeId) return antwort({ fehler: 'Dokument nicht gefunden' }, 404);
+      const dok = pflicht(await db.from('dokumente').select('pfad, kunde_id, titel, gueltig').eq('id', d.dokument_id).maybeSingle()) as any;
+      if (!dok || dok.kunde_id !== kundeId || !dok.gueltig) return antwort({ fehler: 'Dokument nicht gefunden' }, 404);
       const { data, error } = await db.storage.from('dokumente').createSignedUrl(dok.pfad, 600);
       if (error) throw error;
       return antwort({ url: data.signedUrl, titel: dok.titel });
