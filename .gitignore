@@ -1,0 +1,6 @@
+daten/
+node_modules/
+.env
+.env.*
+supabase/.temp/
+test/bilder/
