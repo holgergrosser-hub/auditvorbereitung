@@ -134,9 +134,13 @@ Deno.serve(async (req) => {
     if (d.aktion === 'musterfirma_waehlen') {
       if (!grenzen) return antwort({ fehler: 'Nur im Testmonat' }, 403);
       if (!UUID.test(String(d.vorlage_id || ''))) return antwort({ fehler: 'Musterfirma nicht gefunden' }, 404);
-      const { data, error } = await db.rpc('musterfirma_wechseln', { p_kunde: kundeId, p_vorlage: d.vorlage_id });
-      if (error) throw error;
-      if (data !== true) return antwort({ fehler: 'Heute schon dreimal gewechselt – morgen geht es wieder.' }, 429);
+      const [v, k] = await Promise.all([db.from('kunden').select('id').eq('id', d.vorlage_id).eq('art', 'vorlage').maybeSingle(), db.from('kunden').select('vorlage_id').eq('id', kundeId).single()]);
+      if (!pflicht(v)) return antwort({ fehler: 'Musterfirma nicht gefunden' }, 404);
+      if (pflicht(k).vorlage_id === d.vorlage_id) return antwort({ ok: true });
+      if (!(await buchen(kundeId, 'wechsel', 3, 10))) return antwort({ fehler: 'Heute schon dreimal gewechselt – morgen geht es wieder.' }, 429);
+      // alten Uebungsstand leeren (Antworten, Fotos, Plan und Fragen haengen an den Audits; Auszuege an den Dokumenten)
+      for (const t of ['kunden_eintraege', 'audits', 'dokumente', 'faktencheck', 'stolperfallen', 'aufgaben', 'mitarbeiter']) pflicht(await db.from(t).delete().eq('kunde_id', kundeId));
+      pflicht(await db.rpc('musterfirma_wechseln', { p_kunde: kundeId, p_vorlage: d.vorlage_id }));
       return antwort({ ok: true });
     }
 

@@ -94,7 +94,9 @@ end $$;
 revoke all on function public.testkunde_anlegen(uuid, integer, jsonb) from public, anon;
 grant execute on function public.testkunde_anlegen(uuid, integer, jsonb) to authenticated;
 
--- Wechsel der Musterfirma durch den Teilnehmer (Edge Function "kunde", Aktion musterfirma_waehlen)
+-- Wechsel der Musterfirma durch den Teilnehmer (Edge Function "kunde", Aktion musterfirma_waehlen).
+-- Die Edge Function bucht vorher die Grenze (3 je Tag, 10 insgesamt) und leert den alten Uebungsstand ueber die API;
+-- diese Funktion setzt nur die neue Firma und kopiert sie (bricht ab, wenn noch alte Daten da sind).
 create or replace function public.musterfirma_wechseln(p_kunde uuid, p_vorlage uuid)
 returns boolean language plpgsql security definer set search_path = public, extensions as $$
 declare k public.kunden%rowtype;
@@ -102,16 +104,8 @@ begin
   select * into k from public.kunden where id = p_kunde for update;
   if not found or k.art <> 'test' then raise exception 'Nur im Testmonat'; end if;
   if not exists (select 1 from public.kunden where id = p_vorlage and art = 'vorlage') then raise exception 'Musterfirma nicht gefunden'; end if;
-  if k.vorlage_id = p_vorlage then return true; end if;
-  if not public.nutzung_buchen(p_kunde, 'wechsel', 3, 10) then return false; end if;
-  -- Uebungsstand der bisherigen Musterfirma entfernen (Antworten, Fotos, Plan und Fragen haengen an den Audits)
-  delete from public.kunden_eintraege where kunde_id = p_kunde;
-  delete from public.audits where kunde_id = p_kunde;
-  delete from public.dokumente where kunde_id = p_kunde;
-  delete from public.faktencheck where kunde_id = p_kunde;
-  delete from public.stolperfallen where kunde_id = p_kunde;
-  delete from public.aufgaben where kunde_id = p_kunde;
-  delete from public.mitarbeiter where kunde_id = p_kunde;
+  if exists (select 1 from public.audits where kunde_id = p_kunde) or exists (select 1 from public.dokumente where kunde_id = p_kunde)
+     or exists (select 1 from public.mitarbeiter where kunde_id = p_kunde) then raise exception 'Alter Uebungsstand ist noch vorhanden'; end if;
   update public.kunden x set name = v.name, ort = v.ort, rundgang = v.rundgang, pdf_zip_pfad = v.pdf_zip_pfad, firma_laut_zertifizierer = v.firma_laut_zertifizierer,
          vorlage_id = v.id, beschreibung = v.beschreibung, branche = v.branche, technik_check = '{}'::jsonb
   from public.kunden v where x.id = p_kunde and v.id = p_vorlage;
