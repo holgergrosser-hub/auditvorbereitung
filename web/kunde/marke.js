@@ -13,6 +13,8 @@ export const MARKE = {
   datenschutz: 'https://qm-guru.de/sonstiges/datenschutz/',
   googleProfil: 'https://www.google.com/maps/place/?q=place_id:' + PLACE,
   bewerten: 'https://search.google.com/local/writereview?placeid=' + PLACE,
+  angebot: 'https://vorbereitung-auf-audit.netlify.app/', // bestehende Angebotsseite „Audit-Vorbereitung“ (Angebot als PDF, Apps Script)
+  angebotPreis: 'ca. 6–12 Stunden à 135 € zzgl. MwSt., nach Aufwand',
   sterne: '5,0', bewertungen: '100+'
 };
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

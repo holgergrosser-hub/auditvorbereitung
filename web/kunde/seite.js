@@ -1167,15 +1167,20 @@ ANSICHT.danach = () => {
 /* Ende des Weges (E-A34): Bewertungsbitte an ALLE, die ein Ergebnis eingetragen haben (Google-Richtlinie: keine Auswahl nur Zufriedener),
    dazu der nächste logische Schritt (Folgejahr). Nicht im Testmonat (Beispielfirma bzw. fremde Teilnehmer) und nicht vor dem Ergebnis. */
 function nachAuditKarten(r) {
-  if (!r || !r.ergebnis || S.start.test) return '';
+  if (!r || !r.ergebnis) return '';
   const geschafft = r.ergebnis !== 'offen';
-  return '<div class="karte marke-karte"><b>' + (geschafft ? 'Herzlichen Glückwunsch! 🎉' : 'Danke für Ihre Rückmeldung.') + '</b>'
+  const bewertung = S.start.test ? '' : '<div class="karte marke-karte"><b>' + (geschafft ? 'Herzlichen Glückwunsch! 🎉' : 'Danke für Ihre Rückmeldung.') + '</b>'
     + '<p>' + (geschafft ? 'Wenn Sie anderen Unternehmen helfen möchten, die vor dem gleichen Schritt stehen: Eine kurze Google-Bewertung ist die beste Weiterempfehlung.'
       : 'Eine kurze, ehrliche Google-Bewertung hilft anderen Unternehmen bei der Wahl ihres Beraters – und mir, besser zu werden.') + '</p>'
-    + '<a class="knopf" href="' + esc(MARKE.bewerten) + '" target="_blank" rel="noopener">★ Google-Bewertung schreiben</a></div>'
-    + '<div class="karte marke-karte" style="--f:#0B7285"><b>Und nächstes Jahr?</b><p>Dann kommt das Überwachungsaudit – meist ohne dass vorher jemand alles vorbereitet. '
-    + 'Die Auditvorbereitung kann aktiv bleiben: Sie erinnert an Prüffristen aus dem Rundgang und an das interne Audit, und vor dem Audit üben wir gemeinsam.</p>'
-    + (S.start.demo ? '' : '<button class="knopf zweit" id="r-folgejahr">Folgejahr-Betreuung anfragen</button>') + '</div>';
+    + '<a class="knopf" href="' + esc(MARKE.bewerten) + '" target="_blank" rel="noopener">★ Google-Bewertung schreiben</a></div>';
+  // Nächster Schritt: das jährliche Audit des Zertifizierers – über die bestehende Angebotsseite (der Kunde fordert selbst an, nichts geht automatisch raus)
+  const folgejahr = '<div class="karte marke-karte" style="--f:#0B7285"><b>' + (S.start.test ? 'Persönliche Begleitung für Ihr Audit?' : 'Und nächstes Jahr?') + '</b>'
+    + '<p>' + (S.start.test ? 'Wenn Sie sich nicht allein vorbereiten möchten: ' + esc(MARKE.name) + ' bereitet Sie und Ihr Team auf das Audit des Zertifizierers vor – mit dieser Auditvorbereitung und Ihren Unterlagen.'
+      : 'Jedes Jahr kommt der Zertifizierer wieder – meist ohne dass vorher jemand alles vorbereitet. ' + esc(MARKE.name) + ' bereitet Sie wieder vor, die Auditvorbereitung bleibt dabei aktiv.')
+    + ' <span class="grau">Aufwand ' + esc(MARKE.angebotPreis) + '.</span></p>'
+    + (S.start.demo ? '' : '<div class="zeile"><a class="knopf zweit" href="' + esc(MARKE.angebot) + '" target="_blank" rel="noopener">Unverbindliches Angebot anfordern</a>'
+      + (S.start.eigen ? '' : '<button class="link" id="r-folgejahr">oder kurz Bescheid geben</button>') + '</div>') + '</div>';
+  return bewertung + folgejahr;
 }
 function karteKnoepfe() { const b = $('#r-folgejahr'); if (b) b.onclick = () => sendenPanel('Ich interessiere mich für die Betreuung im Folgejahr (Überwachungsaudit). Bitte melden Sie sich.'); }
 function herunterladen() {
