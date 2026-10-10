@@ -1089,16 +1089,30 @@ async function azubi(prozessId) {
 function beispielSatz(t) { const s = String(t).split(/(?<=[.!?])\s+/); const i = s.findIndex(x => /(zum Beispiel|z\. ?B\.|letzte|zuletzt|im (Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)|20\d\d|neulich)/i.test(x)); return (i >= 0 ? s.slice(i, i + 2) : s.slice(0, 2)).join(' '); }
 
 /* ------------------------------------------------ Beispielauftrag: Spurensuche (Idee 8) */
-ANSICHT.spur = () => {
+/* Beste Fundstelle zu Stichworten; bevorzugt = Dokumenttitel (z. B. Musterauftrag), ohne = alle anderen Dokumente */
+async function stelleZu(suche, nurTitel, ohneTitel) {
+  const a = (await auszuege()).filter(x => { const t = dokTitel(x.dokument_id); return (!nurTitel || nurTitel.test(t)) && (!ohneTitel || !ohneTitel.test(t)); });
+  const r = L.auszuegeSuchen(suche, a, 1)[0]; return r ? r.auszug : null;
+}
+const BELEGE = /musterauftrag|beispielauftrag|auftrag\s*\d{4}/i, PRUEFLISTE = /wartung|prüffrist|prüfliste|prüfmittel|qm-übersicht/i;
+ANSICHT.spur = async () => {
   const st = L.SPUR_STATIONEN.map(s => Object.assign({ k: s.k }, (eintrag('spur', s.k) || {}).daten || {}));
   const pr = L.spurPruefen(st.filter(x => Object.keys(x).length > 1));
-  $('#main').innerHTML = '<h2>Beispielauftrag: der rote Faden</h2><p>In Stufe 2 nimmt der Auditor oft <b>einen</b> abgeschlossenen Auftrag und verfolgt ihn durch die Firma. Suchen Sie jetzt einen aus und legen Sie zu jeder Station den Beleg bereit. Datum und Nummer genügen – das Programm prüft, ob der Faden hält.</p>'
+  const hatBelege = S.start.dokumente.some(d => BELEGE.test(d.titel));
+  const orte = await Promise.all(L.SPUR_STATIONEN.map(async x => ({ ablauf: await stelleZu(x.suche || x.name, null, BELEGE), beleg: hatBelege ? await stelleZu(x.suche || x.name, BELEGE) : null })));
+  if (S.ansicht !== 'spur') return;
+  $('#main').innerHTML = '<h2>Beispielauftrag: der rote Faden</h2><p>In Stufe 2 nimmt der Auditor oft <b>einen</b> abgeschlossenen Auftrag und verfolgt ihn durch die Firma – von der Anfrage bis zur Rechnung. Suchen Sie jetzt einen aus und legen Sie zu jeder Station den Beleg bereit. '
+    + 'Bei jeder Station steht, <b>welcher Prozess</b> gemeint ist, <b>welchen Nachweis</b> der Auditor sehen will und was er typischerweise fragt. Datum und Nummer genügen – das Programm prüft, ob der Faden hält.</p>'
+    + (hatBelege ? '<div class="hinweis">In der Beispielfirma liegt ein vollständiger <b>Musterauftrag</b>. Öffnen Sie bei jeder Station „Beleg öffnen“ und tragen Sie Datum und Nummer ab – so üben Sie, wie Sie es im Audit zeigen.</div>' : '')
     + '<div class="karte ' + (pr.ok ? 'gut' : '') + '"><b>' + pr.fertig + ' von ' + pr.von + ' Stationen</b>' + (pr.hinweise.length ? '<ul>' + pr.hinweise.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : ' – der rote Faden hält. Diese Belege zeigen Sie im Audit.') + '</div>'
-    + L.SPUR_STATIONEN.map((s, i) => { const d = st[i]; return '<div class="karte station" data-k="' + s.k + '"><div class="zeile" style="justify-content:space-between"><b>' + (i + 1) + '. ' + esc(s.name) + '</b>' + (d.foto ? '<span class="chip">Beleg ✓</span>' : '') + '</div><div class="grau">' + esc(s.hilfe) + '</div>'
+    + L.SPUR_STATIONEN.map((s, i) => { const d = st[i], o = orte[i]; return '<div class="karte station" data-k="' + s.k + '"><div class="zeile" style="justify-content:space-between"><b>' + (i + 1) + '. ' + esc(s.name) + '</b>' + (d.foto ? '<span class="chip">Beleg ✓</span>' : '') + '</div>'
+      + '<div class="vorgabe">' + (s.prozess ? '<div><span class="etikett-klein">Prozess</span> ' + esc(s.prozess) + '</div>' : '') + '<div><span class="etikett-klein">Nachweis</span> ' + esc(s.nachweis || s.hilfe) + '</div>' + (s.frage ? '<div><span class="etikett-klein">Auditor fragt</span> „' + esc(s.frage) + '“</div>' : '')
+      + ((o.ablauf || o.beleg) ? '<div class="zeile">' + (o.ablauf ? stelleKnopf(o.ablauf.dokument_id, o.ablauf.ort, 'Ablauf öffnen').replace('>Seite', '>Ablauf: ' + esc(dokKurz(o.ablauf.dokument_id)) + ' Seite') : '') + (o.beleg ? stelleKnopf(o.beleg.dokument_id, o.beleg.ort, 'Beleg öffnen').replace('>Seite', '>Beleg: Seite') : '') + '</div>' : '') + '</div>'
       + '<div class="zeile"><label>Datum <input type="date" data-f="datum" value="' + esc(d.datum || '') + '"></label><label>Kunden-/Auftragsnr. <input data-f="nummer" value="' + esc(d.nummer || '') + '" size="12"></label></div>'
       + '<input data-f="notiz" placeholder="Was ist das für ein Beleg? (z. B. Angebot Nr. 2026-041)" value="' + esc(d.notiz || '') + '" style="width:100%">'
       + '<div class="zeile"><label class="knopf klein zweit">📷 Foto/Scan<input type="file" accept="image/*" capture="environment" hidden data-f="foto"></label><button class="knopf klein zweit" data-b="1">🖥 Bildschirmfoto</button><button class="knopf klein" data-s="1">Speichern</button></div>'
       + (d.foto ? '<img class="mini" src="' + d.foto + '" alt="Beleg">' : '') + '</div>'; }).join('');
+  dokKnoepfe($('#main'));
   $$('.station').forEach(k => {
     const s = L.SPUR_STATIONEN.find(x => x.k === k.dataset.k);
     let foto = ((eintrag('spur', s.k) || {}).daten || {}).foto || '';
@@ -1108,16 +1122,25 @@ ANSICHT.spur = () => {
     $('[data-s]', k).onclick = sichern;
   });
 };
+function dokKurz(id) { const d = S.start.dokumente.find(x => x.id === id) || {}; return d.kurzname || String(d.titel || 'Dokument').split(/[ (]/)[0]; }
 
 /* ------------------------------------------------ Foto-Rundgang (Idee 10) */
-ANSICHT.rundgang = () => {
-  const items = S.start.rundgang || L.RUNDGANG_STANDARD;
-  $('#main').innerHTML = '<h2>Foto-Rundgang</h2><p>Gehen Sie mit dem Handy durch Lager und Fahrzeug und fotografieren Sie die Prüfplaketten. Tragen Sie den Monat der <b>nächsten</b> Prüfung ein (steht auf der Plakette) – das Programm zeigt, was fällig ist. Das fragt der Auditor in Stufe 2.</p>'
-    + items.map(it => { const d = (eintrag('rundgang', it.k) || {}).daten || {}; const s = L.rundgangStatus(Object.assign({ intervall_monate: it.intervall_monate }, d));
-      return '<div class="karte rg" data-k="' + esc(it.k) + '"><div class="zeile" style="justify-content:space-between"><b>' + esc(it.name) + '</b><span class="chip ' + s.status + '">' + ({ ok: '✓ in Ordnung', bald: 'diesen Monat fällig', faellig: '⚠ überfällig', offen: 'offen' }[s.status]) + (s.naechste ? ' · ' + s.naechste.split('-').reverse().join('/') : '') + '</span></div><div class="grau">' + esc(it.hilfe) + '</div>'
+ANSICHT.rundgang = async () => {
+  const std = Object.fromEntries(L.RUNDGANG_STANDARD.map(x => [x.k, x]));
+  const items = (S.start.rundgang || L.RUNDGANG_STANDARD).map(x => Object.assign({}, std[x.k] || {}, x));
+  const orte = await Promise.all(items.map(async it => (await stelleZu(it.suche || it.name, /wartung|prüfplan|prüffrist/i)) || stelleZu(it.suche || it.name, PRUEFLISTE)));
+  if (S.ansicht !== 'rundgang') return;
+  $('#main').innerHTML = '<h2>Foto-Rundgang</h2>'
+    + '<div class="karte vorgabe-gross"><b>Was erwartet der Auditor beim Rundgang?</b><p>In Stufe 2 geht der Auditor durch Werkstatt, Lager und Fahrzeuge. Er schaut, ob <b>Prüffristen eingehalten</b> sind (Plaketten, Aufkleber), ob es <b>Nachweise</b> gibt (Prüfliste, Protokoll) und ob die Mitarbeiter wissen, wo Feuerlöscher und Erste-Hilfe-Kasten sind. '
+    + 'Abgelaufene Plaketten sind der häufigste Befund beim Rundgang – und am leichtesten vorher zu beheben.</p><p><b>So gehen Sie vor:</b> Mit dem Handy durch den Betrieb gehen, jede Plakette fotografieren und den Monat der <b>nächsten</b> Prüfung eintragen. Rot heißt: vor dem Audit erledigen.</p></div>'
+    + items.map((it, i) => { const d = (eintrag('rundgang', it.k) || {}).daten || {}; const s = L.rundgangStatus(Object.assign({ intervall_monate: it.intervall_monate }, d)), o = orte[i];
+      return '<div class="karte rg" data-k="' + esc(it.k) + '"><div class="zeile" style="justify-content:space-between"><b>' + esc(it.name) + '</b><span class="chip ' + s.status + '">' + ({ ok: '✓ in Ordnung', bald: 'diesen Monat fällig', faellig: '⚠ überfällig', offen: 'offen' }[s.status]) + (s.naechste ? ' · ' + s.naechste.split('-').reverse().join('/') : '') + '</span></div>'
+        + '<div class="vorgabe"><div><span class="etikett-klein">Fotografieren</span> ' + esc(it.hilfe) + '</div>' + (it.erwartung ? '<div><span class="etikett-klein">Auditor erwartet</span> ' + esc(it.erwartung) + '</div>' : '')
+        + (o ? '<div class="zeile">' + stelleKnopf(o.dokument_id, o.ort, 'In der Prüfliste nachsehen').replace('>Seite', '>Prüfliste: ' + esc(dokKurz(o.dokument_id)) + ' Seite').replace('>Reiter', '>Prüfliste: Reiter') + '</div>' : '') + '</div>'
         + '<div class="zeile"><label>Nächste Prüfung <input type="month" data-f="naechste" value="' + esc(d.naechste || '') + '"></label><span class="grau">oder</span><label>letzte Prüfung <input type="month" data-f="letzte" value="' + esc(d.letzte || '') + '"></label></div>'
         + '<div class="zeile"><label class="knopf klein zweit">📷 Foto<input type="file" accept="image/*" capture="environment" hidden data-f="foto"></label><button class="knopf klein" data-s="1">Speichern</button></div>'
         + (d.foto ? '<img class="mini" src="' + d.foto + '" alt="Foto">' : '') + '</div>'; }).join('');
+  dokKnoepfe($('#main'));
   $$('.rg').forEach(k => {
     let foto = ((eintrag('rundgang', k.dataset.k) || {}).daten || {}).foto || '';
     const sichern = async () => { await speichereEintrag('rundgang', k.dataset.k, { naechste: $('[data-f=naechste]', k).value, letzte: $('[data-f=letzte]', k).value, foto }, true); ANSICHT.rundgang(); };

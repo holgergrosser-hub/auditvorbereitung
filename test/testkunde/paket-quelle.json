@@ -24,19 +24,31 @@
      "gespraechspartner": "GF, QMB"
     },
     {
-     "zeit": "09:15–11:30",
-     "thema": "Bewertung der Systemdokumentation",
-     "normkapitel": "4.1–8.7, 10",
+     "zeit": "09:15–10:30",
+     "thema": "Bewertung der Systemdokumentation: Kontext, Führung, Planung, Unterstützung",
+     "normkapitel": "4.1–7.5",
      "gespraechspartner": "GF, QMB"
     },
     {
-     "zeit": "11:30–12:30",
+     "zeit": "10:30–11:30",
+     "thema": "Bewertung der Systemdokumentation: Betrieb und Verbesserung",
+     "normkapitel": "8.1–8.7, 10",
+     "gespraechspartner": "GF, QMB"
+    },
+    {
+     "zeit": "11:30–12:15",
      "thema": "Interne Audits und Managementbewertung",
      "normkapitel": "9.1–9.3",
      "gespraechspartner": "GF, QMB"
     },
     {
-     "zeit": "12:30–13:00",
+     "zeit": "12:15–12:45",
+     "thema": "Bereitschaft für Stufe 2: Standorte, Baustellen, Auditplan Stufe 2",
+     "normkapitel": "",
+     "gespraechspartner": "GF"
+    },
+    {
+     "zeit": "12:45–13:00",
      "thema": "Abschlussbesprechung",
      "normkapitel": "",
      "gespraechspartner": "GF, QMB"
@@ -176,38 +188,189 @@
    "planpunkte": [
     {
      "zeit": "08:30–09:00",
-     "thema": "Eröffnung, Führung und Politik",
-     "normkapitel": "5.1, 5.2",
+     "thema": "Eröffnungsgespräch: Vorstellung, Ablauf, Geltungsbereich, offene Punkte aus Stufe 1",
+     "normkapitel": "",
+     "gespraechspartner": "GF, QMB",
+     "bereich": "Alle",
+     "fragen": []
+    },
+    {
+     "zeit": "09:00–09:45",
+     "thema": "Kontext, Führung, Politik, Rollen, Risiken und Chancen, Qualitätsziele",
+     "normkapitel": "4.1–4.4, 5.1–5.3, 6.1–6.3",
      "gespraechspartner": "GF",
-     "bereich": "Geschäftsführung"
+     "bereich": "Geschäftsführung",
+     "fragen": [
+      {
+       "frage": "Wie haben Sie Ihre internen und externen Themen bestimmt, und wann haben Sie sie zuletzt bewertet?",
+       "hilfe": "Unternehmens- und Prozesshandbuch (UPH) Seite 3; Managementbewertung 2026 Seite 2",
+       "normkapitel": "4.1"
+      },
+      {
+       "frage": "Welche Qualitätsziele gelten dieses Jahr, und wie stehen Sie aktuell?",
+       "hilfe": "QM-Übersicht, Reiter „Ziele & Kennzahlen“; Managementbewertung 2026 Seite 2",
+       "normkapitel": "6.2"
+      },
+      {
+       "frage": "Zeigen Sie mir Ihre Risikobewertung: Welches Risiko ist das größte, und was tun Sie dagegen?",
+       "hilfe": "QM-Übersicht, Reiter „Risiken“; Unternehmens- und Prozesshandbuch (UPH) Seite 7",
+       "normkapitel": "6.1"
+      }
+     ]
     },
     {
-     "zeit": "09:00–10:30",
-     "thema": "Angebot und Auftrag",
-     "normkapitel": "8.2",
+     "zeit": "09:45–10:30",
+     "thema": "Managementbewertung, internes Audit, Leistungsbewertung",
+     "normkapitel": "9.1.1, 9.1.3, 9.2, 9.3",
+     "gespraechspartner": "GF, QMB",
+     "bereich": "Geschäftsführung",
+     "fragen": [
+      {
+       "frage": "Welche Beschlüsse hat die letzte Managementbewertung gebracht, und wie ist der Stand?",
+       "hilfe": "Managementbewertung 2026 Seite 3",
+       "normkapitel": "9.3"
+      },
+      {
+       "frage": "Was kam beim internen Audit heraus, und was haben Sie mit den Feststellungen gemacht?",
+       "hilfe": "Auditbericht internes Audit Seite 2; Auditprogramm 2026–2028",
+       "normkapitel": "9.2"
+      }
+     ]
+    },
+    {
+     "zeit": "10:30–11:30",
+     "thema": "Vertrieb: Anfrage, Angebot, Auftrag – Stichprobe abgeschlossener Auftrag",
+     "normkapitel": "8.1, 8.2",
      "gespraechspartner": "Kundendienst",
-     "bereich": "Kundendienst"
+     "bereich": "Kundendienst",
+     "fragen": [
+      {
+       "frage": "Nehmen wir einen abgeschlossenen Auftrag: Zeigen Sie mir Anfrage, Angebot und Auftragsbestätigung.",
+       "hilfe": "Musterauftrag 2026-118 Seite 1–4; Unternehmens- und Prozesshandbuch (UPH) Seite 11",
+       "normkapitel": "8.2"
+      },
+      {
+       "frage": "Der Auftrag weicht vom Angebot ab – wie haben Sie die Änderung mit dem Kunden geklärt?",
+       "hilfe": "Musterauftrag 2026-118 Seite 4",
+       "normkapitel": "8.2.4"
+      },
+      {
+       "frage": "Wie stellen Sie vor dem Angebot sicher, dass Sie den Auftrag leisten können?",
+       "hilfe": "Musterauftrag 2026-118 Seite 3; Unternehmens- und Prozesshandbuch (UPH) Seite 11",
+       "normkapitel": "8.2.3"
+      }
+     ]
     },
     {
-     "zeit": "10:30–12:00",
-     "thema": "Montage beim Kunden",
-     "normkapitel": "8.5, 7.1.5",
+     "zeit": "11:30–12:15",
+     "thema": "Einkauf, Lieferantenbewertung, Wareneingang",
+     "normkapitel": "8.4, 8.6",
+     "gespraechspartner": "Büro, GF",
+     "bereich": "Büro",
+     "fragen": [
+      {
+       "frage": "Bei welchen Lieferanten bestellen Sie, und wie haben Sie sie zuletzt bewertet?",
+       "hilfe": "QM-Übersicht, Reiter „Lieferantenbewertung“; Unternehmens- und Prozesshandbuch (UPH) Seite 14",
+       "normkapitel": "8.4"
+      },
+      {
+       "frage": "Wie prüfen Sie die Ware beim Eingang? Zeigen Sie mir einen Lieferschein.",
+       "hilfe": "Musterauftrag 2026-118 Seite 6; Unternehmens- und Prozesshandbuch (UPH) Seite 13",
+       "normkapitel": "8.4.3"
+      }
+     ]
+    },
+    {
+     "zeit": "12:15–13:00",
+     "thema": "Mittagspause",
+     "normkapitel": "",
+     "gespraechspartner": "",
+     "bereich": "",
+     "fragen": []
+    },
+    {
+     "zeit": "13:00–14:30",
+     "thema": "Montage beim Kunden / Werkstatt: Durchführung, Prüfmittel, Rundgang Lager und Fahrzeug",
+     "normkapitel": "7.1.3–7.1.5, 8.5.1, 8.5.2, 8.6",
      "gespraechspartner": "Montage",
-     "bereich": "Montage"
+     "bereich": "Montage",
+     "fragen": [
+      {
+       "frage": "Wie stellen Sie sicher, dass die Montage nach Vorgabe läuft? Zeigen Sie mir ein Prüfprotokoll.",
+       "hilfe": "Musterauftrag 2026-118 Seite 7; Unternehmens- und Prozesshandbuch (UPH) Seite 12",
+       "normkapitel": "8.5.1"
+      },
+      {
+       "frage": "Wann wurde Ihr Druckprüfgerät zuletzt kalibriert, und wo sehe ich das?",
+       "hilfe": "Wartungsplan Seite 1; QM-Übersicht, Reiter „Prüfmittel“",
+       "normkapitel": "7.1.5"
+      },
+      {
+       "frage": "Wer gibt die fertige Anlage frei, bevor die Rechnung rausgeht?",
+       "hilfe": "Musterauftrag 2026-118 Seite 8–9; Unternehmens- und Prozesshandbuch (UPH) Seite 12",
+       "normkapitel": "8.6"
+      }
+     ]
     },
     {
-     "zeit": "13:00–14:00",
-     "thema": "Einkauf und Lieferanten",
-     "normkapitel": "8.4",
+     "zeit": "14:30–15:00",
+     "thema": "Personal: Kompetenz, Schulung, Bewusstsein, Kommunikation",
+     "normkapitel": "7.1.2, 7.2–7.4",
      "gespraechspartner": "GF",
-     "bereich": "Geschäftsführung"
+     "bereich": "Geschäftsführung",
+     "fragen": [
+      {
+       "frage": "Wie planen Sie Schulungen, und wo sind die Nachweise für Ihre Monteure?",
+       "hilfe": "QM-Übersicht, Reiter „Schulungsplan“; Unternehmens- und Prozesshandbuch (UPH) Seite 8",
+       "normkapitel": "7.2"
+      },
+      {
+       "frage": "Woher kennen Ihre Mitarbeiter die Qualitätspolitik und die Ziele?",
+       "hilfe": "Unternehmens- und Prozesshandbuch (UPH) Seite 5",
+       "normkapitel": "7.3"
+      }
+     ]
     },
     {
-     "zeit": "14:00–15:00",
-     "thema": "Reklamationen und Verbesserung",
-     "normkapitel": "10.2",
-     "gespraechspartner": "Kundendienst",
-     "bereich": "Kundendienst"
+     "zeit": "15:00–15:30",
+     "thema": "Kundenzufriedenheit, Reklamationen, Korrekturmaßnahmen, Verbesserung",
+     "normkapitel": "9.1.2, 10.1–10.3",
+     "gespraechspartner": "Kundendienst, QMB",
+     "bereich": "Kundendienst",
+     "fragen": [
+      {
+       "frage": "Wie messen Sie die Kundenzufriedenheit, und was war das letzte Ergebnis?",
+       "hilfe": "Managementbewertung 2026 Seite 2",
+       "normkapitel": "9.1.2"
+      },
+      {
+       "frage": "Zeigen Sie mir die letzte Reklamation: Ursache, Maßnahme und Wirksamkeit.",
+       "hilfe": "Unternehmens- und Prozesshandbuch (UPH) Seite 15; QM-Übersicht, Reiter „Ziele & Kennzahlen“",
+       "normkapitel": "10.2"
+      }
+     ]
+    },
+    {
+     "zeit": "15:30–16:00",
+     "thema": "Dokumentierte Information, Lenkung von Dokumenten und Aufzeichnungen",
+     "normkapitel": "7.5",
+     "gespraechspartner": "QMB",
+     "bereich": "Kundendienst",
+     "fragen": [
+      {
+       "frage": "Wo finde ich die aktuelle Version Ihres Handbuchs, und wer gibt Änderungen frei?",
+       "hilfe": "Unternehmens- und Prozesshandbuch (UPH) Seite 2",
+       "normkapitel": "7.5"
+      }
+     ]
+    },
+    {
+     "zeit": "16:00–16:30",
+     "thema": "Auditorinterne Abstimmung und Abschlussgespräch mit Empfehlung",
+     "normkapitel": "",
+     "gespraechspartner": "GF, QMB",
+     "bereich": "Alle",
+     "fragen": []
     }
    ]
   }
@@ -224,6 +387,18 @@
    "name": "Max Probe",
    "bereich": "Kundendienst",
    "funktion": "QMB, Kundendienst"
+  },
+  {
+   "id": "m3",
+   "name": "Tom Monteur",
+   "bereich": "Montage",
+   "funktion": "Monteur"
+  },
+  {
+   "id": "m4",
+   "name": "Sabine Büro",
+   "bereich": "Büro",
+   "funktion": "Büro und Einkauf"
   }
  ],
  "dokumente": [
@@ -278,6 +453,31 @@
    "stand": "ENTWURF",
    "wichtigkeit": "finden",
    "datei": "quellen/Notfallplan.pdf"
+  },
+  {
+   "id": "d7",
+   "d_nr": "D-07",
+   "titel": "Wartungs- und Prüfplan",
+   "kurzname": "Wartungsplan",
+   "stand": "09/2026",
+   "wichtigkeit": "finden",
+   "datei": "quellen/Wartungsplan.pdf"
+  },
+  {
+   "id": "d8",
+   "d_nr": "N-01",
+   "titel": "Musterauftrag 2026-118",
+   "stand": "05.09.2026",
+   "wichtigkeit": "finden",
+   "datei": "quellen/Musterauftrag_2026-118.pdf"
+  },
+  {
+   "id": "d9",
+   "d_nr": "Z-01",
+   "titel": "Auditplan Stufe 2 (TÜV NORD CERT)",
+   "stand": "Plan",
+   "wichtigkeit": "kennen",
+   "datei": "quellen/Auditplan_Stufe2.pdf"
   }
  ],
  "faktencheck": [
@@ -324,6 +524,22 @@
    "antwortlinie": "Die MB war vor der Entscheidung für TÜV NORD; in der nächsten MB steht es richtig."
   },
   {
+   "id": "x4",
+   "stufe": 2,
+   "thema": "Auffanggurt fällig",
+   "frage": "Ihr Auffanggurt ist laut Wartungsplan im Oktober fällig. Ist die Prüfung erledigt?",
+   "warum": "Wartungsplan: PSA gegen Absturz nächste Prüfung 10/2026",
+   "antwortlinie": "Termin mit der Fachfirma zeigen; bis zur Prüfung wird der Gurt nicht benutzt."
+  },
+  {
+   "id": "x5",
+   "stufe": 2,
+   "thema": "Nachtrag im Auftrag",
+   "frage": "Die Rechnung ist höher als das Angebot. Wie haben Sie die Änderung vereinbart?",
+   "warum": "Musterauftrag: Nachtrag Thermostatventile 380 €",
+   "antwortlinie": "Auftragsbestätigung AB-2026-118 zeigen: Nachtrag vom Kunden schriftlich bestätigt."
+  },
+  {
    "id": "x3",
    "stufe": 2,
    "thema": "Notfallübung",
@@ -344,6 +560,18 @@
    "todo": "Notfallplan freigeben und Übung planen",
    "bis_stufe": 2,
    "verantwortlich": "Erika Beispiel"
+  },
+  {
+   "id": "t3",
+   "todo": "Prüfung Auffanggurt beauftragen (fällig 10/2026)",
+   "bis_stufe": 2,
+   "verantwortlich": "Max Probe"
+  },
+  {
+   "id": "t4",
+   "todo": "Abgeschlossenen Auftrag mit allen Belegen bereitlegen (Musterauftrag 2026-118)",
+   "bis_stufe": 2,
+   "verantwortlich": "Max Probe"
   }
  ]
 }

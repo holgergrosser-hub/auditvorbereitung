@@ -81,7 +81,16 @@ Q.audits.forEach(a => {
     // Seitenzahlen gegen die aktuelle Fassung pruefen (Fundstellen stammen oft aus einer aelteren Fassung)
     fr.forEach(f => { const k = L.seitenKorrigieren(f.hilfe, f.frage, dokumente, A.auszuege); if (k.aenderungen.length) { seitenHinweise.push({ normkapitel: f.normkapitel, aenderungen: k.aenderungen }); f.hilfe = k.text; } });
   }
-  if (a.stufe === 2 || !fr.length) fr = fr.concat(L.fragenOhneKi(pp, a.stufe).map(f => Object.assign({ art: 'frage', normen: (a.normen || 'ISO 9001').split(/,\s*/) }, f)));
+  if (a.stufe === 2 || !fr.length) {
+    const normen = (a.normen || 'ISO 9001').split(/,\s*/);
+    // Eigene Auditorfragen je Programmpunkt (planpunkte[].fragen: {frage, hilfe, normkapitel}) gehen vor; sonst Vorlage je Normkapitel
+    const eigene = pp.flatMap(p => (p.fragen || []).map(f => ({ planpunkt_id: p.id, bereich: p.bereich || '', normkapitel: f.normkapitel || p.normkapitel || '', titel: f.titel || '', frage: f.frage, hilfe: f.hilfe || '',
+      dokument_ids: L.dokumenteAusFundstelle(f.hilfe || "", dokumente), art: 'frage', normen })));
+    const ohne = pp.filter(p => !(p.fragen && p.fragen.length) && (eigene.length ? p.normkapitel : true));
+    fr = fr.concat(eigene, L.fragenOhneKi(ohne, a.stufe).map(f => Object.assign({ art: 'frage', normen }, f)));
+    fr.sort((x, y) => (pp.findIndex(p => p.id === x.planpunkt_id) - pp.findIndex(p => p.id === y.planpunkt_id)));
+  }
+  pp.forEach(p => { delete p.fragen; });
   fragenJe[a.id] = fr.map((f, i) => Object.assign({ id: a.id + '-f' + (i + 1) }, f, { reihenfolge: i + 1 }));
   delete a.auditplan; delete a.prueflisten; delete a.planpunkte; delete a.pruefpunkte; a.status = 'fragen_bereit';
 });

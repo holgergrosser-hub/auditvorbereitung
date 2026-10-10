@@ -589,16 +589,16 @@ const ROLLENTAUSCH = [
 ];
 
 /* ================================================================ Spurensuche an einem Beispielauftrag (Idee 8) */
-const SPUR_STATIONEN = [
-  { k: 'anfrage', name: 'Anfrage', hilfe: 'E-Mail oder Notiz der Kundenanfrage' },
-  { k: 'angebot', name: 'Angebot', hilfe: 'Angebot mit Nummer und Datum' },
-  { k: 'auftrag', name: 'Auftrag / Auftragsbestätigung', hilfe: 'Bestellung des Kunden oder Ihre Auftragsbestätigung' },
-  { k: 'planung', name: 'Einsatzplanung', hilfe: 'Disposition, Termin, eingesetzte Personen' },
-  { k: 'einkauf', name: 'Material / Einkauf', hilfe: 'Bestellung von Material oder Reinigungsmitteln (falls nötig)' },
-  { k: 'durchfuehrung', name: 'Durchführung', hilfe: 'Stundenzettel, Fotos, Checkliste' },
-  { k: 'abnahme', name: 'Abnahme / Fertigmeldung', hilfe: 'Abnahmeprotokoll, E-Mail des Kunden, Unterschrift' },
-  { k: 'rechnung', name: 'Rechnung', hilfe: 'Rechnung mit Bezug auf Auftrag/Angebot' },
-  { k: 'reklamation', name: 'Reklamation (falls vorhanden)', hilfe: 'Reklamation und was Sie getan haben', optional: true }
+const SPUR_STATIONEN = [ // prozess = wo der Ablauf meist beschrieben ist, nachweis = was der Auditor sehen will, frage = typische Auditorfrage, suche = Stichworte für "Wo steht das?"
+  { k: 'anfrage', name: 'Anfrage', hilfe: 'E-Mail oder Notiz der Kundenanfrage', prozess: 'Angebots- und Auftragsbearbeitung (ISO 9001 8.2.1/8.2.2)', nachweis: 'E-Mail, Telefonnotiz oder Eintrag in der Kundenkartei mit Datum und Kundenwunsch', frage: 'Wie kommt eine Anfrage zu Ihnen, und wo halten Sie fest, was der Kunde will?', suche: 'Anfrage aufnehmen Kunde' },
+  { k: 'angebot', name: 'Angebot', hilfe: 'Angebot mit Nummer und Datum', prozess: 'Angebots- und Auftragsbearbeitung (8.2.3 Prüfung der Anforderungen)', nachweis: 'Angebot mit Nummer, Datum, Leistung und Preis; ggf. Aufmaß', frage: 'Wie stellen Sie sicher, dass Sie das Gewünschte leisten können, bevor Sie anbieten?', suche: 'Angebot schreiben Aufmaß' },
+  { k: 'auftrag', name: 'Auftrag / Auftragsbestätigung', hilfe: 'Bestellung des Kunden oder Ihre Auftragsbestätigung', prozess: 'Angebots- und Auftragsbearbeitung (8.2.3, 8.2.4 Änderungen)', nachweis: 'Unterschriebener Auftrag oder Auftragsbestätigung; Abweichungen zum Angebot geklärt', frage: 'Was passiert, wenn der Auftrag vom Angebot abweicht?', suche: 'Auftrag bestätigen Auftragsbestätigung' },
+  { k: 'planung', name: 'Einsatzplanung', hilfe: 'Disposition, Termin, eingesetzte Personen', prozess: 'Planung der Leistungserbringung (8.1)', nachweis: 'Termin- oder Einsatzplan mit Datum und eingesetzten Personen', frage: 'Wer hat den Termin geplant, und woher wusste der Monteur, was zu tun ist?', suche: 'Termin planen Einsatzplanung Disposition' },
+  { k: 'einkauf', name: 'Material / Einkauf', hilfe: 'Bestellung von Material oder Reinigungsmitteln (falls nötig)', prozess: 'Einkauf und Lieferanten (8.4)', nachweis: 'Bestellung beim freigegebenen Lieferanten, Lieferschein mit Wareneingangsprüfung', frage: 'Bei wem bestellen Sie, und wie prüfen Sie die Ware beim Eingang?', suche: 'Einkauf bestellen Lieferant Wareneingang' },
+  { k: 'durchfuehrung', name: 'Durchführung', hilfe: 'Stundenzettel, Fotos, Checkliste', prozess: 'Durchführung der Leistung (8.5.1 beherrschte Bedingungen)', nachweis: 'Stundenzettel, Prüf- oder Montageprotokoll, Fotos', frage: 'Woran sehe ich, dass die Arbeit nach Vorgabe gemacht wurde?', suche: 'Montage Prüfprotokoll Durchführung' },
+  { k: 'abnahme', name: 'Abnahme / Fertigmeldung', hilfe: 'Abnahmeprotokoll, E-Mail des Kunden, Unterschrift', prozess: 'Freigabe (8.6)', nachweis: 'Abnahmeprotokoll mit Unterschrift des Kunden oder Fertigmeldung', frage: 'Wer gibt die Leistung frei, bevor die Rechnung rausgeht?', suche: 'Abnahme Abnahmeprotokoll Kunde' },
+  { k: 'rechnung', name: 'Rechnung', hilfe: 'Rechnung mit Bezug auf Auftrag/Angebot', prozess: 'Auftragsabschluss', nachweis: 'Rechnung mit Bezug auf Angebot oder Auftrag, Datum nach der Abnahme', frage: 'Passt die Rechnung zum Angebot und zur Abnahme?', suche: 'Rechnung stellen' },
+  { k: 'reklamation', name: 'Reklamation (falls vorhanden)', hilfe: 'Reklamation und was Sie getan haben', optional: true, prozess: 'Reklamationen und Korrekturmaßnahmen (10.2)', nachweis: 'Eintrag in der Reklamationsliste mit Ursache und Maßnahme', frage: 'Gab es zu diesem Auftrag eine Reklamation, und was haben Sie daraus gelernt?', suche: 'Reklamation Ursache Maßnahme' }
 ];
 /** Roter Faden pruefen: Datum aufsteigend, gleiche Kunden-/Auftragsnummer, Pflichtstationen vorhanden */
 function spurPruefen(stationen) {
@@ -619,14 +619,14 @@ function spurPruefen(stationen) {
 }
 
 /* ================================================================ Foto-Rundgang (Idee 10) */
-const RUNDGANG_STANDARD = [
-  { k: 'feuerloescher', name: 'Feuerlöscher', intervall_monate: 24, hilfe: 'Prüfplakette fotografieren (Monat/Jahr der nächsten Prüfung)' },
-  { k: 'leitern', name: 'Leitern und Tritte', intervall_monate: 12, hilfe: 'Prüfaufkleber oder Prüfblatt der Sichtprüfung' },
-  { k: 'elektro', name: 'Elektrische Geräte (DGUV V3)', intervall_monate: 12, hilfe: 'Prüfaufkleber an Geräten/Kabeln' },
-  { k: 'fahrzeug', name: 'Fahrzeuge (UVV/HU)', intervall_monate: 12, hilfe: 'HU-Plakette, UVV-Prüfnachweis' },
-  { k: 'erstehilfe', name: 'Erste-Hilfe-Kasten', intervall_monate: 12, hilfe: 'Inhalt vollständig, Ablaufdaten' },
-  { k: 'chemie', name: 'Reinigungsmittel / Chemikalien', intervall_monate: 0, hilfe: 'Lagerung, Kennzeichnung, Betriebsanweisung in der Nähe' },
-  { k: 'psa', name: 'Schutzausrüstung (PSA)', intervall_monate: 12, hilfe: 'Handschuhe, Brille, Absturzsicherung – Prüfdatum bei PSA gegen Absturz' }
+const RUNDGANG_STANDARD = [ // erwartung = was der Auditor beim Rundgang sehen will, suche = Stichworte für die Prüfliste in den Dokumenten
+  { k: 'feuerloescher', name: 'Feuerlöscher', intervall_monate: 24, hilfe: 'Prüfplakette fotografieren (Monat/Jahr der nächsten Prüfung)', erwartung: 'Plakette nicht abgelaufen, Löscher frei zugänglich und gekennzeichnet; Prüfung alle 2 Jahre durch Fachfirma.', suche: 'Feuerlöscher Prüfung' },
+  { k: 'leitern', name: 'Leitern und Tritte', intervall_monate: 12, hilfe: 'Prüfaufkleber oder Prüfblatt der Sichtprüfung', erwartung: 'Jährliche Sichtprüfung durch eine befähigte Person, Prüfaufkleber oder Liste; beschädigte Leitern aussortiert.', suche: 'Leitern Sichtprüfung' },
+  { k: 'elektro', name: 'Elektrische Geräte (DGUV V3)', intervall_monate: 12, hilfe: 'Prüfaufkleber an Geräten/Kabeln', erwartung: 'Prüfaufkleber mit Datum an ortsveränderlichen Geräten, Prüfprotokoll der Elektrofachkraft.', suche: 'DGUV V3 Elektrowerkzeuge Prüfung' },
+  { k: 'fahrzeug', name: 'Fahrzeuge (UVV/HU)', intervall_monate: 12, hilfe: 'HU-Plakette, UVV-Prüfnachweis', erwartung: 'HU-Plakette gültig, jährliche UVV-Prüfung nachgewiesen, Ladungssicherung vorhanden.', suche: 'Fahrzeug UVV HU' },
+  { k: 'erstehilfe', name: 'Erste-Hilfe-Kasten', intervall_monate: 12, hilfe: 'Inhalt vollständig, Ablaufdaten', erwartung: 'Inhalt vollständig, nichts abgelaufen, Ersthelfer benannt und Aushang vorhanden.', suche: 'Erste Hilfe Ersthelfer' },
+  { k: 'chemie', name: 'Reinigungsmittel / Chemikalien', intervall_monate: 0, hilfe: 'Lagerung, Kennzeichnung, Betriebsanweisung in der Nähe', erwartung: 'Originalgebinde gekennzeichnet, Sicherheitsdatenblätter griffbereit, Betriebsanweisung ausgehängt.', suche: 'Gefahrstoffe Sicherheitsdatenblatt Betriebsanweisung' },
+  { k: 'psa', name: 'Schutzausrüstung (PSA)', intervall_monate: 12, hilfe: 'Handschuhe, Brille, Absturzsicherung – Prüfdatum bei PSA gegen Absturz', erwartung: 'PSA vorhanden und benutzt; PSA gegen Absturz jährlich geprüft und Unterweisung nachgewiesen.', suche: 'Schutzausrüstung PSA Unterweisung' }
 ];
 /** Faellig? naechste: "2026-03" (Monat der naechsten Pruefung) oder letzte Pruefung + Intervall */
 function rundgangStatus(eintrag, heute) {
