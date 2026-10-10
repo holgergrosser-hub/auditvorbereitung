@@ -100,7 +100,7 @@ const paket = {
 const ziel = path.join(ordner, 'netlify');
 fs.rmSync(ziel, { recursive: true, force: true });
 const web = new URL('../web/', import.meta.url).pathname;
-fs.cpSync(web, ziel, { recursive: true, filter: (s) => !/demo-lokal\.json$|[\/]backoffice([\/]|$)/.test(s) });
+fs.cpSync(web, ziel, { recursive: true, filter: (s) => !/demo-lokal\.json$|[\/](backoffice|test)([\/]|$)/.test(s) });
 fs.writeFileSync(path.join(ziel, 'config.js'), '// Testfassung ohne Server: Daten aus paket.json, Fortschritt im Browser\nwindow.AV_CONFIG = { paket: "paket.json" };\n');
 fs.writeFileSync(path.join(ziel, 'kunde', 'paket.json'), JSON.stringify(paket));
 fs.mkdirSync(path.join(ziel, 'kunde', 'dok'), { recursive: true });

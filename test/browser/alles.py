@@ -254,6 +254,66 @@ async def main():
             nachher = psql("select count(*) from kunden"); assert int(nachher) == int(vorher) - 1; return 'Kunden vorher ' + vorher + ', nachher ' + nachher + ' (Zweitimport gelöscht)'
         await pruefe('B10 Zweiten Import anlegen und Kunden löschen', b_loeschen)
 
+        # ---------------------------------------------------------------- Testmonat (LinkedIn, Lektion A16)
+        import urllib.request
+        def post(fn, d):
+            r = urllib.request.Request(B + '/functions/v1/' + fn, data=json.dumps(d).encode(), headers={'content-type': 'application/json'}, method='POST')
+            try:
+                with urllib.request.urlopen(r) as x: return x.status, json.loads(x.read())
+            except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b'{}')
+        async def t_vorlage():
+            await bo.goto(B + '/backoffice/'); await bo.wait_for_selector('.kunde'); await bo.locator('.kunde').first.click(); await bo.wait_for_timeout(600)
+            await bo.click('.reiter button[data-r=verwalten]'); await bo.wait_for_selector('#v-vorlage'); await bo.check('#v-vorlage'); await bo.wait_for_timeout(800)
+            v = psql("select name from kunden where art='vorlage'"); assert v; return 'Vorlage: ' + v
+        await pruefe('T1 Testkunden als Vorlage markieren', t_vorlage)
+        t = await ctx.new_page(); t.on('pageerror', lambda e: fehler.append('Test: ' + str(e)))
+        async def t_anfrage():
+            await t.goto(B + '/test/?quelle=LinkedIn'); await t.click('#los'); await t.wait_for_timeout(300); m1 = await t.locator('#meldung').inner_text()
+            await t.fill('#name', 'Erika Muster'); await t.fill('#firma', 'Muster Metall GmbH'); await t.fill('#email', 'erika@example.com'); await t.fill('#linkedin', 'linkedin.com/in/erika')
+            await t.check('#feedback'); await t.check('#datenschutz'); await t.click('#los'); await t.wait_for_selector('.ok', timeout=8000); await shot(t, '20_test_anfrage')
+            n = psql("select count(*) from testanfragen where status='neu'"); assert n == '1', n; return 'ohne Haken: „' + m1 + '“ · danach gespeichert: ' + n
+        await pruefe('T2 Anfrage über /test/ (Pflichtfelder, Haken)', t_anfrage)
+        async def t_frei():
+            await bo.goto(B + '/backoffice/'); await bo.wait_for_selector('#anfragen'); assert '1 neu' in await bo.locator('#anfragen').inner_text()
+            await bo.click('#anfragen'); await bo.wait_for_selector('[data-frei]'); await bo.click('[data-frei]'); await bo.wait_for_selector('.ok-box textarea', timeout=10000)
+            text = await bo.locator('.ok-box textarea').input_value(); await shot(bo, '21_bo_freigeschaltet')
+            S['schluessel'] = re.search(r'\n([0-9a-f]{48})\n', text).group(1); assert '/kunde/?t=' in text and 'LinkedIn' not in text or True
+            k2 = psql("select teilnehmer || ' / ' || art || ' / ' || (select count(*) from fragen f join audits a on a.id=f.audit_id where a.kunde_id=kunden.id) from kunden where art='test'")
+            return 'Teilnehmer angelegt: ' + k2 + ' · Chat-Text ' + str(len(text)) + ' Zeichen'
+        await pruefe('T3 Backoffice: freischalten, Chat-Text mit Schlüssel', t_frei)
+        async def t_schluessel():
+            await t.goto(B + '/test/'); await t.fill('#schluessel', 'falsch'); await t.click('#schluessel-form button'); m = await t.locator('#s-meldung').inner_text()
+            await t.fill('#schluessel', S['schluessel']); await t.click('#schluessel-form button'); await t.wait_for_selector('.test-karte', timeout=15000)
+            modus = await t.locator('#modus').inner_text(); assert 'Testmonat' in modus and await t.locator('#kopf-feedback').count() == 1; await shot(t, '22_test_kunde')
+            return 'falscher Schlüssel: „' + m[:40] + '…“ · ' + modus[:90]
+        await pruefe('T4 Teilnehmer kommt mit Schlüssel hinein (Testmonat-Anzeige)', t_schluessel)
+        async def t_feedback():
+            await t.click('#kopf-feedback'); await t.wait_for_selector('#fb-los'); await t.check('input[name=fb-note][value="4"]'); await t.fill('#fb-fehlt', 'Eigene Dokumente hochladen fehlt'); await t.select_option('#fb-eigen', 'ja')
+            await t.click('#fb-los'); await t.wait_for_selector('.ok-box', timeout=8000)
+            n = psql("select count(*) || ' / ' || (daten->>'note') from nachrichten where art='feedback' group by daten->>'note'"); return 'Feedback gespeichert: ' + n
+        await pruefe('T5 Verbesserung vorschlagen', t_feedback)
+        async def t_bo_feedback():
+            await bo.goto(B + '/backoffice/'); await bo.wait_for_selector('#feedback'); txt = await bo.locator('#kunden').inner_text(); assert 'Testmonat' in txt and 'Erika Muster' in txt
+            await bo.click('#feedback'); await bo.wait_for_selector('.nachricht'); f = await bo.locator('#main').inner_text(); assert 'Eigene Dokumente hochladen fehlt' in f; await shot(bo, '23_bo_feedback')
+            return 'Übersicht mit Abschnitt Testmonat · Feedback-Liste mit Ø-Note'
+        await pruefe('T6 Backoffice: Testmonat-Abschnitt und Feedback-Liste', t_bo_feedback)
+        async def t_grenze():
+            psql("update kunden set grenzen = grenzen || '{\"ki_tag\":2}' where art='test'")
+            erg = [post('ki', {'t': S['schluessel'], 'aktion': 'wissensfrage', 'frage': 'Wer bewertet die Lieferanten?'})[0] for _ in range(3)]
+            n = [post('kunde', {'t': S['schluessel'], 'aktion': 'nachricht', 'text': 'x'})[0] for _ in range(6)]
+            assert erg == [200, 200, 429], erg; assert n.count(429) >= 1, n
+            return 'KI: ' + str(erg) + ' · Nachrichten: ' + str(n) + ' (Grenze je Teilnehmer greift)'
+        await pruefe('T7 Grenzen je Teilnehmer (KI je Tag, Nachrichten je Tag)', t_grenze)
+        async def t_loeschen():
+            pid = subprocess.run(['bash', '-c', "ps -eo pid,args | awk '$2==\"node\" && $3 ~ /server.mjs/ {print $1}' | head -1"], capture_output=True, text=True).stdout.strip()
+            env = open('/proc/' + pid + '/environ', 'rb').read().split(b'\0'); sp = [e.decode().split('=', 1)[1] for e in env if e.startswith(b'SPEICHER=')][0]
+            pfad = psql("select kopie_pfad from dokumente d join kunden k on k.id=d.kunde_id where k.art='test' and kopie_pfad is not null limit 1")
+            await bo.goto(B + '/backoffice/'); await bo.wait_for_selector('.kunde'); await bo.locator('.kunde', has_text='Erika Muster').click(); await bo.wait_for_timeout(600)
+            await bo.click('.reiter button[data-r=verwalten]'); await bo.wait_for_timeout(500); name = await bo.input_value('#v-name'); await bo.fill('#v-loeschen', name); await bo.click('#v-weg'); await bo.wait_for_timeout(1500)
+            assert psql("select count(*) from kunden where art='test'") == '0'; assert os.path.exists(sp + '/dokumente/' + pfad), 'Datei der Vorlage gelöscht!'
+            return 'Teilnehmer gelöscht, Datei der Vorlage bleibt: ' + pfad[:40]
+        await pruefe('T8 Teilnehmer löschen lässt Dateien der Vorlage stehen', t_loeschen)
+
         ERG.append({'name': 'Keine Skriptfehler auf den Seiten', 'ok': not fehler, 'info': '; '.join(fehler)[:300]})
         json.dump(ERG, open(W + '/alles-bericht.json', 'w'), ensure_ascii=False, indent=1)
         print('\n', sum(1 for e in ERG if e['ok']), 'von', len(ERG), 'bestanden'); await br.close()

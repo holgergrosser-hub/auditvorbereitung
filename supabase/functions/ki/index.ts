@@ -34,14 +34,15 @@ async function istBackoffice(req: Request) {
   const { data: b } = await db.from('backoffice_nutzer').select('aktiv').eq('email', mail).maybeSingle();
   return !!(b && b.aktiv);
 }
-// Kostenbremse: Zaehler je Kunde und Tag in kunden_eintraege (art 'lernen', schluessel 'ki:JJJJ-MM-TT')
+// Kostenbremse je Kunde: Zaehler in der Tabelle nutzung (Datenbankfunktion nutzung_buchen, atomar).
+// Im Testmonat (kunden.art = 'test') gelten die Grenzen des Teilnehmers (ki_tag, ki_gesamt), sonst KI_MAX_JE_KUNDE_TAG.
 async function zaehlen(kundeId: string) {
-  const k = 'ki:' + new Date().toISOString().slice(0, 10);
-  const { data } = await db.from('kunden_eintraege').select('daten').eq('kunde_id', kundeId).eq('art', 'lernen').eq('schluessel', k).is('audit_id', null).is('mitarbeiter_id', null).maybeSingle();
-  const n = ((data && data.daten && data.daten.n) || 0) + 1;
-  if (n > MAX_JE_TAG) return false;
-  await db.from('kunden_eintraege').upsert({ kunde_id: kundeId, audit_id: null, mitarbeiter_id: null, art: 'lernen', schluessel: k, daten: { n } }, { onConflict: 'kunde_id,audit_id,mitarbeiter_id,art,schluessel' });
-  return true;
+  const { data: k } = await db.from('kunden').select('art, grenzen').eq('id', kundeId).maybeSingle();
+  const g = k && k.art === 'test' ? (k.grenzen || {}) : {};
+  const z = (x: unknown) => (x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? null : Number(x));
+  const { data, error } = await db.rpc('nutzung_buchen', { p_kunde: kundeId, p_art: 'ki', p_max_tag: z(g.ki_tag) ?? MAX_JE_TAG, p_max_gesamt: z(g.ki_gesamt) });
+  if (error) throw error;
+  return { ok: data === true, test: !!(k && k.art === 'test') };
 }
 // deno-lint-ignore no-explicit-any
 async function claude(system: string, inhalt: any[], maxTokens = 700) {
@@ -89,7 +90,8 @@ Deno.serve(async (req) => {
     // ---------------- Kunde
     const kundeId = await kundeZumToken(String(d.t || ''));
     if (!kundeId) return antwort({ fehler: 'Link ungültig oder abgelaufen.' }, 401);
-    if (!(await zaehlen(kundeId))) return antwort({ fehler: 'Für heute sind genug KI-Übungen gemacht – morgen geht es weiter.' }, 429);
+    const z = await zaehlen(kundeId);
+    if (!z.ok) return antwort({ fehler: z.test ? 'Das KI-Kontingent Ihres Testmonats ist für heute (oder insgesamt) aufgebraucht. Die Übungen ohne KI gehen weiter.' : 'Für heute sind genug KI-Übungen gemacht – morgen geht es weiter.' }, 429);
 
     if (d.aktion === 'gespraech') { // Auditor nach Mass: naechste Frage/Nachfrage im Gespraech
       const typ = (L.AUDITOR_TYPEN as any)[d.typ] || L.AUDITOR_TYPEN.sachlich;

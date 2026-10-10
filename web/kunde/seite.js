@@ -74,6 +74,7 @@ async function start() {
   $('#wahl').hidden = false;
   $('#sel-audit').onchange = $('#sel-ma').onchange = () => { merken(); laden(); };
   if (st.demo) $('#modus').textContent = 'Demo – nichts wird gespeichert.';
+  else if (st.test) $('#modus').textContent = testZeile();
   else if (!api.lokal) $('#modus').textContent = 'Ihre Eingaben werden gespeichert – Sie können mit diesem Link auf jedem Gerät weiterüben. ' + bn('nom') + ' sieht Ihren Stand.';
   else if (api.lokal) $('#modus').textContent = 'Ihre Eingaben bleiben auf diesem Gerät (immer denselben Laptop und Browser nutzen). ' + bn('nom') + ' sieht sie, wenn Sie oben rechts senden.';
   laden();
@@ -116,6 +117,7 @@ function zeichneKopf() {
   $('#reife').innerHTML = '<span class="reife ' + r.stufe + '" title="' + esc(r.teile.map(t => t.name + ' ' + t.prozent + ' %').join(' · ')) + '">Prüfungsreife ' + r.prozent + ' %</span>'
     + (!S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an ' + esc(bn('akk')) + ' schicken">✉ An ' + esc(bn('kurz')) + ' senden</button>' : '');
   const ks = $('#kopf-senden'); if (ks) ks.onclick = sendenPanel;
+  if (S.start.test) { $('#reife').insertAdjacentHTML('beforeend', '<button class="kopf-senden kein-druck" id="kopf-feedback" title="Was sollen wir verbessern?">💡 Verbesserung</button>'); $('#kopf-feedback').onclick = feedbackPanel; }
   zeichneNav();
 }
 function technikFertig() { const c = S.start.kunde.technik_check || {}; return ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].every(k => c[k]); }
@@ -259,6 +261,7 @@ ANSICHT.heute = () => {
     + (kiAn() ? '<button data-schnell="ki"><span class="rund">🤖</span>KI fragen</button>' : '<button data-schnell="tag"><span class="rund">📋</span>Spickzettel</button>')
     + (!S.start.demo ? '<button data-schnell="senden" title="An ' + esc(bn('akk')) + ' senden"><span class="rund">✉</span>Senden</button>' : '')
     + '</nav>'
+    + testKarte()
     + '<div class="gruppen">' + GRUPPEN.map(g => { const ks = g.keys.filter(k => da.indexOf(k) >= 0); if (!ks.length) return '';
       return '<section class="gruppe" style="--f:' + g.farbe + ';--f-hell:' + g.hell + ';--n:' + ks.length + '"><h3 class="gruppe-titel">' + (g.nr ? '<span class="gruppe-nr">' + g.nr + '</span>' : '') + esc(g.name) + '</h3><div class="kacheln">' + ks.map(k => kachelHtml(k, g)).join('') + '</div></section>'; }).join('') + '</div>'
     + (lektion.length ? '<section class="abschnitt" style="--f:#0B7285;--f-hell:#E3FAFC"><div class="zeile" style="justify-content:space-between"><span class="etikett">⏱ Für heute</span><button class="knopf klein" id="lektion">▶ Los geht’s</button></div><h3 class="satz">Ihre 5 Minuten: drei Punkte wiederholen</h3><p class="grau">Zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 110)) + (String(f.frage).length > 110 ? ' …' : '') + '</span></div>').join('') + '</section>' : '')
@@ -273,6 +276,7 @@ ANSICHT.heute = () => {
     else if (w === 'ki') { zeige('finden'); const f = $('#suche'); if (f) { f.placeholder = 'Ihre Frage, z. B. Wer bewertet unsere Lieferanten?'; f.focus(); } }
     else zeige(w);
   });
+  $$('[data-feedback]').forEach(b => b.onclick = feedbackPanel);
   $$('[data-weiter]').forEach(x => x.onclick = () => { if (x.dataset.weiter === 'lektion') { const b = $('#lektion'); if (b) b.click(); } else zeige(x.dataset.weiter); });
   $$('[data-bau]').forEach(b => b.onclick = () => { const f = S.fragen.find(x => x.id === b.dataset.bau); reihe([{ art: 'frage', item: f, modus: b.dataset.modus || null }], null, false); });
   $$('[data-bu]').forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + b.dataset.bu, { ursache: b.dataset.u }); ANSICHT.heute(); });
@@ -315,6 +319,45 @@ function sendenHtml() {
   if (S.start.demo) return '';
   const zuletzt = (() => { try { return localStorage.getItem('av_gesendet') || ''; } catch (e) { return ''; } })();
   return '<h3>Ihr Stand an ' + esc(bn('akk')) + '</h3><div class="karte"><p>' + esc(bn('nom')) + ' sieht Ihren Übungsstand erst, wenn Sie ihn senden. Den Knopf <b>✉ An ' + esc(bn('kurz')) + ' senden</b> finden Sie jederzeit oben in der Kopfzeile – auch für Änderungswünsche an Ihren Dokumenten vor dem Audit.</p><div class="zeile"><button class="knopf" id="senden">Jetzt senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
+}
+/* ------------------------------------------------ Testmonat (LinkedIn): Laufzeit, Kontingent, Verbesserungsvorschläge */
+function testTage() { const t = S.start.test; return t ? L.tageBis(t.bis) : null; }
+function testZeile() {
+  const t = S.start.test, g = t.grenzen || {}, v = t.verbraucht || {}, tage = testTage();
+  return 'Kostenloser Testmonat mit der erfundenen Beispielfirma – noch ' + (tage == null ? '?' : tage) + (tage === 1 ? ' Tag' : ' Tage')
+    + (cfg.ki && g.ki_tag ? ' · KI heute ' + (v.ki_heute || 0) + ' von ' + g.ki_tag : '') + '. Ihre Eingaben werden gespeichert.';
+}
+function testKarte() {
+  if (!S.start.test) return '';
+  const tage = testTage();
+  return '<div class="karte test-karte"><b>💡 Ihr Testmonat' + (tage != null ? ' · noch ' + tage + (tage === 1 ? ' Tag' : ' Tage') : '') + '</b>'
+    + '<p>Sie üben mit einer erfundenen Beispielfirma. Was hat geholfen, was fehlt, was stört? Zwei Minuten Rückmeldung machen das Werkzeug für alle besser.</p>'
+    + '<button class="knopf" data-feedback>Verbesserung vorschlagen</button></div>';
+}
+function feedbackPanel() {
+  const alt = $('#feedback-panel'); if (alt) { alt.remove(); return; }
+  const d = document.createElement('div'); d.id = 'feedback-panel'; d.className = 'karte senden-panel kein-druck';
+  const note = [1, 2, 3, 4, 5].map(n => '<label class="fb-note"><input type="radio" name="fb-note" value="' + n + '"> ' + n + '</label>').join('');
+  d.innerHTML = '<div class="zeile" style="justify-content:space-between"><b>💡 Was sollen wir verbessern?</b><button class="link" id="fb-zu">schließen</button></div>'
+    + '<label>Wie hilfreich ist die Vorbereitung bisher? (1 = gar nicht, 5 = sehr)</label><div class="zeile">' + note + '</div>'
+    + '<label for="fb-hilft">Was hat Ihnen am meisten geholfen?</label><textarea id="fb-hilft" rows="2"></textarea>'
+    + '<label for="fb-fehlt">Was fehlt, was stört, wo kamen Sie nicht weiter?</label><textarea id="fb-fehlt" rows="3"></textarea>'
+    + '<label for="fb-eigen">Würden Sie es mit Ihren eigenen Dokumenten vor Ihrem Audit nutzen?</label><select id="fb-eigen"><option value="">– bitte wählen –</option><option>ja</option><option>vielleicht</option><option>nein</option></select>'
+    + '<p class="grau">Ihre Rückmeldung liest ' + esc(bn('nom')) + ' persönlich. Es geht keine automatische Mail heraus.</p>'
+    + '<div class="zeile"><button class="knopf" id="fb-los">Rückmeldung senden</button></div>';
+  $('#main').prepend(d); window.scrollTo(0, 0);
+  $('#fb-zu').onclick = () => d.remove();
+  $('#fb-los').onclick = async () => {
+    const n = $('input[name="fb-note"]:checked'), daten = { note: n ? Number(n.value) : null, hilft: $('#fb-hilft').value.trim(), fehlt: $('#fb-fehlt').value.trim(), eigene_dokumente: $('#fb-eigen').value, ansicht: S.ansicht };
+    if (!daten.note && !daten.hilft && !daten.fehlt) return hinweisBox('Bitte mindestens eine Angabe machen.');
+    const b = $('#fb-los'); b.disabled = true; b.textContent = 'Sende …';
+    try {
+      await api('nachricht', { art: 'feedback', daten, mitarbeiter_id: S.ma ? S.ma.id : null,
+        text: [daten.hilft && 'Geholfen: ' + daten.hilft, daten.fehlt && 'Fehlt/stört: ' + daten.fehlt].filter(Boolean).join('\n'),
+        zusammenfassung: 'Feedback' + (daten.note ? ' · Note ' + daten.note + '/5' : '') + (daten.eigene_dokumente ? ' · eigene Dokumente: ' + daten.eigene_dokumente : '') });
+      d.remove(); hinweisBox('Danke! Ihre Rückmeldung ist bei ' + bn('dat') + ' angekommen.', 'ok');
+    } catch (e) { hinweisBox('Senden hat nicht geklappt: ' + e.message); b.disabled = false; b.textContent = 'Rückmeldung senden'; }
+  };
 }
 function sendenKnopf() { const b = $('#senden'); if (b) b.onclick = sendenPanel; }
 /* Fenster zum Senden: Nachricht (z. B. Änderungswunsch vor dem Audit) + Übungsstand. Geht nur an den Berater, nie an Dritte. */

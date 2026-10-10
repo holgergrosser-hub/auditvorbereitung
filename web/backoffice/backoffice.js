@@ -58,7 +58,11 @@ async function uebersicht() {
   const tage = (d) => d ? Math.round((new Date(d + 'T12:00:00') - new Date(new Date().toISOString().slice(0, 10) + 'T12:00:00')) / 86400000) : null;
   const bald = liste.filter(k => { const t = tage(k.naechstes_audit); return t != null && t <= 7; }).length;
   const neu = liste.reduce((s, k) => s + Number(k.nachrichten_neu || 0), 0), korr = liste.reduce((s, k) => s + Number(k.korrekturen_offen || 0), 0);
-  $('#main').innerHTML = '<div class="zeile" style="justify-content:space-between"><h2>Kunden</h2><div class="zeile"><input id="suche" type="search" placeholder="Kunde suchen"><button class="knopf" id="neu">+ Kunde importieren</button></div></div>'
+  const anfragenNeu = (await sb.from('testanfragen').select('id', { count: 'exact', head: true }).eq('status', 'neu')).count || 0;
+  $('#main').innerHTML = '<div class="zeile" style="justify-content:space-between"><h2>Kunden</h2><div class="zeile"><input id="suche" type="search" placeholder="Kunde suchen">'
+    + '<button class="knopf zweit" id="anfragen" style="--f:var(--gelb-dunkel)">Testanfragen' + (anfragenNeu ? ' <span class="chip orange">' + anfragenNeu + ' neu</span>' : '') + '</button>'
+    + '<button class="knopf zweit" id="feedback" style="--f:var(--gelb-dunkel)">💡 Feedback</button>'
+    + '<button class="knopf" id="neu">+ Kunde importieren</button></div></div>'
     + '<div class="kennzahlen">'
     + '<div class="kz" style="--f:var(--blau)"><div class="zahl">' + liste.length + '</div>Kunden</div>'
     + '<div class="kz" style="--f:var(--petrol)"><div class="zahl">' + bald + '</div>Audit in 7 Tagen</div>'
@@ -68,23 +72,98 @@ async function uebersicht() {
   const zeichneListe = () => {
     const f = ($('#suche').value || '').toLowerCase();
     const el = $('#kunden'); if (!el) return;
-    el.innerHTML = liste.filter(k => !f || k.name.toLowerCase().includes(f)).map(k => {
-      const t = tage(k.naechstes_audit), anteil = k.fragen ? k.geuebt / k.fragen : 0;
-      const farbe = t == null ? 'var(--rand)' : t <= 3 ? 'var(--rot)' : t <= 7 ? 'var(--gelb)' : 'var(--petrol)';
-      return '<button class="kunde" data-id="' + k.id + '" style="--f:' + farbe + '"><span class="zeile" style="justify-content:space-between"><span class="name">' + esc(k.name) + '</span>'
-        + (t != null ? '<span class="tage">' + (t === 0 ? 'heute' : 'in ' + t + ' T.') + '</span>' : '') + '</span>'
+    const kachel = (k) => {
+      const t = tage(k.naechstes_audit), anteil = k.fragen ? k.geuebt / k.fragen : 0, test = k.art === 'test';
+      const farbe = test ? 'var(--gelb-dunkel)' : t == null ? 'var(--rand)' : t <= 3 ? 'var(--rot)' : t <= 7 ? 'var(--gelb)' : 'var(--petrol)';
+      const rest = test && k.link_gueltig_bis ? tage(k.link_gueltig_bis) : null;
+      return '<button class="kunde" data-id="' + k.id + '" style="--f:' + farbe + '"><span class="zeile" style="justify-content:space-between"><span class="name">' + esc(test ? (k.teilnehmer || k.name) : k.name) + '</span>'
+        + (test ? '<span class="tage">' + (rest != null && rest >= 0 ? 'noch ' + rest + ' T.' : 'abgelaufen') + '</span>' : t != null ? '<span class="tage">' + (t === 0 ? 'heute' : 'in ' + t + ' T.') + '</span>' : '') + '</span>'
+        + (test ? '<span class="grau">Testmonat · KI ' + (k.ki_gesamt || 0) + (k.grenzen && k.grenzen.ki_gesamt ? ' von ' + k.grenzen.ki_gesamt : '') + '</span>' : '')
+        + (k.art === 'vorlage' ? '<span class="chips"><span class="chip violett">Vorlage für den Testmonat</span></span>' : '')
         + '<span class="grau">' + esc(k.termine || 'kein Termin') + '</span>'
         + '<span class="balken" title="geübt"><span style="flex:' + anteil + ';background:var(--petrol)"></span><span style="flex:' + (1 - anteil) + '"></span></span>'
         + '<span class="grau">' + k.geuebt + ' von ' + k.fragen + ' Fragen geübt' + (k.schwer ? ' · ' + k.schwer + ' schwer' : '') + ' · aktiv ' + esc(vorWann(k.zuletzt_aktiv)) + '</span>'
         + '<span class="chips">' + (k.nachrichten_neu ? '<span class="chip orange">✉ ' + k.nachrichten_neu + ' neu</span>' : '')
         + (k.korrekturen_offen ? '<span class="chip violett">✎ ' + k.korrekturen_offen + ' Korrekturen</span>' : '')
-        + (k.link_gueltig_bis ? '<span class="chip grau">Link bis ' + datum(k.link_gueltig_bis) + '</span>' : '<span class="chip rot">kein Link</span>') + '</span></button>';
-    }).join('');
+        + (Number(k.feedback) ? '<span class="chip orange">💡 ' + k.feedback + ' Feedback</span>' : '')
+        + (k.link_gueltig_bis ? '<span class="chip grau">Link bis ' + datum(k.link_gueltig_bis) + '</span>' : (k.art === 'vorlage' ? '' : '<span class="chip rot">kein Link</span>')) + '</span></button>';
+    };
+    const passt = liste.filter(k => !f || (k.name + ' ' + (k.teilnehmer || '')).toLowerCase().includes(f));
+    const kunden = passt.filter(k => k.art !== 'test'), tests = passt.filter(k => k.art === 'test');
+    el.innerHTML = kunden.map(kachel).join('') + (tests.length ? '<h3 style="grid-column:1/-1">Testmonat (LinkedIn) · ' + tests.length + '</h3>' + tests.map(kachel).join('') : '');
     $$('.kunde').forEach(b => b.onclick = () => kundeZeigen(b.dataset.id));
   };
   zeichneListe();
   $('#suche').oninput = zeichneListe;
   $('#neu').onclick = importieren;
+  $('#anfragen').onclick = testanfragen;
+  $('#feedback').onclick = feedbackListe;
+}
+
+/* ------------------------------------------------ Testmonat (LinkedIn)
+   Weg: Anfrage auf /test/ → hier prüfen → Freischalten (kopiert die Vorlage, Link 30 Tage, Grenzen je Teilnehmer)
+   → Text mit Schlüssel kopieren und SELBST im LinkedIn-Chat schicken. Nie automatische Mails. */
+async function testanfragen() {
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>Testanfragen</h2><p class="grau">Lade …</p>';
+  $('#zurueck').onclick = uebersicht;
+  const [liste, vorlage] = await Promise.all([
+    sb.from('testanfragen').select('*').order('angelegt_am', { ascending: false }).limit(300),
+    sb.from('kunden').select('id, name').eq('art', 'vorlage').limit(1)]);
+  const a = pflicht(liste), v = pflicht(vorlage)[0];
+  const zeile = (x) => '<div class="karte" style="border-left:6px solid ' + (x.status === 'neu' ? 'var(--gelb)' : x.status === 'freigeschaltet' ? 'var(--gruen)' : 'var(--rand)') + '">'
+    + '<div class="zeile" style="justify-content:space-between"><b>' + esc(x.name) + ' · ' + esc(x.firma) + '</b><span class="grau">' + new Date(x.angelegt_am).toLocaleString('de-DE') + '</span></div>'
+    + '<div>' + esc(x.email) + (x.linkedin ? ' · <a href="' + esc(/^https?:/.test(x.linkedin) ? x.linkedin : 'https://' + x.linkedin) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + '</div>'
+    + '<div class="grau">' + [x.normen, x.audit_termin && 'Audit: ' + x.audit_termin, 'Quelle: ' + x.quelle].filter(Boolean).map(esc).join(' · ') + '</div>'
+    + (x.nachricht ? '<p style="white-space:pre-wrap;margin:6px 0">' + esc(x.nachricht) + '</p>' : '')
+    + (x.status === 'neu' ? '<div class="zeile" style="margin-top:8px"><label style="margin:0">Tage</label><input type="number" min="1" max="90" value="30" style="width:80px" data-tage="' + x.id + '">'
+      + '<button class="knopf" data-frei="' + x.id + '"' + (v ? '' : ' disabled title="Erst einen Kunden als Vorlage markieren"') + '>Freischalten</button><button class="knopf klein zweit" data-ab="' + x.id + '">ablehnen</button></div><div data-ergebnis="' + x.id + '"></div>'
+      : '<span class="chip ' + (x.status === 'freigeschaltet' ? 'gruen' : 'grau') + '">' + esc(x.status) + '</span>' + (x.kunde_id ? ' <button class="link" data-kunde="' + x.kunde_id + '">zum Teilnehmer</button>' : ''))
+    + '</div>';
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>Testanfragen</h2>'
+    + (v ? '<p class="grau">Freischalten kopiert die Vorlage <b>' + esc(v.name) + '</b> für genau diesen Teilnehmer (eigene Übungsdaten, Grenzen: 20 KI-Fragen am Tag, 150 im Monat, 5 Nachrichten am Tag, 30 Fotos).</p>'
+      : '<div class="hinweis">Noch keine Vorlage. Importieren Sie den Testkunden (Testkunde.zip) und setzen Sie unter <b>Verwalten</b> „Als Vorlage für den Testmonat“.</div>')
+    + '<p class="grau">Formular für Interessenten: <code>' + esc(location.origin) + '/test/</code></p>'
+    + (a.length ? a.map(zeile).join('') : '<div class="karte grau">Noch keine Anfragen.</div>');
+  $('#zurueck').onclick = uebersicht;
+  $$('[data-kunde]').forEach(b => b.onclick = () => kundeZeigen(b.dataset.kunde, 'ueberblick'));
+  $$('[data-ab]').forEach(b => b.onclick = async () => { pflicht(await sb.from('testanfragen').update({ status: 'abgelehnt', bearbeitet_am: new Date().toISOString() }).eq('id', b.dataset.ab)); testanfragen(); });
+  $$('[data-frei]').forEach(b => b.onclick = async () => {
+    const x = a.find(y => y.id === b.dataset.frei), tage = Number($('[data-tage="' + x.id + '"]').value) || 30;
+    b.disabled = true; b.textContent = 'Lege an …';
+    let tok;
+    try { tok = pflicht(await sb.rpc('testkunde_anlegen', { p_anfrage: x.id, p_tage: tage })); }
+    catch (e) { b.disabled = false; b.textContent = 'Freischalten'; $('[data-ergebnis="' + x.id + '"]').innerHTML = '<div class="fehler">' + esc(e.message) + '</div>'; return; }
+    const url = location.origin + '/kunde/?t=' + tok, bis = new Date(Date.now() + tage * 864e5).toLocaleDateString('de-DE');
+    const text = 'Hallo ' + x.name.split(' ')[0] + ',\n\ndanke für Ihr Interesse an der Auditvorbereitung! Hier ist Ihr persönlicher Zugang für den kostenlosen Testmonat (bis ' + bis + '):\n\n' + url
+      + '\n\nOder unter ' + location.origin + '/test/ diesen Schlüssel eingeben:\n' + tok
+      + '\n\nSie üben mit einer erfundenen Beispielfirma – am besten am Laptop in Google Chrome. Oben rechts finden Sie „💡 Verbesserung“: Ihre Hinweise, was fehlt oder stört, sind mein Dankeschön für den Testmonat.\n\nViele Grüße\nHolger Grosser';
+    $('[data-ergebnis="' + x.id + '"]').innerHTML = '<div class="ok-box"><b>Freigeschaltet.</b> Jetzt kopieren und selbst im LinkedIn-Chat schicken – Schlüssel und Link werden nicht wieder angezeigt.'
+      + '<textarea id="chat-' + x.id + '" rows="10" style="width:100%;margin-top:8px">' + esc(text) + '</textarea>'
+      + '<div class="zeile"><button class="knopf klein" id="kop-' + x.id + '">Text kopieren</button><a class="knopf klein zweit" href="' + esc(url) + '" target="_blank" rel="noopener">selbst öffnen</a></div><p class="grau">Es wird nichts automatisch verschickt.</p></div>';
+    b.remove();
+    $('#kop-' + x.id).onclick = async (ev) => { try { await navigator.clipboard.writeText($('#chat-' + x.id).value); ev.target.textContent = '✓ kopiert'; } catch (e) { $('#chat-' + x.id).select(); } };
+  });
+}
+
+/* Alle Verbesserungsvorschläge aus dem Testmonat an einer Stelle: daraus wird das Produkt für alle besser */
+async function feedbackListe() {
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>💡 Feedback</h2><p class="grau">Lade …</p>';
+  $('#zurueck').onclick = uebersicht;
+  const liste = pflicht(await sb.from('nachrichten').select('id, kunde_id, text, zusammenfassung, daten, gelesen, gesendet_am, kunden(name, teilnehmer)').eq('art', 'feedback').order('gesendet_am', { ascending: false }).limit(500));
+  const noten = liste.map(n => n.daten && Number(n.daten.note)).filter(Boolean), schnitt = noten.length ? (noten.reduce((s, x) => s + x, 0) / noten.length).toFixed(1).replace('.', ',') : '–';
+  const eigen = liste.filter(n => n.daten && n.daten.eigene_dokumente === 'ja').length;
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>💡 Feedback aus dem Testmonat</h2>'
+    + '<div class="kennzahlen"><div class="kz" style="--f:var(--gelb-dunkel)"><div class="zahl">' + liste.length + '</div>Rückmeldungen</div>'
+    + '<div class="kz" style="--f:var(--petrol)"><div class="zahl">' + schnitt + '</div>Ø Note (1–5)</div>'
+    + '<div class="kz" style="--f:var(--gruen)"><div class="zahl">' + eigen + '</div>„mit eigenen Dokumenten: ja“</div>'
+    + '<div class="kz" style="--f:var(--orange)"><div class="zahl">' + liste.filter(n => !n.gelesen).length + '</div>ungelesen</div></div>'
+    + (liste.length ? liste.map(n => { const d = n.daten || {}; return '<div class="nachricht ' + (n.gelesen ? 'gelesen' : '') + '"><div class="zeile" style="justify-content:space-between"><b>' + esc((n.kunden && (n.kunden.teilnehmer || n.kunden.name)) || 'Teilnehmer') + ' · ' + new Date(n.gesendet_am).toLocaleString('de-DE') + '</b>'
+      + (n.gelesen ? '<span class="grau">gelesen</span>' : '<button class="knopf klein zweit" data-gelesen="' + n.id + '">gelesen</button>') + '</div>'
+      + '<div class="chips">' + (d.note ? '<span class="chip">Note ' + d.note + '/5</span>' : '') + (d.eigene_dokumente ? '<span class="chip ' + (d.eigene_dokumente === 'ja' ? 'gruen' : 'grau') + '">eigene Dokumente: ' + esc(d.eigene_dokumente) + '</span>' : '') + (d.ansicht ? '<span class="chip grau">aus: ' + esc(d.ansicht) + '</span>' : '') + '</div>'
+      + (d.hilft ? '<p><b>Geholfen:</b> ' + esc(d.hilft) + '</p>' : '') + (d.fehlt ? '<p><b>Fehlt/stört:</b> ' + esc(d.fehlt) + '</p>' : '') + (!d.hilft && !d.fehlt && n.text ? '<p style="white-space:pre-wrap">' + esc(n.text) + '</p>' : '') + '</div>'; }).join('')
+      : '<div class="karte grau">Noch kein Feedback.</div>');
+  $('#zurueck').onclick = uebersicht;
+  $$('[data-gelesen]').forEach(b => b.onclick = async () => { pflicht(await sb.from('nachrichten').update({ gelesen: true }).eq('id', b.dataset.gelesen)); feedbackListe(); });
 }
 
 /* ------------------------------------------------ Einzelner Kunde */
@@ -94,7 +173,7 @@ async function kundeZeigen(id, reiter) {
   S.kunde = k;
   const R = [['ueberblick', 'Überblick', 'var(--blau)'], ['nachrichten', 'Nachrichten', 'var(--orange)'], ['fakten', 'Faktencheck', 'var(--violett)'], ['fallen', 'Stolperfallen', 'var(--petrol)'],
     ['ergebnis', 'Ergebnisse', 'var(--petrol)'], ['link', 'Link', 'var(--blau)'], ['verwalten', 'Verwalten', 'var(--grau)']];
-  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>' + esc(k.name) + (k.ort ? ' <span class="grau">· ' + esc(k.ort) + '</span>' : '') + '</h2>'
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>' + esc(k.art === 'test' ? (k.teilnehmer || k.name) : k.name) + (k.art === 'test' ? ' <span class="chip orange">Testmonat</span> <span class="grau">· übt mit ' + esc(k.name) + '</span>' : k.ort ? ' <span class="grau">· ' + esc(k.ort) + '</span>' : '') + (k.art === 'vorlage' ? ' <span class="chip violett">Vorlage</span>' : '') + '</h2>'
     + '<div class="reiter">' + R.map(r => '<button data-r="' + r[0] + '" style="--f:' + r[2] + '" class="' + (S.reiter === r[0] ? 'an' : '') + '">' + r[1] + '</button>').join('') + '</div><div id="inhalt"><p class="grau">Lade …</p></div>';
   $('#zurueck').onclick = uebersicht;
   $$('.reiter button').forEach(b => b.onclick = () => kundeZeigen(id, b.dataset.r));
@@ -121,8 +200,8 @@ REITER.ueberblick = async (k, el) => {
 };
 
 REITER.nachrichten = async (k, el) => {
-  const liste = pflicht(await sb.from('nachrichten').select('id, text, zusammenfassung, gelesen, gesendet_am, mitarbeiter(name)').eq('kunde_id', k.id).order('gesendet_am', { ascending: false }).limit(100));
-  el.innerHTML = liste.length ? liste.map(n => '<div class="nachricht ' + (n.gelesen ? 'gelesen' : '') + '"><div class="zeile" style="justify-content:space-between"><b>' + esc((n.mitarbeiter && n.mitarbeiter.name) || 'Kunde') + ' · ' + new Date(n.gesendet_am).toLocaleString('de-DE') + '</b>'
+  const liste = pflicht(await sb.from('nachrichten').select('id, art, text, zusammenfassung, gelesen, gesendet_am, mitarbeiter(name)').eq('kunde_id', k.id).order('gesendet_am', { ascending: false }).limit(100));
+  el.innerHTML = liste.length ? liste.map(n => '<div class="nachricht ' + (n.gelesen ? 'gelesen' : '') + '"><div class="zeile" style="justify-content:space-between"><b>' + (n.art === 'feedback' ? '💡 ' : '') + esc((n.mitarbeiter && n.mitarbeiter.name) || 'Kunde') + ' · ' + new Date(n.gesendet_am).toLocaleString('de-DE') + '</b>'
     + (n.gelesen ? '<span class="grau">gelesen</span>' : '<button class="knopf klein zweit" data-gelesen="' + n.id + '" style="--f:var(--orange)">als gelesen markieren</button>') + '</div>'
     + (n.text ? '<p style="white-space:pre-wrap;margin:6px 0">' + esc(n.text) + '</p>' : '<p class="grau">(nur Stand gesendet)</p>') + '<div class="grau">' + esc(n.zusammenfassung || '') + '</div></div>').join('')
     : '<div class="karte grau">Noch keine Nachrichten.</div>';
@@ -190,16 +269,37 @@ REITER.link = async (k, el) => {
 REITER.verwalten = async (k, el) => {
   el.innerHTML = '<div class="karte"><b>Kundendaten</b><label for="v-name">Firma</label><input id="v-name" value="' + esc(k.name) + '" style="width:100%"><label for="v-berater">Berater (erscheint als „An … senden“)</label><input id="v-berater" value="' + esc(k.berater_name || '') + '" style="width:100%">'
     + '<p><button class="knopf" id="v-speichern">Speichern</button></p></div>'
+    + (k.art !== 'test' ? '<div class="karte"><b>Vorlage für den Testmonat</b><p class="grau">Die Vorlage wird für jeden freigeschalteten LinkedIn-Teilnehmer kopiert. Nur eine erfundene Beispielfirma verwenden – nie echte Kundendaten.</p>'
+      + '<label class="zeile" style="font-weight:400"><input type="checkbox" id="v-vorlage" ' + (k.art === 'vorlage' ? 'checked' : '') + '> Diesen Kunden als Vorlage verwenden</label></div>' : '')
+    + (k.art === 'test' ? '<div class="karte"><b>Grenzen dieses Teilnehmers</b><p class="grau">Leer = ohne Grenze. Die Laufzeit steuert der Link (Reiter „Link“).</p><div class="zeile">'
+      + [['ki_tag', 'KI-Fragen je Tag'], ['ki_gesamt', 'KI-Fragen gesamt'], ['nachrichten_tag', 'Nachrichten je Tag'], ['fotos_gesamt', 'Fotos gesamt']].map(g => '<label style="margin:0">' + g[1] + '<br><input type="number" min="0" style="width:110px" data-grenze="' + g[0] + '" value="' + esc((k.grenzen || {})[g[0]] ?? '') + '"></label>').join('')
+      + '</div><p><button class="knopf" id="v-grenzen">Grenzen speichern</button></p></div>' : '')
     + '<div class="karte" style="border-color:#F5A3A3"><b>Kunde löschen</b><p class="grau">Löscht alle Daten dieses Kunden (Dokumente, Fragen, Antworten, Links). Nicht rückgängig zu machen.</p>'
     + '<label for="v-loeschen">Zur Bestätigung den Firmennamen eintippen</label><input id="v-loeschen" style="width:100%"><p><button class="knopf rot" id="v-weg" disabled>Endgültig löschen</button></p></div>';
   $('#v-speichern').onclick = async () => { pflicht(await sb.from('kunden').update({ name: $('#v-name').value.trim(), berater_name: $('#v-berater').value.trim() }).eq('id', k.id)); kundeZeigen(k.id, 'verwalten'); };
+  if ($('#v-vorlage')) $('#v-vorlage').onchange = async () => {
+    if ($('#v-vorlage').checked) pflicht(await sb.from('kunden').update({ art: 'kunde' }).eq('art', 'vorlage')); // nur eine Vorlage
+    pflicht(await sb.from('kunden').update({ art: $('#v-vorlage').checked ? 'vorlage' : 'kunde' }).eq('id', k.id)); kundeZeigen(k.id, 'verwalten');
+  };
+  if ($('#v-grenzen')) $('#v-grenzen').onclick = async () => {
+    const g = {}; $$('[data-grenze]').forEach(i => { if (i.value !== '') g[i.dataset.grenze] = Math.max(0, Number(i.value)); });
+    pflicht(await sb.from('kunden').update({ grenzen: g }).eq('id', k.id)); kundeZeigen(k.id, 'verwalten');
+  };
   $('#v-loeschen').oninput = () => { $('#v-weg').disabled = $('#v-loeschen').value.trim() !== k.name; };
   $('#v-weg').onclick = async () => { await kundeLoeschen(k.id); uebersicht(); };
 };
 async function kundeLoeschen(id) {
   const doks = pflicht(await sb.from('dokumente').select('pfad, kopie_pfad').eq('kunde_id', id));
   const k = pflicht(await sb.from('kunden').select('pdf_zip_pfad').eq('id', id).single());
-  const pfade = [...new Set(doks.flatMap(d => [d.pfad, d.kopie_pfad]).concat([k.pdf_zip_pfad]).filter(Boolean))];
+  let pfade = [...new Set(doks.flatMap(d => [d.pfad, d.kopie_pfad]).concat([k.pdf_zip_pfad]).filter(Boolean))];
+  if (pfade.length) { // Dateien, die noch ein anderer Kunde nutzt (Vorlage ↔ Testteilnehmer), bleiben liegen
+    const liste = '(' + pfade.map(x => '"' + x.replace(/"/g, '') + '"').join(',') + ')';
+    const [a, b, c] = await Promise.all([sb.from('dokumente').select('pfad').neq('kunde_id', id).filter('pfad', 'in', liste),
+      sb.from('dokumente').select('kopie_pfad').neq('kunde_id', id).filter('kopie_pfad', 'in', liste),
+      sb.from('kunden').select('pdf_zip_pfad').neq('id', id).filter('pdf_zip_pfad', 'in', liste)]);
+    const belegt = new Set([...pflicht(a).map(x => x.pfad), ...pflicht(b).map(x => x.kopie_pfad), ...pflicht(c).map(x => x.pdf_zip_pfad)]);
+    pfade = pfade.filter(x => !belegt.has(x));
+  }
   if (pfade.length) await sb.storage.from('dokumente').remove(pfade);
   pflicht(await sb.from('kunden').delete().eq('id', id));
 }

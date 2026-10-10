@@ -1,4 +1,4 @@
-# Lernpfad Auditvorbereitung (A01–A15)
+# Lernpfad Auditvorbereitung (A01–A16)
 
 | Lektion | Thema | Im Projekt | Stand |
 |---|---|---|---|
@@ -14,9 +14,16 @@
 | A10 | Bildschirm und Texterkennung | Bildschirm teilen, Foto, Texterkennung im Browser | ✓ |
 | A11 | KI sicher einbinden | Geheimnis als Secret, Kostenbremse, Rückfall auf Regeln, Antworten nur aus eigenen Dokumenten | ✓ lokal getestet (Ersatz-KI), echter Schlüssel fehlt |
 | A12 | Auswertung und Fragenbank | Ampel je Mitarbeiter, Fragen aus echten Audits | ✓ (Datei-Auswertung) |
-| A13 | Supabase-Projekt | Eigenes Projekt (Frankfurt), öffentlicher Schlüssel vs. Geheimschlüssel, Backoffice-Nutzer | in Arbeit |
-| A14 | Automatisch ausspielen | GitHub Action spielt Migrationen und Edge Functions ein; Mini-Supabase für Tests ohne Internet | in Arbeit |
-| A15 | Backoffice für viele Kunden | Übersicht aller Kunden, Import, persönlicher Link, Nachrichten, Ergebnisse | in Arbeit |
+| A13 | Supabase-Projekt | Eigenes Projekt (Frankfurt), öffentlicher Schlüssel vs. Geheimschlüssel, Backoffice-Nutzer | ✓ Projekt steht, Migrationen eingespielt |
+| A14 | Ausspielen | Claude spielt über die Supabase-Verbindung ein (GitHub Action als Reserve); Mini-Supabase für Tests ohne Internet | ✓ |
+| A15 | Backoffice für viele Kunden | Übersicht aller Kunden, Import, persönlicher Link, Nachrichten, Ergebnisse | ✓ lokal getestet, live nach Netlify-Anschluss |
+| A16 | Testmonat mit Grenzen | Anfrageformular, Freischalten mit Vorlage-Kopie, Grenzen je Teilnehmer, Feedback sammeln | ✓ lokal getestet (43/43) |
+
+## Begriffe A16 (in Alltagssprache)
+- **Vorlage:** ein Kunde, der als Kopiervorlage dient. Beispiel: Die erfundene „Beispiel Haustechnik GmbH“ wird für jeden LinkedIn-Teilnehmer kopiert, damit jeder seinen eigenen Übungsstand hat.
+- **Kontingent (Grenze je Teilnehmer):** wie viel jemand verbrauchen darf. Beispiel: 20 KI-Fragen am Tag – die 21. bekommt die Antwort „für heute aufgebraucht“, alle Übungen ohne KI gehen weiter.
+- **Atomar:** zählen und prüfen in einem einzigen Schritt. Beispiel: Klickt jemand zweimal gleichzeitig, wird trotzdem nur bis 20 gezählt.
+- **Honigtopf-Feld:** ein unsichtbares Formularfeld. Menschen sehen es nicht, Spam-Programme füllen es aus – und werden still verworfen.
 
 ## Begriffe A13–A15 (in Alltagssprache)
 - **Access Token:** ein Schlüssel, mit dem GitHub in Ihrem Namen Änderungen bei Supabase einspielt. Beispiel: Eine neue Spalte für Nachrichten kommt ohne Ihr Zutun in die Datenbank.

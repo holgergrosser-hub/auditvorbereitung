@@ -12,7 +12,11 @@
 //   eintrag  {audit_id?, mitarbeiter_id?, art, schluessel, daten}   Spurensuche, Rundgang, Fallen, Lernstand, Rueckmeldung
 //   eintraege {audit_id?}         eigene Eintraege lesen
 //   dokument {dokument_id, pdf:true}  10 Minuten gueltiger Link auf die PDF-Kopie (Seitenbetrachter pdf.html)
-//   nachricht {mitarbeiter_id?, text, zusammenfassung}  "✉ An … senden": landet im Backoffice, nie als automatische Mail
+//   nachricht {mitarbeiter_id?, text, zusammenfassung, art?:'feedback', daten?}  "✉ An … senden" / Verbesserungsvorschlag:
+//                                 landet im Backoffice, nie als automatische Mail
+//   testanfrage {name, firma, email, linkedin, normen, audit_termin, nachricht, feedback_zugesagt, datenschutz_ok}
+//                                 OHNE Link: Anfrage fuer den Testmonat (web/test/). Holger schaltet im Backoffice frei.
+// Testteilnehmer (kunden.art = 'test') haben Grenzen (kunden.grenzen): Nachrichten je Tag, Fotos gesamt; KI zaehlt die Funktion "ki".
 // Bereitstellen: supabase functions deploy kunde --no-verify-jwt   (Kunden haben kein Supabase-Login)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import L from '../_shared/logik.js';
@@ -28,11 +32,20 @@ async function sha256(s: string) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
-async function kundeZumToken(t: string) {
+async function zugangZumToken(t: string) {
   if (!/^[0-9a-f]{48}$/.test(t || '')) return null;
   const { data } = await db.from('zugaenge').select('kunde_id, gueltig_bis, gesperrt').eq('token_hash', await sha256(t)).maybeSingle();
   if (!data || data.gesperrt || new Date(data.gueltig_bis + 'T23:59:59') < new Date()) return null;
-  return data.kunde_id as string;
+  return data as { kunde_id: string; gueltig_bis: string };
+}
+const MAIL = /^[^\s@<>]{1,64}@[^\s@<>]{1,200}\.[a-z]{2,}$/i;
+// deno-lint-ignore no-explicit-any
+const zahl = (g: any, k: string) => (g && Number.isFinite(Number(g[k])) && g[k] !== null && g[k] !== '' ? Number(g[k]) : null);
+// Verbrauch buchen (Datenbankfunktion nutzung_buchen, atomar). true = erlaubt
+async function buchen(kundeId: string, art: string, maxTag: number | null, maxGesamt: number | null) {
+  const { data, error } = await db.rpc('nutzung_buchen', { p_kunde: kundeId, p_art: art, p_max_tag: maxTag, p_max_gesamt: maxGesamt });
+  if (error) throw error;
+  return data === true;
 }
 // deno-lint-ignore no-explicit-any
 const pflicht = (r: { data: any; error: unknown }) => { if (r.error) throw r.error; return r.data; };
@@ -47,8 +60,30 @@ Deno.serve(async (req) => {
   const antwort = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: h });
   try {
     const d = await req.json();
-    const kundeId = await kundeZumToken(String(d.t || ''));
-    if (!kundeId) return antwort({ fehler: 'Link ungültig oder abgelaufen. Bitte bei QM-Dienstleistungen einen neuen Link anfordern.' }, 401);
+
+    if (d.aktion === 'testanfrage') { // oeffentlich: Anfrage fuer den kostenlosen Testmonat. Keine Mail, nur ein Eintrag fuers Backoffice.
+      if (d.website) return antwort({ ok: true });            // Honigtopf-Feld: Bots fuellen es aus, Menschen sehen es nicht
+      const k = (x: unknown, n: number) => String(x || '').trim().slice(0, n);
+      const a = { name: k(d.name, 120), firma: k(d.firma, 160), email: k(d.email, 200).toLowerCase(), linkedin: k(d.linkedin, 300), normen: k(d.normen, 200),
+        audit_termin: k(d.audit_termin, 100), nachricht: k(d.nachricht, 2000), quelle: k(d.quelle, 60) || 'LinkedIn',
+        feedback_zugesagt: d.feedback_zugesagt === true, datenschutz_ok: d.datenschutz_ok === true };
+      if (!a.name || !a.firma || !MAIL.test(a.email)) return antwort({ fehler: 'Bitte Name, Firma und eine gültige E-Mail-Adresse angeben.' }, 400);
+      if (!a.datenschutz_ok || !a.feedback_zugesagt) return antwort({ fehler: 'Bitte die beiden Häkchen setzen.' }, 400);
+      const gestern = new Date(Date.now() - 864e5).toISOString();
+      const [je, alle] = await Promise.all([
+        db.from('testanfragen').select('id', { count: 'exact', head: true }).eq('email', a.email).gte('angelegt_am', gestern),
+        db.from('testanfragen').select('id', { count: 'exact', head: true }).gte('angelegt_am', gestern)]);
+      if ((je.count || 0) >= 3) return antwort({ fehler: 'Ihre Anfrage ist schon da – Holger Grosser meldet sich.' }, 429);
+      if ((alle.count || 0) >= 60) return antwort({ fehler: 'Heute sind sehr viele Anfragen eingegangen. Bitte morgen noch einmal versuchen.' }, 429);
+      pflicht(await db.from('testanfragen').insert(a));
+      return antwort({ ok: true });
+    }
+
+    const zugang = await zugangZumToken(String(d.t || ''));
+    if (!zugang) return antwort({ fehler: 'Link ungültig oder abgelaufen. Bitte bei Holger Grosser (QM-Dienstleistungen) einen neuen Link anfordern.' }, 401);
+    const kundeId = zugang.kunde_id;
+    const ki0 = pflicht(await db.from('kunden').select('art, grenzen').eq('id', kundeId).single());
+    const grenzen = ki0.art === 'test' ? (ki0.grenzen || {}) : null;   // Grenzen gelten nur im Testmonat
 
     if (d.aktion === 'start') {
       const [kunde, audits, mitarbeiter, dokumente, fakten, fallen, aufgaben] = await Promise.all([
@@ -65,18 +100,27 @@ Deno.serve(async (req) => {
       if (k.pdf_zip_pfad) { const z = await db.storage.from('dokumente').createSignedUrl(k.pdf_zip_pfad, 12 * 3600, { download: true }); if (!z.error) pdfZip = z.data.signedUrl; }
       const rundgang = Array.isArray(k.rundgang) && k.rundgang.length ? k.rundgang : L.RUNDGANG_STANDARD;
       delete k.pdf_zip_pfad; delete k.rundgang;
-      return antwort({ kunde: k, audits: pflicht(audits).filter((a: any) => a.status === 'fragen_bereit'),
+      let test = null;
+      if (grenzen) { // Testmonat: Laufzeit und Verbrauch fuer die Anzeige "noch x Tage · KI heute n von m"
+        const nu = pflicht(await db.from('nutzung').select('tag, art, anzahl').eq('kunde_id', kundeId));
+        const heute = new Date().toISOString().slice(0, 10);
+        const summe = (art: string, nurHeute: boolean) => nu.filter((x: any) => x.art === art && (!nurHeute || x.tag === heute)).reduce((s: number, x: any) => s + x.anzahl, 0);
+        test = { bis: zugang.gueltig_bis, grenzen, verbraucht: { ki_heute: summe('ki', true), ki_gesamt: summe('ki', false), fotos_gesamt: summe('foto', false), nachrichten_heute: summe('nachricht', true) } };
+      }
+      return antwort({ kunde: k, test, audits: pflicht(audits).filter((a: any) => a.status === 'fragen_bereit'),
         mitarbeiter: pflicht(mitarbeiter), dokumente: pflicht(dokumente).map(dokFuerKunde), faktencheck: pflicht(fakten), stolperfallen: pflicht(fallen),
         aufgaben: pflicht(aufgaben), rundgang, pdf_zip: pdfZip, level: L.AUDITOR_LEVEL });
     }
 
-    if (d.aktion === 'nachricht') { // Kostenbremse: hoechstens 30 Nachrichten je Kunde und Tag
-      const heute = new Date().toISOString().slice(0, 10);
-      const { count } = await db.from('nachrichten').select('id', { count: 'exact', head: true }).eq('kunde_id', kundeId).gte('gesendet_am', heute);
-      if ((count || 0) >= 30) return antwort({ fehler: 'Heute schon sehr viele Nachrichten – bitte morgen wieder.' }, 429);
+    if (d.aktion === 'nachricht') { // Kostenbremse: hoechstens 30 Nachrichten je Kunde und Tag (im Testmonat laut Grenze)
+      if (!(await buchen(kundeId, 'nachricht', zahl(grenzen, 'nachrichten_tag') ?? 30, null))) return antwort({ fehler: 'Heute schon sehr viele Nachrichten – bitte morgen wieder.' }, 429);
       let maId = null;
       if (d.mitarbeiter_id) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
-      pflicht(await db.from('nachrichten').insert({ kunde_id: kundeId, mitarbeiter_id: maId, text: String(d.text || '').slice(0, 4000), zusammenfassung: String(d.zusammenfassung || '').slice(0, 500) }));
+      const fb = d.art === 'feedback';
+      const daten = fb && d.daten && typeof d.daten === 'object' ? d.daten : null;
+      if (daten && JSON.stringify(daten).length > 8000) return antwort({ fehler: 'Zu viele Daten' }, 413);
+      pflicht(await db.from('nachrichten').insert({ kunde_id: kundeId, mitarbeiter_id: maId, text: String(d.text || '').slice(0, 4000), zusammenfassung: String(d.zusammenfassung || '').slice(0, 500),
+        art: fb ? 'feedback' : 'nachricht', daten }));
       return antwort({ ok: true });
     }
 
@@ -177,6 +221,7 @@ Deno.serve(async (req) => {
       if (!m) return antwort({ fehler: 'Kein Bild' }, 400);
       const bytes = Uint8Array.from(atob(m[2]), c => c.charCodeAt(0));
       if (bytes.length > 8 * 1024 * 1024) return antwort({ fehler: 'Bild zu groß' }, 413);
+      if (grenzen && !(await buchen(kundeId, 'foto', null, zahl(grenzen, 'fotos_gesamt')))) return antwort({ fehler: 'Im Testmonat sind genug Fotos gespeichert.' }, 429);
       const pfad = kundeId + '/' + audit.id + '/' + frage.id + '/' + crypto.randomUUID() + '.' + (m[1] === 'png' ? 'png' : 'jpg');
       pflicht(await db.storage.from('nachweise').upload(pfad, bytes, { contentType: 'image/' + m[1] }));
       pflicht(await db.from('nachweise').insert({ frage_id: frage.id, mitarbeiter_id: mitarbeiterId, pfad, notiz: String(d.notiz || '').slice(0, 500) }));

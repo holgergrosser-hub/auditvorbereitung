@@ -5,10 +5,8 @@
 #   SUPABASE_DB_PASSWORD   (Datenbank-Passwort beim Anlegen des Projekts)
 #   SUPABASE_PROJECT_REF   (Project Settings → General → Reference ID)
 name: Supabase ausspielen
+# Seit E-A28 spielt Claude ueber die Supabase-Verbindung ein; diese Action laeuft nur noch auf Knopfdruck (Reserve).
 on:
-  push:
-    branches: [main]
-    paths: ['supabase/**', '.github/workflows/supabase.yml']
   workflow_dispatch:
 
 jobs:
