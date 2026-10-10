@@ -139,7 +139,7 @@ quelle = {
                   {'zeit': '14:00–15:00', 'thema': 'Reklamationen und Verbesserung', 'normkapitel': '10.2', 'gespraechspartner': 'Kundendienst', 'bereich': 'Kundendienst'}]}],
  'mitarbeiter': [{'id': 'm1', 'name': 'Erika Beispiel', 'bereich': 'Geschäftsführung', 'funktion': 'Geschäftsführerin'}, {'id': 'm2', 'name': 'Max Probe', 'bereich': 'Kundendienst', 'funktion': 'QMB, Kundendienst'}],
  'dokumente': [
-  {'id': 'd1', 'd_nr': 'D-01', 'titel': 'Unternehmens- und Prozesshandbuch', 'kurzname': 'UPH', 'stand': STAND, 'wichtigkeit': 'kennen', 'datei': 'quellen/UPH.pdf', 'link': 'https://example.com/uph'},
+  {'id': 'd1', 'd_nr': 'D-01', 'titel': 'Unternehmens- und Prozesshandbuch', 'kurzname': 'UPH', 'stand': STAND, 'wichtigkeit': 'kennen', 'datei': 'quellen/UPH.pdf'},
   {'id': 'd2', 'd_nr': 'D-02', 'titel': 'QM-Übersicht', 'kurzname': 'QMÜ', 'stand': STAND, 'wichtigkeit': 'kennen', 'datei': 'quellen/QM-Uebersicht.xlsx', 'kopie_datei': 'quellen/QM-Uebersicht.pdf'},
   {'id': 'd3', 'd_nr': 'D-03', 'titel': 'Managementbewertung 2026', 'kurzname': 'MB', 'stand': '15.09.2026', 'wichtigkeit': 'kennen', 'datei': 'quellen/MB.pdf'},
   {'id': 'd4', 'd_nr': 'D-04', 'titel': 'Auditbericht internes Audit', 'stand': '10.09.2026', 'wichtigkeit': 'finden', 'datei': 'quellen/Auditbericht.pdf'},

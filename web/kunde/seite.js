@@ -483,7 +483,11 @@ ANSICHT.technik = () => {
 async function technik(k, still) {
   try { const j = await api('technik', { check: { [k]: true } }); S.start.kunde.technik_check = j.technik_check; } catch (e) { hinweisBox(e.message); return; }
   if (!still && S.ansicht === 'technik') ANSICHT.technik();
-  else { const h = $('[data-h="' + k + '"]'); if (h) { h.classList.add('ja'); h.textContent = '✓'; } } // Vorschau-Video bleibt stehen, Haken trotzdem sichtbar
+  else { // Vorschau-Video bleibt stehen, Haken und Zähler trotzdem aktualisieren
+    const h = $('[data-h="' + k + '"]'); if (h) { h.classList.add('ja'); h.textContent = '✓'; }
+    const c = S.start.kunde.technik_check || {}, n = ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].filter(x => c[x]).length;
+    const r = $('#main .mini-ring'); if (r) r.outerHTML = miniRing(n / 4, n + ' von 4 erledigt');
+  }
   zeichneKopf();
 }
 async function teilen() {
@@ -516,8 +520,9 @@ function kopieUrl(d, ort) { // eigener Seitenbetrachter (pdf.html) statt #page: 
 function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
 async function oeffne(id, ort) {
   // Mit Seite/Reiter: immer den Seitenbetrachter (springt sicher auf die Stelle); Google-Links koennen keine Seite ansteuern
-  const d = S.start.dokumente.find(x => x.id === id), u = ort || (d && /^eigen:/.test(d.kopie)) ? kopieUrl(d, ort) : '';
-  if (u && (/&s=\d/.test(u) || /[?&]e=/.test(u))) { const w = window.open(u, '_blank'); if (!w) location.href = u; return; }
+  // Ohne Live-Link (Google) öffnet die PDF-Kopie im eigenen Seitenbetrachter – auch ohne Seitenangabe
+  const d = S.start.dokumente.find(x => x.id === id), u = ort || (d && d.kopie && !d.link) ? kopieUrl(d, ort) : '';
+  if (u && (/&s=\d/.test(u) || !d.link)) { const w = window.open(u, '_blank'); if (!w) location.href = u; return; }
   const fenster = window.open('', '_blank');
   try {
     const j = await api('dokument', { dokument_id: id });
