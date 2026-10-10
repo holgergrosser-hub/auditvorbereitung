@@ -325,6 +325,14 @@ async def main():
             assert n == 2 and 'Zweite Musterfirma' in kopf and int(fr) > 0 and vor == vid, (n, kopf, fr, vor)
             return str(n) + ' Musterfirmen zur Auswahl · gewechselt zu „' + kopf + '“ · ' + fr + ' Fragen neu kopiert'
         await pruefe('T9 Musterfirma wählen und wechseln', t_wechsel)
+        async def t_nutzung():  # E-A42: Bausteine zählen, Auswertung im Backoffice
+            await t.click('nav button[data-k=fahrplan]'); await t.wait_for_timeout(800); await t.click('nav button[data-k=probeaudit]'); await t.wait_for_timeout(800)
+            z = psql("select string_agg(art || '=' || anzahl, ', ' order by art) from nutzung where art like 'baustein:%'")
+            await bo.goto(B + '/backoffice/'); await bo.wait_for_selector('#nutzung'); await bo.click('#nutzung'); await bo.wait_for_selector('#main table', timeout=10000)
+            txt = await bo.locator('#main').inner_text(); await shot(bo, '25_bo_nutzung')
+            assert 'baustein:fahrplan' in z and 'baustein:probeaudit' in z and 'Fahrplan / Fragen' in txt and 'Gewählte Musterfirmen' in txt, (z, txt[:300])
+            return 'Gezählt: ' + z[:120]
+        await pruefe('N1 Nutzung der Bausteine im Backoffice', t_nutzung)
         async def t_grenze():
             psql("update kunden set grenzen = grenzen || '{\"ki_tag\":2}' where art='test'")
             erg = [post('ki', {'t': S['schluessel'], 'aktion': 'wissensfrage', 'frage': 'Wer bewertet die Lieferanten?'})[0] for _ in range(3)]

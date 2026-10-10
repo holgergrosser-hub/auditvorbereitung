@@ -9,7 +9,7 @@ import { praxisZu, nachfrageZu, nachfragenZu } from './wissen.js';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 export function probeaudit(ctx) {
-  const { L, S, esc, main, ki, kiAn, api, speichereEintrag, eintrag, fallen, hilfe, eigeneAuszuege, oeffneHilfe, stimme, rolleHtml } = ctx;
+  const { L, S, esc, main, ki, kiAn, api, speichereEintrag, eintrag, fallen, hilfe, eigeneAuszuege, oeffneHilfe, stimme, rolleHtml, melden } = ctx;
   const typGemerkt = ((eintrag('auditor', 'typ') || {}).daten || {}).typ;
   const P = { verlauf: [], thema: 0, frageNr: 0, aktuell: null, nachgehakt: false, ende: false, mitKi: kiAn(), vorlesen: true, freihaendig: false,
     typ: typGemerkt && L.AUDITOR_TYPEN[typGemerkt] ? typGemerkt : 'sachlich', antworten: [] };
@@ -163,6 +163,7 @@ export function probeaudit(ctx) {
   if ($m('#pa-natur')) $m('#pa-natur').onchange = () => { stimme.natuerlich = $m('#pa-natur').checked; };
   if ($m('#pa-art')) $m('#pa-art').onchange = () => { stimme.art = $m('#pa-art').value; };
   $m('#pa-start').onclick = () => { if (!themen.length) return hinweis('Für dieses Audit sind noch keine Fragen hinterlegt.');
+    if (melden) melden('probeaudit_start');
     stimme.entsperren(); if ('speechSynthesis' in window) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { /* */ } }
     P.mitKi ? kiNaechste() : lokalNaechste(); };
   $m('#pa-los').onclick = antworten;

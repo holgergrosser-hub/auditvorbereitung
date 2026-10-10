@@ -38,6 +38,7 @@ async function zugangZumToken(t: string) {
   if (!data || data.gesperrt || new Date(data.gueltig_bis + 'T23:59:59') < new Date()) return null;
   return data as { kunde_id: string; gueltig_bis: string };
 }
+const BAUSTEINE = ['heute', 'technik', 'fakten', 'fahrplan', 'probeaudit', 'fallen', 'lernen', 'spur', 'rundgang', 'finden', 'tag', 'danach', 'probeaudit_start', 'zeig_mal', 'dokument'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // fremde IDs (z. B. vom Geraet) nie an die Datenbank
 const MAIL = /^[^\s@<>]{1,64}@[^\s@<>]{1,200}\.[a-z]{2,}$/i;
 // deno-lint-ignore no-explicit-any
@@ -126,6 +127,13 @@ Deno.serve(async (req) => {
     }
 
     // Testmonat: Musterfirmen zur Auswahl (alle Vorlagen) und Wechsel (E-A41) – Uebungsstand der alten Firma wird verworfen
+    // Nutzung der Bausteine zaehlen (E-A42): nur Zaehler je Tag und Baustein, keine Inhalte
+    if (d.aktion === 'nutzung') {
+      const b = String(d.baustein || '');
+      if (!BAUSTEINE.includes(b)) return antwort({ fehler: 'Unbekannter Baustein' }, 400);
+      await buchen(kundeId, 'baustein:' + b, 500, null);
+      return antwort({ ok: true });
+    }
     if (d.aktion === 'musterfirmen') {
       if (!grenzen) return antwort({ firmen: [], aktuell: null });
       const [f, k] = await Promise.all([db.from('kunden').select('id, name, beschreibung, branche').eq('art', 'vorlage').order('name'), db.from('kunden').select('vorlage_id').eq('id', kundeId).single()]);

@@ -62,6 +62,7 @@ async function uebersicht() {
   $('#main').innerHTML = '<div class="zeile" style="justify-content:space-between"><h2>Kunden</h2><div class="zeile"><input id="suche" type="search" placeholder="Kunde suchen">'
     + '<button class="knopf zweit" id="anfragen" style="--f:var(--gelb-dunkel)">Testanfragen' + (anfragenNeu ? ' <span class="chip orange">' + anfragenNeu + ' neu</span>' : '') + '</button>'
     + '<button class="knopf zweit" id="feedback" style="--f:var(--gelb-dunkel)">💡 Feedback</button>'
+    + '<button class="knopf zweit" id="nutzung" style="--f:var(--petrol)">📊 Nutzung</button>'
     + '<button class="knopf" id="neu">+ Kunde importieren</button></div></div>'
     + '<div class="kennzahlen">'
     + '<div class="kz" style="--f:var(--blau)"><div class="zahl">' + liste.length + '</div>Kunden</div>'
@@ -98,6 +99,7 @@ async function uebersicht() {
   $('#neu').onclick = importieren;
   $('#anfragen').onclick = testanfragen;
   $('#feedback').onclick = feedbackListe;
+  $('#nutzung').onclick = nutzungListe;
 }
 
 /* ------------------------------------------------ Testmonat (LinkedIn)
@@ -146,6 +148,51 @@ async function testanfragen() {
 }
 
 /* Alle Verbesserungsvorschläge aus dem Testmonat an einer Stelle: daraus wird das Produkt für alle besser */
+/* Nutzung (E-A42): welche Bausteine Kunden und Testteilnehmer öffnen, welche Musterfirmen gewählt werden.
+   Quelle: Tabelle nutzung (nur Zähler je Tag – keine Inhalte; eigene Dokumente im Testmonat werden nie gezählt). */
+const BAUSTEIN_NAME = { heute: 'Startseite (Heute)', technik: 'Technik-Check', fakten: 'Faktencheck', fahrplan: 'Fahrplan / Fragen', probeaudit: 'Probeaudit geöffnet',
+  probeaudit_start: 'Probeaudit gestartet', zeig_mal: 'Fragen geübt (Zeig mal / Antworten)', fallen: 'Stolperfallen', lernen: 'Lernen', spur: 'Beispielauftrag',
+  rundgang: 'Rundgang', finden: 'Wo steht das?', dokument: 'Dokument geöffnet', tag: 'Spickzettel & Ablauf', danach: 'Nach dem Audit' };
+async function nutzungListe() {
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>📊 Nutzung</h2><p class="grau">Lade …</p>';
+  $('#zurueck').onclick = uebersicht;
+  const [nu, ku] = await Promise.all([sb.from('nutzung').select('kunde_id, tag, art, anzahl').limit(20000), sb.from('kunden').select('id, name, art, teilnehmer, vorlage_id')]);
+  const n = pflicht(nu), k = pflicht(ku), kunde = Object.fromEntries(k.map(x => [x.id, x]));
+  const vor30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const gruppe = (id) => (kunde[id] || {}).art === 'test' ? 'test' : 'kunde';
+  // Bausteine
+  const b = {};
+  n.filter(x => x.art.startsWith('baustein:')).forEach(x => {
+    const key = x.art.slice(9), z = b[key] = b[key] || { kunden: new Set(), test: new Set(), aufrufe: 0, d30: 0 };
+    (gruppe(x.kunde_id) === 'test' ? z.test : z.kunden).add(x.kunde_id); z.aufrufe += x.anzahl; if (x.tag >= vor30) z.d30 += x.anzahl;
+  });
+  const zeilen = Object.entries(b).sort((x, y) => (y[1].kunden.size + y[1].test.size) - (x[1].kunden.size + x[1].test.size) || y[1].aufrufe - x[1].aufrufe);
+  const nie = Object.keys(BAUSTEIN_NAME).filter(x => !b[x]);
+  // weitere Zaehler
+  const summe = (art) => n.filter(x => x.art === art).reduce((s, x) => s + x.anzahl, 0);
+  // Musterfirmen
+  const vorl = Object.fromEntries(k.filter(x => x.art === 'vorlage').map(x => [x.id, x.name.replace(/\s*\((Musterfirma|Testkunde)\)\s*$/, '')]));
+  const wahl = {}; k.filter(x => x.art === 'test').forEach(x => { const nm = vorl[x.vorlage_id] || (x.vorlage_id ? 'nicht mehr als Vorlage markiert' : 'ohne Musterfirma'); wahl[nm] = (wahl[nm] || 0) + 1; });
+  // je Kunde: welche Bausteine
+  const jeKunde = {};
+  n.filter(x => x.art.startsWith('baustein:')).forEach(x => { const j = jeKunde[x.kunde_id] = jeKunde[x.kunde_id] || {}; j[x.art.slice(9)] = (j[x.art.slice(9)] || 0) + x.anzahl; });
+  const spalten = zeilen.map(z => z[0]).slice(0, 10);
+  $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>📊 Nutzung der Bausteine</h2>'
+    + '<p class="grau">Gezählt wird nur, dass ein Baustein geöffnet wurde (höchstens alle 10 Minuten je Baustein) – keine Inhalte. Wer im Testmonat mit eigenen Dokumenten übt, wird nicht gezählt.</p>'
+    + '<div class="kennzahlen"><div class="kz" style="--f:var(--petrol)"><div class="zahl">' + Object.keys(jeKunde).length + '</div>aktive Kunden und Teilnehmer</div>'
+    + '<div class="kz" style="--f:var(--gelb-dunkel)"><div class="zahl">' + summe('ki') + '</div>KI-Anfragen</div>'
+    + '<div class="kz" style="--f:var(--gruen)"><div class="zahl">' + summe('tts') + '</div>Sätze mit Google-Stimme</div>'
+    + '<div class="kz" style="--f:var(--orange)"><div class="zahl">' + summe('wechsel') + '</div>Wechsel der Musterfirma</div></div>'
+    + '<div class="karte"><b>Bausteine</b><table><tr><th>Baustein</th><th>Kunden</th><th>Testmonat</th><th>Aufrufe gesamt</th><th>letzte 30 Tage</th></tr>'
+    + zeilen.map(([key, z]) => '<tr><td>' + esc(BAUSTEIN_NAME[key] || key) + '</td><td>' + z.kunden.size + '</td><td>' + z.test.size + '</td><td>' + z.aufrufe + '</td><td>' + z.d30 + '</td></tr>').join('')
+    + '</table>' + (nie.length ? '<p class="grau">Noch nie geöffnet: ' + nie.map(x => esc(BAUSTEIN_NAME[x])).join(', ') + '</p>' : '') + '</div>'
+    + '<div class="karte"><b>Gewählte Musterfirmen im Testmonat</b>' + (Object.keys(wahl).length ? '<table><tr><th>Musterfirma</th><th>Teilnehmer</th></tr>'
+      + Object.entries(wahl).sort((x, y) => y[1] - x[1]).map(([nm, c]) => '<tr><td>' + esc(nm) + '</td><td>' + c + '</td></tr>').join('') + '</table>' : '<p class="grau">Noch keine Teilnehmer.</p>') + '</div>'
+    + '<div class="karte" style="overflow-x:auto"><b>Je Kunde</b><table><tr><th>Kunde</th>' + spalten.map(x => '<th>' + esc(BAUSTEIN_NAME[x] || x) + '</th>').join('') + '</tr>'
+    + Object.entries(jeKunde).map(([id, j]) => { const kk = kunde[id] || {}; return '<tr><td>' + esc(kk.art === 'test' ? (kk.teilnehmer || kk.name) + ' (Test)' : kk.name || '–') + '</td>' + spalten.map(x => '<td>' + (j[x] || '') + '</td>').join('') + '</tr>'; }).join('')
+    + '</table></div>';
+  $('#zurueck').onclick = uebersicht;
+}
 async function feedbackListe() {
   $('#main').innerHTML = '<p><button class="link" id="zurueck">‹ Alle Kunden</button></p><h2>💡 Feedback</h2><p class="grau">Lade …</p>';
   $('#zurueck').onclick = uebersicht;

@@ -270,7 +270,15 @@ function zeichneNav() {
   zeichneUnten();
 }
 const ANSICHT = {};
-function zeige(k) { if (S.paStopp) { S.paStopp(); S.paStopp = null; } S.ansicht = k; farbeSetzen(k); $('#main').classList.toggle('breit', k === 'heute'); brotkrume(k); zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); }
+function zeige(k) { if (S.paStopp) { S.paStopp(); S.paStopp = null; } S.ansicht = k; farbeSetzen(k); $('#main').classList.toggle('breit', k === 'heute'); brotkrume(k); zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); melden(ANSICHT[k] ? k : 'heute'); }
+/* Nutzung der Bausteine für das Backoffice (E-A42): nur „Baustein geöffnet“, höchstens alle 10 Minuten je Baustein, keine Inhalte.
+   Mit eigenen Dokumenten und in der Testfassung ohne Server wird nichts gemeldet. */
+const gemeldet = {};
+function melden(b) {
+  if (!api || api.lokal || api.eigen) return;
+  const jetzt = Date.now(); if (gemeldet[b] && jetzt - gemeldet[b] < 600000) return; gemeldet[b] = jetzt;
+  api('nutzung', { baustein: b }).catch(() => { /* Zählen ist nie wichtiger als Üben */ });
+}
 function brauchtMa(titel) { if (S.ma) return false; $('#main').innerHTML = '<h2>' + titel + '</h2><div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>'; return true; }
 
 /* ------------------------------------------------ Heute (Tageslektion, Aufgaben, Reife) */
@@ -537,6 +545,7 @@ function kopieUrl(d, ort) { // eigener Seitenbetrachter (pdf.html) statt #page: 
 }
 function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
 async function oeffne(id, ort) {
+  melden('dokument');
   // Mit Seite/Reiter: immer den Seitenbetrachter (springt sicher auf die Stelle); Google-Links koennen keine Seite ansteuern
   // Ohne Live-Link (Google) öffnet die PDF-Kopie im eigenen Seitenbetrachter – auch ohne Seitenangabe
   const d = S.start.dokumente.find(x => x.id === id), u = ort || (d && d.kopie && !d.link) ? kopieUrl(d, ort) : '';
@@ -625,7 +634,7 @@ ANSICHT.probeaudit = () => {
   if (brauchtMa('Probeaudit')) return;
   const hilfe = (f) => '<div><b>Wo steht das?</b> ' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '</div><div class="doks">' + (f.dokumente || []).map(d => stelleKnopf(d.id, (L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0] ? 'Seite ' + String((L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0]).replace(/^S\. /, '') : '', esc(d.titel) + ' öffnen')).join('') + '</div>'
     + '<div class="grau" style="margin-top:6px">So könnte ein Beispiel klingen: „' + esc(beispielZu(f)) + '“</div>' + praxisHtml(f, esc);
-  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe, stimme, rolleHtml });
+  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe, stimme, rolleHtml, melden });
 };
 /* Probegespräch mit dem KI-Auditor (Edge Function "ki", Aktion gespraech): eine Frage nach der anderen */
 function kiGespraech() {
@@ -827,6 +836,7 @@ let uhr = null;
 function reihe(items, titel, einzel) {
   if (!S.ma && S.audit.stufe) { if (brauchtMa('Üben')) return; }
   S.queue = { items: items.slice(), pos: 0, titel, einzel, start: Date.now(), ergebnis: [] };
+  melden('zeig_mal');
   naechstesItem();
 }
 function naechstesItem() {
