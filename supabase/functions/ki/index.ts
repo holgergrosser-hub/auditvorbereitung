@@ -59,7 +59,10 @@ async function claude(system: string, inhalt: any[], maxTokens = 700) {
     body: JSON.stringify({ model: MODELL, max_tokens: maxTokens, system, messages: inhalt }) });
   const j = await r.json();
   if (!r.ok) throw new Error('KI-Fehler ' + r.status + ': ' + JSON.stringify(j).slice(0, 300));
-  return (j.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n');
+  const text = (j.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n');
+  // Abgeschnitten (Grenze erreicht): nur bis zum letzten vollständigen Satz, damit der Auditor nicht mitten im Wort aufhört
+  if (j.stop_reason === 'max_tokens') { const m = text.match(/^[\s\S]*[.?!](?=\s|$)/); if (m && m[0].length > 20) return m[0]; }
+  return text;
 }
 const kurz = (s: unknown, n: number) => String(s || '').slice(0, n);
 // Textstellen aus den gueltigen Dokumenten des Kunden (Grundlage fuer alle KI-Antworten: nur eigene Dokumente)
@@ -157,6 +160,12 @@ Deno.serve(async (req) => {
         + 'Nach dem letzten Thema bedanke dich in einem Satz und schreibe [ENDE]. '
         + 'Themen: ' + (themen.join(' / ') || 'Führung, Auftrag, Einkauf, Reklamationen') + '. Aktuelles Thema: ' + (thema + 1) + '.'
         + (d.fallen ? ' Stolperfallen, die du nach und nach ansprechen darfst: ' + kurz(JSON.stringify(d.fallen), 1500) : '')
+        + (d.gespraechspartner && d.gespraechspartner.name ? '\n\nDein Gesprächspartner: ' + kurz(d.gespraechspartner.name, 80) + ' (' + kurz(d.gespraechspartner.rolle, 120) + '). '
+          + (Array.isArray(d.gespraechspartner.kapitel) && d.gespraechspartner.kapitel.length
+            ? 'Frage diese Person NUR zu Themen, die sie verantwortet oder mitmacht: Normkapitel ' + d.gespraechspartner.kapitel.slice(0, 12).map((k: any) => kurz(k, 10)).join(', ')
+              + (Array.isArray(d.gespraechspartner.prozesse) && d.gespraechspartner.prozesse.length ? ' (Prozesse: ' + d.gespraechspartner.prozesse.slice(0, 6).map((x: any) => kurz(x, 60)).join(', ') + ')' : '')
+              + '. Kontext, Risiken und Chancen, Ziele, internes Audit und Managementbewertung fragst du die Geschäftsführung, nicht diese Person. Qualitätspolitik und den eigenen Beitrag zu den Zielen darf jeder gefragt werden.'
+            : 'Diese Person verantwortet das Managementsystem; du darfst sie zu allen Themen befragen.') : '')
         + (Array.isArray(d.praxis) && d.praxis.length ? '\n\nAus der Beratungspraxis (typische Fragen kleiner Firmen zu diesem Thema mit der fachlich richtigen Antwort) – nutze das für gezielte, realistische Nachfragen, ohne es vorzulesen:\n'
           + d.praxis.slice(0, 4).map((x: any) => '- ' + kurz(x && x.q, 200) + ' → ' + kurz(x && x.a, 400)).join('\n') : '')
         + (belege ? '\n\nAuszüge aus den Dokumenten der Firma:\n' + belege : '');
@@ -165,7 +174,7 @@ Deno.serve(async (req) => {
           + verlauf.map((m: any) => (m.role === 'user' ? 'Kunde: ' : 'Auditor: ') + m.content).join('\n') + '\n\nGib eine kurze Rückmeldung an den Kunden nach der Formel „Was wir machen – wo es steht – ein Beispiel“. Format: {"gut":"ein Satz","ueben":"ein Satz","tipp":"ein Satz"}' }], 400);
         return antwort(L.kiJson(fb) || {});
       }
-      const roh = await claude(system, verlauf, 300);
+      const roh = await claude(system, verlauf, 1500); // genug Platz, auch wenn das Modell vorher nachdenkt
       const m = roh.match(/\[THEMA:(\d+)\]/);
       return antwort({ text: roh.replace(/\[THEMA:\d+\]|\[ENDE\]/g, '').trim(), thema: m ? Number(m[1]) - 1 : null, ende: /\[ENDE\]/.test(roh) });
     }

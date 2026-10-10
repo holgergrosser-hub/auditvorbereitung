@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     // ab hier: gehoert zu einem Audit dieses Kunden
     const audit = UUID.test(String(d.audit_id || '')) ? pflicht(await db.from('audits').select('id, kunde_id, stufe').eq('id', d.audit_id).maybeSingle()) : null;
     if (!audit || audit.kunde_id !== kundeId) return antwort({ fehler: 'Audit nicht gefunden' }, 404);
-    const ma = UUID.test(String(d.mitarbeiter_id || '')) ? pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()) : null;
+    const ma = UUID.test(String(d.mitarbeiter_id || '')) ? pflicht(await db.from('mitarbeiter').select('id, kunde_id, name, bereich, funktion').eq('id', d.mitarbeiter_id).maybeSingle()) : null;
     const mitarbeiterId = ma && ma.kunde_id === kundeId ? ma.id : null;
 
     if (d.aktion === 'fragen') {
@@ -196,10 +196,18 @@ Deno.serve(async (req) => {
         db.from('dokumente').select(DOK_FELDER).eq('kunde_id', kundeId).eq('gueltig', true).order('d_nr')
       ]);
       const fr = pflicht(fragen), pp = pflicht(punkte), dk = pflicht(doks);
-      const auswahl = L.fragenFuerBereich(fr, pp, String(d.bereich || 'alle'), String(mitarbeiterId || ''));
+      // Rolle des Mitarbeiters: Themen aus Bereich/Funktion und aus den Prozessbeschreibungen in Handbuch und Prozessen (E-A40)
+      let rolle = null;
+      if (mitarbeiterId) {
+        const dokIds = dk.map((x: any) => x.id);
+        const pz = dokIds.length ? pflicht(await db.from('auszuege').select('dokument_id, ort, text').in('dokument_id', dokIds).ilike('text', '%Normbezug%').limit(500)) : [];
+        rolle = L.rolleThemen(ma, pz);
+      }
+      const auswahl = L.fragenFuerBereich(fr, pp, String(d.bereich || 'alle'), String(mitarbeiterId || ''), rolle);
       const bisher = mitarbeiterId && auswahl.length ? pflicht(await db.from('antworten')
         .select('frage_id, text, sicherheit, hilfe_genutzt, dauer_sekunden, ist_beispiel, beantwortet_am').eq('mitarbeiter_id', mitarbeiterId).in('frage_id', auswahl.map((f: any) => f.id))) : [];
       return antwort({
+        rolle,
         fragen: auswahl.map((f: any) => Object.assign({}, f, {
           dokumente: L.dokumenteFuerFrage(Object.assign({}, f, { normkapitel: f.normkapitel || (pp.find((p: any) => p.id === f.planpunkt_id) || {}).normkapitel }), dk)
             .map((x: any) => ({ id: x.id, d_nr: x.d_nr, titel: x.titel, stand: x.stand, wichtigkeit: x.wichtigkeit }))

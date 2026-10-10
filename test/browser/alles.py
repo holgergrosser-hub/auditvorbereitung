@@ -169,6 +169,17 @@ async def main():
             assert natur == 1 and len(tts) >= 1 and tts[0]['stimme'].startswith('de-DE'), (natur, tts[:2])
             return (await k.locator('#pa-auswertung').inner_text())[:90].replace('\n', ' ') + ' · Google-Stimme: ' + str(len(tts)) + ' Sätze (' + tts[0]['stimme'] + ')'
         await pruefe('K15 Probeaudit mit dem KI-Auditor (Server) und natürlicher Stimme', k_gespraech)
+        async def k_rolle():  # Büro/Einkauf wird nur zu Einkauf, Lieferanten und Qualitätspolitik befragt (aus Handbuch und Prozessen)
+            d = await ctx.new_page(); d.on('pageerror', lambda x: fehler.append('Rolle: ' + str(x)))
+            await d.goto(S['link']); await d.wait_for_selector('#sel-ma', timeout=20000); await d.wait_for_timeout(600)
+            await d.select_option('#sel-audit', index=0); await d.wait_for_timeout(800)
+            await d.select_option('#sel-ma', label='Sabine Büro (Büro und Einkauf)'); await d.wait_for_timeout(1200)
+            await d.click('nav button[data-k=fahrplan]'); await d.wait_for_selector('.rolle-karte', timeout=15000)
+            rk = await d.locator('.rolle-karte').inner_text(); kap = await d.eval_on_selector_all('.karte[data-f] .np', 'x => x.map(e => e.innerText)')
+            await shot(d, '42_rolle_einkauf'); await d.close()
+            assert 'Einkauf' in rk and 'Qualitätspolitik' in rk and not any(k.startswith(('4.', '6.', '9.')) for k in kap), (rk, kap)
+            return 'Themen: ' + rk.split('\n')[1][:90] + ' · Fragen: ' + ', '.join(kap)
+        await pruefe('R1 Rolle Büro und Einkauf: nur ihre Prozesse und die Politik', k_rolle)
         async def k_lektion():
             await k.click('nav button[data-k=heute]'); await k.wait_for_timeout(500); await k.click('#lektion'); await k.wait_for_timeout(600)
             assert await k.locator('#trainer-box').is_visible(); t = await k.locator('#trainer-box h2').first.text_content(); await k.click('#t-zu'); await k.wait_for_timeout(300); return t

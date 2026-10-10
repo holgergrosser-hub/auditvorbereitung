@@ -132,7 +132,7 @@ async function laden() {
       api('fragen', { audit_id: a.id, bereich: S.ma ? S.ma.bereich : 'alle', mitarbeiter_id: S.ma ? S.ma.id : '' }),
       api('eintraege', { audit_id: a.id })
     ]);
-    S.fragen = j.fragen; S.planpunkte = j.planpunkte || []; S.antworten = j.antworten || []; S.eintraege = e.eintraege || [];
+    S.fragen = j.fragen; S.rolle = j.rolle || null; S.planpunkte = j.planpunkte || []; S.antworten = j.antworten || []; S.eintraege = e.eintraege || [];
   } catch (e) { return fehler(e); }
   S.ruhe = L.imRuhemodus(a.datum, a.ruhemodus_tage) && !S.trotzRuhe;
   const erlaubt = tabs().map(x => x[0]);
@@ -618,7 +618,7 @@ ANSICHT.probeaudit = () => {
   if (brauchtMa('Probeaudit')) return;
   const hilfe = (f) => '<div><b>Wo steht das?</b> ' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '</div><div class="doks">' + (f.dokumente || []).map(d => stelleKnopf(d.id, (L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0] ? 'Seite ' + String((L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0]).replace(/^S\. /, '') : '', esc(d.titel) + ' öffnen')).join('') + '</div>'
     + '<div class="grau" style="margin-top:6px">So könnte ein Beispiel klingen: „' + esc(beispielZu(f)) + '“</div>' + praxisHtml(f, esc);
-  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe, stimme });
+  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe, stimme, rolleHtml });
 };
 /* Probegespräch mit dem KI-Auditor (Edge Function "ki", Aktion gespraech): eine Frage nach der anderen */
 function kiGespraech() {
@@ -708,6 +708,21 @@ function planDurchgangBinden() {
   dokKnoepfe($('#main'));
 }
 
+/* ------------------------------------------------ Rolle: wozu wird diese Person befragt (E-A40) */
+const KAP_NAMEN = { '5.2': 'Qualitätspolitik', '7.3': 'Ihr Beitrag zu den Zielen', '7.4': 'interne Kommunikation', '8.4': 'Einkauf und Lieferantenbewertung', '8.4.2': 'Wareneingang',
+  '8.2': 'Anfrage, Angebot und Auftrag', '9.1.2': 'Kundenzufriedenheit', '8.5': 'Leistungserbringung', '8.5.1': 'Leistungserbringung', '8.5.4': 'Lagerung', '8.6': 'Prüfung und Freigabe',
+  '8.7': 'Fehler und Nacharbeit', '7.1.3': 'Wartung und Infrastruktur', '7.1.5': 'Messmittel', '7.1.2': 'Personal', '7.2': 'Schulung und Kompetenz', '8.3': 'Entwicklung', '7.5.3': 'Dokumente und Daten' };
+function rolleHtml() {
+  const r = S.rolle; if (!r || !S.ma || S.audit.stufe !== 1) return ''; // Stufe 2 ordnet der Auditplan zu
+  const name = (k) => esc((KAP_NAMEN[k] || 'Kapitel ' + k) + ' (' + k + ')');
+  const eigene = r.kapitel.filter(k => L.FUER_ALLE.indexOf(k) < 0);
+  return '<div class="karte rolle-karte"><b>🎯 Ihre Themen im Audit</b> <span class="grau">– ' + esc(S.ma.name + (S.ma.funktion ? ', ' + S.ma.funktion : '')) + '</span>'
+    + '<div>' + (eigene.length ? 'Der Auditor fragt Sie zu: <b>' + eigene.map(name).join(', ') + '</b>' : 'Eigene Prozesse haben wir im Handbuch nicht gefunden.')
+    + (r.prozesse && r.prozesse.length ? ' <span class="grau">– laut ' + r.prozesse.map(p => 'Prozess „' + esc(p.name) + '“').join(', ') + '</span>' : '') + '.</div>'
+    + '<div>Das muss jeder kennen: ' + L.FUER_ALLE.map(name).join(', ') + '.</div>'
+    + '<div class="grau">Kontext, Risiken, Ziele, internes Audit und Managementbewertung beantwortet die Geschäftsführung bzw. der QMB.</div></div>';
+}
+
 /* ------------------------------------------------ Fahrplan / Fragen (P01, P04, P09, Ideen 1–4) */
 function kapitelVon(f) { const k = String(f.normkapitel || '').split('.')[0]; return KAPITEL[k] ? k : (f.art === 'zeig_mal' ? '0' : '8'); }
 ANSICHT.fahrplan = () => {
@@ -716,6 +731,7 @@ ANSICHT.fahrplan = () => {
   const lv = (S.start.level || {})[S.audit.auditor_level] || {};
   const typ = (eintrag('auditor', 'typ') || {}).daten || {};
   let html = '<div class="zeile" style="justify-content:space-between"><h2>' + (zeig ? 'Fahrplan: Finden Sie die Dokumente' : 'Fragen üben') + '</h2>' + miniRing((S.fragen.length - z.offen) / n, (S.fragen.length - z.offen) + ' von ' + S.fragen.length + ' geübt') + '</div>'
+    + rolleHtml()
     + (zeig ? '<p>So üben Sie in zwei Schritten. Sie müssen nichts auswendig lernen.</p>' + planDurchgangHtml()
       + '<h3 class="schritt">Schritt 2: Einzelne Fragen der Prüfliste üben</h3><p>Das ist die Prüfliste des Auditors. Er fragt diese Punkte ab – nicht unbedingt in dieser Reihenfolge. Üben Sie: <b>Frage lesen → Dokument öffnen → zeigen.</b></p>'
       : '<p>So fragt der Auditor in Stufe 2. Antworten Sie, wie Sie es im Audit sagen würden: <b>Was wir machen – wo es steht – ein Beispiel.</b></p>')

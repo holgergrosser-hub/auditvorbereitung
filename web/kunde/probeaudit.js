@@ -9,7 +9,7 @@ import { praxisZu, nachfrageZu, nachfragenZu } from './wissen.js';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 export function probeaudit(ctx) {
-  const { L, S, esc, main, ki, kiAn, api, speichereEintrag, eintrag, fallen, hilfe, eigeneAuszuege, oeffneHilfe, stimme } = ctx;
+  const { L, S, esc, main, ki, kiAn, api, speichereEintrag, eintrag, fallen, hilfe, eigeneAuszuege, oeffneHilfe, stimme, rolleHtml } = ctx;
   const typGemerkt = ((eintrag('auditor', 'typ') || {}).daten || {}).typ;
   const P = { verlauf: [], thema: 0, frageNr: 0, aktuell: null, nachgehakt: false, ende: false, mitKi: kiAn(), vorlesen: true, freihaendig: false,
     typ: typGemerkt && L.AUDITOR_TYPEN[typGemerkt] ? typGemerkt : 'sachlich', antworten: [] };
@@ -75,13 +75,21 @@ export function probeaudit(ctx) {
     (t.fragen || []).forEach(f => { praxisZu(f, 2).forEach(e => m.set(e.q, { q: e.q, a: e.a })); nachfragenZu(f, 1).forEach(x => m.set(x.frage, { q: 'Typische Nachfrage: ' + x.frage, a: 'Erwarteter Nachweis: ' + (x.nachweis || 'ein echtes Beispiel') })); });
     return [...m.values()].slice(0, 4);
   }
+  // Mit wem spricht der Auditor? Rolle und ihre Themen (sonst fragt die KI z. B. den Einkauf nach der Managementbewertung)
+  function partner() {
+    if (!S.ma) return null;
+    const r = S.audit.stufe === 1 ? S.rolle : null; // Stufe 2: Zuordnung kommt schon aus dem Auditplan (Planpunkte je Bereich)
+    return { name: S.ma.name, rolle: [S.ma.bereich, S.ma.funktion].filter(Boolean).join(', '), kapitel: r ? r.kapitel : null, prozesse: r && r.prozesse ? r.prozesse.map(p => p.name) : [] };
+  }
   async function kiNaechste() {
     zeichne(true);
     const t = themen[P.thema] || {};
     const eig = eigeneAuszuege ? await eigeneAuszuege(t.titel + ' ' + (t.fragen || []).slice(0, 2).map(f => f.frage).join(' '), 4) : null;
-    const k = await ki('gespraech', Object.assign({ verlauf: P.verlauf, typ: P.typ, stufe: S.audit.stufe, thema: P.thema,
+    const anfrage = Object.assign({ verlauf: P.verlauf, typ: P.typ, stufe: S.audit.stufe, thema: P.thema,
       themen: themen.map(x => ({ titel: x.titel, fragen: x.fragen.slice(0, 3).map(f => f.frage) })), fallen: fallen().map(f => f.frage).slice(0, 8),
-      praxis: praxisDesThemas(t) }, eig ? { auszuege: eig } : {}));
+      praxis: praxisDesThemas(t), gespraechspartner: partner() }, eig ? { auszuege: eig } : {});
+    let k = await ki('gespraech', anfrage);
+    if (!k || !k.text) k = await ki('gespraech', anfrage); // einmal neu versuchen (Netz, kurzer Aussetzer)
     if (!k || !k.text) { P.mitKi = false; hinweis('Die KI ist gerade nicht erreichbar – ich mache mit den Fragen aus Ihrem Fahrplan weiter.'); return lokalNaechste(); }
     if (k.thema != null) P.thema = Math.max(P.thema, Math.min(themen.length - 1, k.thema));
     if (k.ende) { P.ende = true; auditorSagt(k.text); setTimeout(auswerten, 400); return; }
@@ -133,6 +141,7 @@ export function probeaudit(ctx) {
   main.innerHTML = '<h2>Probeaudit mit dem Auditor</h2>'
     + '<p class="erkl-kurz">Der Auditor stellt seine Fragen <b>laut</b> – Sie antworten mit dem Mikrofon oder tippen. Er geht die Themen Ihres Auditplans der Reihe nach durch. '
     + 'Antworten Sie nach der Formel <b>Was wir machen – wo es steht – ein Beispiel</b>. Nur zum Üben.' + (P.mitKi ? '' : ' <span class="grau">(Ohne KI: Fragen aus Ihrem Fahrplan, der Auditor hakt nach festen Regeln nach.)</span>') + '</p>'
+    + (rolleHtml ? rolleHtml() : '')
     + '<div class="karte zeile pa-einst"><label style="margin:0">Auditor <select id="pa-typ">' + Object.entries(L.AUDITOR_TYPEN).map(([k, t]) => '<option value="' + k + '"' + (k === P.typ ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') + '</select></label>'
     + (sprichtOk ? '<label class="zeile" style="margin:0;font-weight:400"><input type="checkbox" id="pa-vorlesen" checked> Fragen vorlesen</label>' : '')
     + (stimme.serverMoeglich() ? '<label class="zeile" style="margin:0;font-weight:400" title="Natürliche KI-Stimme von Google. Es wird nur der Text des Auditors übertragen, nichts gespeichert."><input type="checkbox" id="pa-natur"' + (stimme.natuerlich ? ' checked' : '') + '> Natürliche Stimme</label>'

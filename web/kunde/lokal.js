@@ -45,8 +45,10 @@ export function lokaleApi(L, paket, opt) {
     if (aktion === 'auszuege') return { auszuege: paket.auszuege || [] };
     if (aktion === 'fragen') {
       const pp = (paket.punkteJe || {})[d.audit_id] || [];
-      const fr = L.fragenFuerBereich((paket.fragenJe || {})[d.audit_id] || [], pp, d.bereich || 'alle', d.mitarbeiter_id || '');
-      return kopie({ fragen: fr.map(f => Object.assign({}, f, { dokumente: L.dokumenteFuerFrage(f, paket.dokumente || []).map(x => ({ id: x.id, d_nr: x.d_nr, titel: x.titel, stand: x.stand, wichtigkeit: x.wichtigkeit })) })),
+      const ma = (paket.mitarbeiter || []).find(m => m.id === d.mitarbeiter_id);
+      const rolle = ma ? L.rolleThemen(ma, (paket.auszuege || []).filter(a => /Normbezug/i.test(a.text || ''))) : null;
+      const fr = L.fragenFuerBereich((paket.fragenJe || {})[d.audit_id] || [], pp, d.bereich || 'alle', d.mitarbeiter_id || '', rolle);
+      return kopie({ rolle, fragen: fr.map(f => Object.assign({}, f, { dokumente: L.dokumenteFuerFrage(f, paket.dokumente || []).map(x => ({ id: x.id, d_nr: x.d_nr, titel: x.titel, stand: x.stand, wichtigkeit: x.wichtigkeit })) })),
         planpunkte: pp, antworten: st.antworten.filter(a => a.mitarbeiter_id === (d.mitarbeiter_id || null) || (!d.mitarbeiter_id && !a.mitarbeiter_id)) });
     }
     if (aktion === 'antwort') {

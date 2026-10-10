@@ -158,11 +158,52 @@ function fragenAusKi(json, punkte, dokumente) {
 }
 
 /** Fragen fuer einen Mitarbeiter: die seines Bereichs plus Punkte, denen er zugeordnet ist; "alle" = alles */
-function fragenFuerBereich(fragen, planpunkte, bereich, mitarbeiterId) {
+function fragenFuerBereich(fragen, planpunkte, bereich, mitarbeiterId, rolle) {
   if (!bereich || norm(bereich) === 'alle') return fragen.slice();
   const meine = new Set(planpunkte.filter(p => (p.mitarbeiter_ids || []).indexOf(mitarbeiterId) >= 0).map(p => p.id));
-  // Fahrplan-Punkte ohne Planpunkt und ohne Bereich (Stufe 1, Pruefliste) gehoeren allen
-  return fragen.filter(f => meine.has(f.planpunkt_id) || (f.bereich && bereichPasst(f.bereich, bereich)) || (!f.planpunkt_id && !f.bereich));
+  // Fahrplan-Punkte ohne Planpunkt und ohne Bereich (Stufe 1, Pruefliste): nur die Themen der Rolle (rolleThemen),
+  // ohne bekannte Rolle (oder GF/QM) alle. Fragen ohne Normkapitel (Ueberblick) gehoeren allen.
+  const passtZurRolle = (f) => !rolle || !rolle.kapitel || !f.normkapitel || kapitelPasst(f.normkapitel, rolle.kapitel.join(','));
+  return fragen.filter(f => meine.has(f.planpunkt_id) || (f.bereich && bereichPasst(f.bereich, bereich)) || (!f.planpunkt_id && !f.bereich && passtZurRolle(f)));
+}
+
+/* ---------------------------------------------------------------- Rollen: wer wird wozu befragt (E-A40) */
+// Typische Themen je Bereichsgruppe (Index wie BEREICH_GRUPPEN). GF und QM werden zu allem befragt.
+const ROLLEN_KAPITEL = { 2: ['8.4'], 3: ['8.2', '9.1.2'], 4: ['8.5', '8.6', '8.7', '7.1.3', '7.1.5'], 5: ['8.4.2', '8.5.4'], 6: ['7.1.2', '7.2', '7.3'],
+  7: ['8.3', '8.5.1'], 8: ['7.1.3', '7.5.3'], 9: ['7.1.3', '7.1.5'] };
+// Das muss jeder im Betrieb kennen: Qualitaetspolitik, Bewusstsein (Ziele, eigener Beitrag), interne Kommunikation
+const FUER_ALLE = ['5.2', '7.3', '7.4'];
+const ROLLE_FUELL = new Set(['und', 'team', 'der', 'die', 'das', 'fur', 'mit', 'sowie']);
+/**
+ * Themen (Normkapitel), zu denen ein Mitarbeiter befragt werden kann – aus seiner Rolle und aus Handbuch/Prozessen:
+ * Prozessbeschreibungen (Auszuege mit „Normbezug … Kapitel x“), in denen die Rolle im Prozessnamen steht, als
+ * Verantwortlicher genannt ist oder mindestens zwei Schritte macht. Liefert null = alle Fragen (GF, QM, unbekannte Rolle).
+ * Ausgang: {kapitel:[…], prozesse:[{name, kapitel, dokument_id, ort}]}
+ */
+function rolleThemen(ma, auszuege) {
+  if (!ma) return null;
+  const roh = [ma.bereich, ma.funktion].filter(Boolean).join(' ');
+  const n = norm(roh); if (!n || /^alle\b/.test(n)) return null;
+  const gruppen = new Set([bereichGruppe(roh)].concat(n.split(' ').map(bereichGruppe)).filter(g => g >= 0));
+  if (gruppen.has(0) || gruppen.has(1)) return null;
+  const kap = new Set(FUER_ALLE), prozesse = [];
+  gruppen.forEach(g => (ROLLEN_KAPITEL[g] || []).forEach(k => kap.add(k)));
+  const woerter = [...new Set(n.split(' ').filter(w => w.length >= 4 && !ROLLE_FUELL.has(w)))];
+  const enthaelt = (t) => woerter.some(w => (' ' + norm(t) + ' ').includes(' ' + w + ' '));
+  const zaehle = (t) => woerter.reduce((s, w) => s + (((' ' + norm(t) + ' ').match(new RegExp(' ' + w + ' ', 'g')) || []).length), 0);
+  // Eine Seite kann mehrere Prozessbeschreibungen enthalten: je „Prozess-Nr.“ getrennt pruefen
+  (auszuege || []).flatMap(a => String(a.text || '').split(/(?=Prozess-Nr\.)/).map(t => ({ t, a }))).forEach(({ t, a }) => {
+    const ks = [...t.matchAll(/Normbezug[^\n]*?Kapitel\s+((?:\d+(?:\.\d+)*(?:\s*(?:,|und)\s*)?)+)/gi)].flatMap(m => kapitelListe(m[1].replace(/und/g, ',')));
+    if (!ks.length) return;
+    const name = (t.match(/Prozessname\s*\n\s*([^\n]+)/) || [])[1] || '';
+    const verantw = (t.match(/Verantwortlich\s*\n\s*([^\n]+)/) || [])[1] || '';
+    if (enthaelt(name) || enthaelt(verantw) || zaehle(t) >= 2) {
+      ks.forEach(k => kap.add(k));
+      prozesse.push({ name: name.trim() || ('Kapitel ' + ks.join(', ')), kapitel: ks, dokument_id: a.dokument_id, ort: a.ort || '' });
+    }
+  });
+  if (!gruppen.size && !prozesse.length) return null; // Rolle unbekannt: lieber alle Fragen
+  return { kapitel: [...kap], prozesse: prozesse.slice(0, 8) };
 }
 
 /* ================================================================ Stufe 1: Fahrplan aus der Pruefliste (Praxis P01–P16) */
@@ -853,14 +894,14 @@ function uebungsreihe(fragen, fallen, typ, laenge) {
 }
 
 const Logik = { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
-  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
+  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich, rolleThemen, FUER_ALLE, ROLLEN_KAPITEL,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
   prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, prozessSchritte, musterErklaerung, kapitelImBereich, orteJeDokument, auditplanBloecke, STUFEN, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
   dokumenteErgaenzen, stamm, woerter, auszuegeSuchen, auszuegeZurFundstelle, seitenKorrigieren, fotoPruefen, antwortFeedback, pruefungsreife, tageslektion, AUDIT_DEUTSCH, ROLLENTAUSCH, SPUR_STATIONEN, spurPruefen, RUNDGANG_STANDARD, rundgangStatus, AUDITOR_TYPEN, uebungsreihe };
 export default Logik;
 export { norm, bereichGruppe, bereichPasst, mitarbeiterZuordnen, kapitelListe, kapitelPasst, dokumenteFuerFrage, fragenOhneKi,
-  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich,
+  KI_PLAN, kiAnweisungPlan, KI_FRAGEN, AUDITOR_LEVEL, kiAnweisungFragen, kiJson, fragenAusKi, fragenFuerBereich, rolleThemen, FUER_ALLE, ROLLEN_KAPITEL,
   fahrplanAusPrueflisten, reiterName, klarnamen, dokumenteAusFundstelle, zeigMalFragen, ampel, ZEIG_MAL_SEKUNDEN, zeigMalErgebnis, ampelMatrix,
   tageBis, imRuhemodus, FAKTEN_STANDARD, PLATZHALTER, widerspruchsCheck, ABLAUF,
   prozesseAusAuszuegen, nachplappern, azubiNachfragen, erklaerungAuswerten, prozessSchritte, musterErklaerung, kapitelImBereich, orteJeDokument, auditplanBloecke, STUFEN, URSACHEN, ursacheVorschlag, fehlerbuch, fundstellenHotspots,
