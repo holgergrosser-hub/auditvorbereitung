@@ -4,6 +4,7 @@
  * wie im iso9001-portal (WISSEN.faq). Keine Firmen-, Personen- oder Produktnamen – das Repo ist öffentlich.
  * Nutzt: Fahrplan („Wo steht das?“, „Mein Beispiel“), Probeaudit („Was meint der Auditor?“, Nachhaken, KI-Auditor).
  */
+import { NACHFRAGEN } from './nachfragen.js';
 export const PRAXIS = [ { "kap": "4.3", "q": "Was gehört in den Geltungsbereich?", "a": "Ein Satz: was Sie tun, für wen, mit welchen Leistungen. Alle Tätigkeiten, mit denen Sie Geld verdienen, gehören hinein. Entwicklung (8.3) darf nur ausgeschlossen werden, wenn Sie ausschließlich nach Vorgabe des Kunden arbeiten.", "tags": "scope anwendungsbereich geltungsbereich eingrenzen ausschluss" },
   { "kap": "4.1", "q": "Müssen wir die Prozesse erst optimieren, bevor wir zertifizieren?", "a": "Nein. Für die Zertifizierung beschreiben Sie Ihre Abläufe so, wie sie heute funktionieren. Verbesserung läuft danach Schritt für Schritt – das ist ein eigenes Projekt.", "tags": "chaos optimieren verbessern vorher prozesse" },
   { "kap": "4.2", "q": "Welche Zulassungen müssen wir angeben?", "a": "Nur behördliche Genehmigungen, die Sie für Ihre Tätigkeit brauchen und die heute gültig sind (z. B. Erlaubnis zur Arbeitnehmerüberlassung, Sachkunde § 34a, Handwerksrolle). ISO 9001 selbst ist keine Zulassung. Wenn Sie keine brauchen: „keine“.", "tags": "zulassung genehmigung erlaubnis" },
@@ -82,7 +83,16 @@ export function themaZu(f) {
   return best || STANDARD;
 }
 export const beispielZu = (f) => themaZu(f).beispiel;
-export const nachfrageZu = (f) => themaZu(f).nachfrage;
+
+/** Echte Nachfragen von Auditoren (aus der Wissensbasis, anonymisiert) zum Thema der Frage */
+export function nachfragenZu(f, max = 2, liste = NACHFRAGEN) {
+  const t = themaZu(f); if (!t.rx || !liste.length) return [];
+  const passend = liste.filter(n => t.rx.test(n.frage));
+  const start = [...String((f && (f.id || f.frage)) || '')].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % (passend.length || 1); // je Frage fest, aber verschieden
+  return passend.slice(start).concat(passend.slice(0, start)).slice(0, max).map(n => n.frage);
+}
+/** Nachhaken ohne KI: echte Nachfrage aus der Praxis, sonst die typische des Themas */
+export const nachfrageZu = (f) => nachfragenZu(f, 1)[0] || themaZu(f).nachfrage;
 
 /** Passende Einträge aus Holgers Beratungspraxis (höchstens max). */
 export function praxisZu(f, max = 2) {
@@ -97,8 +107,11 @@ export function praxisZu(f, max = 2) {
 
 /** HTML-Kasten „Aus Holgers Beratungspraxis“ (esc = Escape-Funktion der Seite) */
 export function praxisHtml(f, esc, max = 2) {
-  const p = praxisZu(f, max);
-  if (!p.length) return '';
-  return '<div class="praxis"><div class="praxis-kopf">💬 Aus der Beratungspraxis – das fragen andere Betriebe dazu</div>'
-    + p.map(e => '<details><summary>' + esc(e.q) + ' <span class="np">' + esc(e.kap) + '</span></summary><div>' + esc(e.a) + '</div></details>').join('') + '</div>';
+  const p = praxisZu(f, max), n = nachfragenZu(f, 2);
+  if (!p.length && !n.length) return '';
+  return '<div class="praxis">'
+    + (p.length ? '<div class="praxis-kopf">💬 Aus der Beratungspraxis – das fragen andere Betriebe dazu</div>'
+      + p.map(e => '<details><summary>' + esc(e.q) + ' <span class="np">' + esc(e.kap) + '</span></summary><div>' + esc(e.a) + '</div></details>').join('') : '')
+    + (n.length ? '<div class="praxis-kopf" style="margin-top:6px">🎯 So haken Auditoren in der Praxis nach</div><ul class="praxis-nach">' + n.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '')
+    + '</div>';
 }

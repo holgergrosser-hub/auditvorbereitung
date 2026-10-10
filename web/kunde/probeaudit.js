@@ -5,7 +5,7 @@
  * - Ohne KI (kein Schlüssel, Kontingent aufgebraucht, Testfassung): Fragen aus dem Fahrplan, Nachhaken nach festen Regeln.
  * Nur zum Üben – im echten Audit gibt es keine verdeckte Hilfe.
  */
-import { praxisZu, nachfrageZu } from './wissen.js';
+import { praxisZu, nachfrageZu, nachfragenZu } from './wissen.js';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 export function probeaudit(ctx) {
@@ -70,7 +70,11 @@ export function probeaudit(ctx) {
   }
   function abschluss() { P.ende = true; auditorSagt('Vielen Dank, damit bin ich durch. Ich fasse gleich zusammen, was mir aufgefallen ist.'); setTimeout(auswerten, 400); }
   // Holgers Beratungspraxis zu den Fragen des Themas (anonymisiert, wissen.js) – der KI-Auditor hakt damit realistischer nach
-  function praxisDesThemas(t) { const m = new Map(); (t.fragen || []).forEach(f => praxisZu(f, 2).forEach(e => m.set(e.q, { q: e.q, a: e.a }))); return [...m.values()].slice(0, 4); }
+  function praxisDesThemas(t) {
+    const m = new Map();
+    (t.fragen || []).forEach(f => { praxisZu(f, 2).forEach(e => m.set(e.q, { q: e.q, a: e.a })); nachfragenZu(f, 1).forEach(x => m.set(x, { q: x, a: 'So hakt ein Auditor in der Praxis nach.' })); });
+    return [...m.values()].slice(0, 4);
+  }
   async function kiNaechste() {
     zeichne(true);
     const t = themen[P.thema] || {};
