@@ -109,6 +109,9 @@ Deno.serve(async (req) => {
       const typ = (L.AUDITOR_TYPEN as any)[d.typ] || L.AUDITOR_TYPEN.sachlich;
       const verlauf = (Array.isArray(d.verlauf) ? d.verlauf : []).slice(-16).map((m: any) => ({ role: m.rolle === 'kunde' ? 'user' : 'assistant', content: kurz(m.text, 1500) }));
       if (!verlauf.length || verlauf[0].role !== 'user') verlauf.unshift({ role: 'user', content: 'Guten Tag, wir sind bereit.' });
+      // Die API verlangt abwechselnde Rollen und am Ende den Kunden: gleiche Rollen zusammenfassen, sonst „Bitte weiter.“ anhängen
+      for (let i = verlauf.length - 1; i > 0; i--) if (verlauf[i].role === verlauf[i - 1].role) { verlauf[i - 1].content += '\n' + verlauf[i].content; verlauf.splice(i, 1); }
+      if (verlauf[verlauf.length - 1].role !== 'user') verlauf.push({ role: 'user', content: 'Bitte stellen Sie Ihre nächste Frage.' });
       // Themen: [{titel, fragen:[…]}] (neu) oder Liste von Texten (alt)
       const themen = (Array.isArray(d.themen) ? d.themen : []).slice(0, 20).map((t: any, i: number) => typeof t === 'string' ? (i + 1) + '. ' + kurz(t, 120)
         : (i + 1) + '. ' + kurz(t.titel, 120) + (Array.isArray(t.fragen) && t.fragen.length ? ' – typische Fragen: ' + t.fragen.slice(0, 3).map((f: any) => kurz(f, 200)).join(' | ') : ''));
