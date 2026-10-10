@@ -119,6 +119,20 @@
      "norm": "ISO 9001"
     },
     {
+     "normpunkt": "7.3",
+     "titel": "Bewusstsein",
+     "frage": "Kennen die Mitarbeiter die Qualitätspolitik, die Qualitätsziele und ihren eigenen Beitrag?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 8; QM-Übersicht, Reiter „Ziele & Kennzahlen“",
+     "norm": "ISO 9001"
+    },
+    {
+     "normpunkt": "7.4",
+     "titel": "Kommunikation",
+     "frage": "Ist festgelegt, wie intern kommuniziert wird – was, wann und mit wem?",
+     "bemerkung": "Unternehmens- und Prozesshandbuch (UPH) Seite 8, Seite 17",
+     "norm": "ISO 9001"
+    },
+    {
      "normpunkt": "7.1.5",
      "titel": "Prüfmittel",
      "frage": "Werden Messmittel überwacht und kalibriert?",

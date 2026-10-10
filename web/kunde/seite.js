@@ -727,10 +727,12 @@ function rolleHtml() {
 /* Welche Dokumente soll sich diese Person vorher ansehen? Ihre Prozessbeschreibungen und die Fundstellen ihrer Fragen,
    je mit Knopf direkt auf die Seite (ohne das kann man im Probeaudit nicht antworten) */
 function rolleDokumente(r) {
-  const liste = [], schon = new Set();
-  const dazu = (thema, dokId, ort, was) => {
+  const liste = [], schon = {};
+  const dazu = (thema, dokId, ort, was) => { // gleiche Stelle für mehrere Themen: ein Eintrag, Themen zusammengefasst
     const o = String(ort || '').replace(/^S\. /, 'Seite '), k = dokId + '|' + o;
-    if (!dokId || schon.has(k) || !S.start.dokumente.some(d => d.id === dokId)) return; schon.add(k); liste.push({ thema, dokId, ort: o, was });
+    if (!dokId || !S.start.dokumente.some(d => d.id === dokId)) return;
+    if (schon[k]) { if (schon[k].thema.indexOf(thema) < 0) schon[k].thema += ', ' + thema; return; }
+    schon[k] = { thema, dokId, ort: o, was }; liste.push(schon[k]);
   };
   (r.prozesse || []).forEach(p => dazu((p.kapitel || []).map(k => KAP_NAMEN[k]).filter(Boolean)[0] || p.name, p.dokument_id, p.ort, 'Prozess „' + p.name + '“'));
   S.fragen.filter(f => f.normkapitel).forEach(f => {

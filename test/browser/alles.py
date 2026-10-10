@@ -179,7 +179,7 @@ async def main():
             doks = await d.eval_on_selector_all('.rolle-doks li', 'x => x.map(e => e.innerText.replace(/\\s+/g, " "))'); knoepfe = await d.locator('.rolle-doks [data-d]').count()
             await shot(d, '42_rolle_einkauf'); await d.close()
             assert 'Einkauf' in rk and 'Qualitätspolitik' in rk and not any(k.startswith(('4.', '6.', '9.')) for k in kap), (rk, kap)
-            assert len(doks) >= 2 and knoepfe == len(doks) and any('Einkauf' in x for x in doks), doks
+            assert len(doks) >= 4 and knoepfe == len(doks) and any('Einkauf' in x for x in doks) and any('Kommunikation' in x and 'Seite 8' in x for x in doks) and any('Ziele' in x for x in doks), doks
             return 'Themen: ' + rk.split('\n')[1][:70] + ' · Fragen: ' + ', '.join(kap) + ' · Dokumente: ' + ' | '.join(x[:60] for x in doks)
         await pruefe('R1 Rolle Büro und Einkauf: nur ihre Prozesse und die Politik', k_rolle)
         async def k_lektion():
