@@ -68,6 +68,7 @@ http.createServer(async (req, res) => {
       return json(res, 200, { access_token: jwt({ role: 'authenticated', email: mail, sub: id, aud: 'authenticated' }), token_type: 'bearer', expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: 'r', user });
     }
     if (u.pathname === '/auth/v1/user') { const c = lies((req.headers.authorization || '').replace(/^Bearer /, '')); return c && c.email ? json(res, 200, { id: c.sub, email: c.email, aud: 'authenticated', role: 'authenticated' }) : json(res, 401, { message: 'kein Nutzer' }); }
+    if (u.pathname === '/auth/v1/recover') return json(res, 200, {});
     if (u.pathname === '/auth/v1/logout') { res.writeHead(204, CORS); return res.end(); }
     if (u.pathname.startsWith('/storage/v1/object/sign/')) {
       const rest = decodeURIComponent(u.pathname.slice('/storage/v1/object/sign/'.length));

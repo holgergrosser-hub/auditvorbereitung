@@ -23,9 +23,14 @@ const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.anonKey);
 const S = { kunde: null, reiter: 'ueberblick' };
 
 /* ------------------------------------------------ Anmelden */
+// Passwort vergessen (E-A43): Supabase schickt die Mail nur an die eigene Adresse; der Link fuehrt mit ?neues-passwort=1 hierher zurueck
+const NEU_PW = new URLSearchParams(location.search).has('neues-passwort') || /type=recovery/.test(location.hash);
+let pwOffen = false;
+sb.auth.onAuthStateChange((ereignis) => { if (ereignis === 'PASSWORD_RECOVERY' && !pwOffen) neuesPasswort(); });
 async function start() {
   const { data } = await sb.auth.getSession();
-  if (!data.session) return anmelden();
+  if (!data.session) return anmelden(NEU_PW ? 'Der Link ist abgelaufen oder wurde schon benutzt. Bitte „Passwort vergessen?“ noch einmal anklicken.' : '');
+  if (NEU_PW && !pwOffen) return neuesPasswort();
   const ich = await sb.from('backoffice_nutzer').select('email, name, aktiv').maybeSingle();
   $('#kopf-rechts').innerHTML = '<span>' + esc(data.session.user.email) + '</span><button class="knopf klein" id="abmelden" style="background:transparent;border:1px solid #fff;color:#fff">Abmelden</button>';
   $('#abmelden').onclick = async () => { await sb.auth.signOut(); location.reload(); };
@@ -39,12 +44,49 @@ function anmelden(meldung) {
   $('#kopf-rechts').innerHTML = '';
   $('#main').innerHTML = '<div class="karte anmelden"><h2>Anmelden</h2>' + (meldung ? '<div class="fehler">' + esc(meldung) + '</div>' : '')
     + '<form id="login"><label for="mail">E-Mail</label><input id="mail" type="email" autocomplete="username" required><label for="pw">Passwort</label><input id="pw" type="password" autocomplete="current-password" required>'
-    + '<p><button class="knopf" type="submit">Anmelden</button></p></form><p class="grau">Zugang anlegen: Supabase → Authentication → Users → Add user.</p></div>';
+    + '<p><button class="knopf" type="submit">Anmelden</button> <button class="knopf zweit" type="button" id="vergessen">Passwort vergessen?</button></p></form><p class="grau">Zugang anlegen: Supabase → Authentication → Users → Add user.</p></div>';
+  $('#vergessen').onclick = vergessen;
   $('#login').onsubmit = async (e) => {
     e.preventDefault();
     const { error } = await sb.auth.signInWithPassword({ email: $('#mail').value.trim(), password: $('#pw').value });
     if (error) return anmelden('Anmeldung fehlgeschlagen: ' + error.message);
     start();
+  };
+}
+
+function vergessen() {
+  const mail = ($('#mail') && $('#mail').value.trim()) || '';
+  $('#main').innerHTML = '<div class="karte anmelden"><h2>Passwort vergessen</h2><p>Sie bekommen eine Mail mit einem Link. Darüber legen Sie hier selbst ein neues Passwort fest.</p>'
+    + '<form id="vergessen-form"><label for="mail2">E-Mail</label><input id="mail2" type="email" autocomplete="username" required value="' + esc(mail) + '">'
+    + '<p><button class="knopf" type="submit">Link schicken</button> <button class="knopf zweit" type="button" id="zurueck">Zurück</button></p></form></div>';
+  $('#zurueck').onclick = () => anmelden();
+  $('#vergessen-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await sb.auth.resetPasswordForEmail($('#mail2').value.trim(), { redirectTo: location.origin + location.pathname + '?neues-passwort=1' });
+    $('#main').innerHTML = '<div class="karte anmelden"><h2>Passwort vergessen</h2>' + (error ? '<div class="fehler">Das hat nicht geklappt: ' + esc(error.message) + '</div>'
+      : '<p class="ok-text" id="link-geschickt">Wenn die Adresse als Backoffice-Zugang angelegt ist, kommt in wenigen Minuten eine Mail. Bitte auch im Spam-Ordner nachsehen. Der Link gilt nur kurz.</p>')
+      + '<p><button class="knopf zweit" id="zurueck">Zur Anmeldung</button></p></div>';
+    $('#zurueck').onclick = () => anmelden();
+  };
+}
+function neuesPasswort(meldung) {
+  pwOffen = true;
+  $('#kopf-rechts').innerHTML = '';
+  $('#main').innerHTML = '<div class="karte anmelden"><h2>Neues Passwort festlegen</h2>' + (meldung ? '<div class="fehler">' + esc(meldung) + '</div>' : '')
+    + '<p class="grau">Mindestens 12 Zeichen. Am besten im Passwortmanager speichern.</p>'
+    + '<form id="pw-form"><label for="pw1">Neues Passwort</label><input id="pw1" type="password" autocomplete="new-password" minlength="12" required>'
+    + '<label for="pw2">Noch einmal</label><input id="pw2" type="password" autocomplete="new-password" minlength="12" required>'
+    + '<p><button class="knopf" type="submit">Speichern</button></p></form></div>';
+  $('#pw-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const a = $('#pw1').value, b = $('#pw2').value;
+    if (a.length < 12) return neuesPasswort('Bitte mindestens 12 Zeichen.');
+    if (a !== b) return neuesPasswort('Die beiden Eingaben sind verschieden.');
+    const { error } = await sb.auth.updateUser({ password: a });
+    if (error) return neuesPasswort('Speichern hat nicht geklappt: ' + error.message);
+    history.replaceState(null, '', location.pathname);
+    $('#main').innerHTML = '<div class="karte anmelden"><h2>Neues Passwort gespeichert</h2><p id="pw-gespeichert">Sie sind angemeldet. Weiter zur Übersicht …</p></div>';
+    setTimeout(() => { pwOffen = false; location.reload(); }, 1500);
   };
 }
 

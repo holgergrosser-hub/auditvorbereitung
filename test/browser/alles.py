@@ -58,6 +58,18 @@ async def main():
             await bo.goto(B + '/backoffice/'); await bo.fill('#mail', 'test@example.com'); await bo.fill('#pw', 'x'); await bo.click('button[type=submit]')
             await bo.wait_for_selector('#neu', timeout=15000); return 'Übersicht geladen'
         await pruefe('B1 Backoffice: anmelden', b_login)
+        async def b_passwort():  # E-A43: Passwort vergessen -> Link -> neues Passwort festlegen
+            await bo.goto(B + '/backoffice/'); await bo.click('#abmelden'); await bo.wait_for_selector('#vergessen', timeout=10000)
+            await bo.fill('#mail', 'test@example.com'); await bo.click('#vergessen'); await bo.click('#vergessen-form button[type=submit]')
+            await bo.wait_for_selector('#link-geschickt', timeout=10000)
+            await bo.click('#zurueck'); await bo.fill('#mail', 'test@example.com'); await bo.fill('#pw', 'x'); await bo.click('button[type=submit]'); await bo.wait_for_selector('#neu', timeout=15000)
+            await bo.goto(B + '/backoffice/?neues-passwort=1'); await bo.wait_for_selector('#pw-form', timeout=10000)
+            await bo.fill('#pw1', 'kurz'); await bo.fill('#pw2', 'kurz'); await bo.click('#pw-form button[type=submit]'); await bo.wait_for_selector('text=mindestens 12 Zeichen')
+            await bo.fill('#pw1', 'ein-langes-Testpasswort'); await bo.fill('#pw2', 'ein-langes-Testpasswort'); await bo.click('#pw-form button[type=submit]')
+            await bo.wait_for_selector('#pw-gespeichert', timeout=10000); await shot(bo, '03_bo_neues_passwort')
+            await bo.wait_for_selector('#neu', timeout=15000); assert 'neues-passwort' not in bo.url, bo.url
+            return 'Link angefordert, kurzes Passwort abgelehnt, neues gespeichert, Übersicht'
+        await pruefe('B1b Backoffice: Passwort vergessen', b_passwort)
         async def b_import():
             await bo.click('#neu'); await bo.set_input_files('#zip', ZIP); await bo.wait_for_selector('#los', timeout=20000)
             v = await bo.locator('#vorschau p').first.text_content()
