@@ -5,10 +5,20 @@
  */
 export function lokaleApi(L, paket, opt) {
   opt = opt || {};
-  const schluessel = 'av_paket_' + (opt.schluessel || (paket.kunde.name + '_' + paket.erstellt)).replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 80);
+  // Schluessel nur aus dem Firmennamen: ein neu gebautes Paket (neues Datum) darf den Fortschritt nicht verlieren
+  const sauber = (t) => String(t).replace(/[^A-Za-z0-9_-]+/g, '_');
+  const schluessel = 'av_paket_' + sauber(opt.schluessel || paket.kunde.name).slice(0, 80);
   const leer = () => ({ technik: {}, fakten: {}, antworten: [], nachweise: [], eintraege: [] });
   let st = leer();
-  if (!opt.fluechtig) { try { const r = localStorage.getItem(schluessel); if (r) st = Object.assign(leer(), JSON.parse(r)); } catch (e) { /* ohne Speicher */ } }
+  if (!opt.fluechtig) { try {
+    let r = localStorage.getItem(schluessel);
+    if (!r && !opt.schluessel) { // Stand aus einer aelteren Fassung (Schluessel mit Paketdatum) uebernehmen – den umfangreichsten
+      const alt = Object.keys(localStorage).filter(k => k.indexOf(sauber('av_paket_' + paket.kunde.name + '_').slice(0, 60)) === 0 || k.indexOf(('av_paket_' + sauber(paket.kunde.name + '_')).slice(0, 60)) === 0);
+      alt.forEach(k => { const v = localStorage.getItem(k) || ''; if (v.length > (r || '').length) r = v; });
+      if (r) localStorage.setItem(schluessel, r);
+    }
+    if (r) st = Object.assign(leer(), JSON.parse(r));
+  } catch (e) { /* ohne Speicher */ } }
   let speicherWarnung = false;
   function sichern() {
     if (opt.fluechtig) return;

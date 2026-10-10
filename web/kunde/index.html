@@ -26,14 +26,14 @@ header .info{opacity:.9;font-size:.95rem}
 .wahl{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px;background:var(--hell);border-bottom:1px solid var(--rand)}
 select,button,textarea,input{font:inherit}
 select,input{padding:7px 9px;border:1px solid var(--rand);border-radius:8px;background:#fff;max-width:100%}
-nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid var(--rand);position:sticky;top:0;z-index:5}
-nav button{border:0;background:none;padding:8px 12px;border-radius:8px;color:var(--grau);font-weight:600;white-space:nowrap;cursor:pointer}
-nav button{display:inline-flex;align-items:center;gap:6px}
-nav .punkt{width:8px;height:8px;border-radius:50%;background:var(--f);flex:none}
-nav button.an{background:var(--f);color:#fff}nav button.an .punkt{background:#fff}
+#nav{display:flex;gap:4px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid var(--rand);position:sticky;top:0;z-index:5}
+#nav button{border:0;background:none;padding:8px 12px;border-radius:8px;color:var(--grau);font-weight:600;white-space:nowrap;cursor:pointer}
+#nav button{display:inline-flex;align-items:center;gap:6px}
+#nav .punkt{width:8px;height:8px;border-radius:50%;background:var(--f);flex:none}
+#nav button.an{background:var(--f);color:#fff}#nav button.an .punkt{background:#fff}
 #brot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:920px;margin:0 auto;padding:12px 16px 0;font-size:.92rem}
 .brot-gruppe{background:var(--f-hell);color:var(--f);font-weight:700;border-radius:99px;padding:1px 10px}
-nav .ok{color:var(--gruen)}nav button.an .ok{color:#B7F0C4}nav .zahl{font-weight:400;opacity:.8}
+#nav .ok{color:var(--gruen)}#nav button.an .ok{color:#B7F0C4}#nav .zahl{font-weight:400;opacity:.8}
 main{max-width:920px;margin:0 auto;padding:16px}
 h2{color:var(--f);margin:6px 0 10px;font-size:1.3rem}
 h3{margin:18px 0 8px;font-size:1.05rem;color:var(--f)}
@@ -149,6 +149,52 @@ table.spick a{color:var(--blau2)}@media print{table.spick a{color:inherit;text-d
 .nur-druck{display:none}
 @media (max-width:640px){.teil{grid-template-columns:110px 1fr 40px}header .firma{font-size:1.2rem}}
 @media print{header,nav,.wahl,.kein-druck,#trainer,.ruhe{display:none!important}.spick-box{background:#f2f2f2}body{background:#fff;font-size:10pt}main{padding:0;max-width:none}.karte{border:0;padding:0;margin:4px 0}.nur-druck{display:block}h2{font-size:13pt}h3{font-size:10.5pt;margin:7px 0 3px}.spick-dok{font-size:9pt}}
+
+/* Tawuniya-Lehren (E-A26): eine kräftige Hauptkarte, sonst ruhig; Etiketten statt farbiger Flächen; Schnellzugriffe; untere Leiste am Handy */
+.hero2{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;margin:4px 0 10px}
+.haupt-karte{background:var(--f);color:#fff;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 22px rgba(15,40,60,.16)}
+.haupt-karte .eyebrow{color:rgba(255,255,255,.82)}
+.hk-termin{display:flex;flex-direction:column;gap:2px}.hk-tage{font-size:2rem;font-weight:700;line-height:1.1}.hk-datum{opacity:.9}
+.hk-weiter{position:relative;display:flex;flex-direction:column;gap:2px;text-align:left;font:inherit;background:#fff;color:var(--text);border:0;border-radius:14px;padding:12px 44px 12px 14px;cursor:pointer}
+.hk-weiter .eyebrow{color:var(--f)}.hk-weiter b{font-size:1.1rem}.hk-weiter.fertig{cursor:default}
+.hk-pfeil{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--f);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.hk-weiter:hover{box-shadow:0 0 0 3px rgba(255,255,255,.5)}.hk-weiter:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.hk-danach{font-size:.88rem;opacity:.9}
+.schnell{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;background:#fff;border:1px solid var(--rand);border-radius:18px;padding:12px 8px;margin:0 0 6px}
+.schnell button{min-width:0;overflow-wrap:anywhere;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;font:inherit;font-size:.86rem;color:var(--text);cursor:pointer;padding:4px;border-radius:12px;text-align:center}
+.schnell .rund{width:50px;height:50px;border-radius:50%;background:#F1F4F7;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
+.schnell button:hover .rund{background:#E4EAF0}.schnell button:focus-visible{outline:3px solid var(--blau2)}
+.gruppe-titel{display:inline-flex;align-items:center;gap:6px;background:var(--f-hell);color:var(--f);border-radius:99px;padding:3px 12px 3px 4px;font-size:.92rem}
+.gruppe-titel .gruppe-nr{width:22px;height:22px;font-size:.78rem}
+.kachel{border-top:1px solid var(--rand)}.kachel:hover{border-color:var(--f)}
+.abschnitt{display:block;background:#fff;border:1px solid var(--rand);border-radius:18px;padding:14px 16px;margin:12px 0}
+.etikett{display:inline-flex;align-items:center;gap:4px;background:var(--f-hell);color:var(--f);font-weight:700;font-size:.82rem;border-radius:99px;padding:3px 11px}
+.abschnitt .satz,.abschnitt h3.satz{font-size:1.05rem;font-weight:600;color:var(--text);margin:8px 0 4px}
+details.abschnitt summary{list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer}details.abschnitt summary::-webkit-details-marker{display:none}
+details.abschnitt summary .satz{margin:0}.chevron{margin-left:auto;color:var(--grau);transition:transform .15s}details[open] .chevron{transform:rotate(180deg)}
+.mini-ring{display:inline-flex;align-items:center;gap:6px;font-size:.88rem;color:var(--grau);font-weight:600}.mini-ring svg{width:22px;height:22px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.chip-knopf{border:1px solid var(--rand);background:#fff;border-radius:99px;padding:5px 12px;font:inherit;font-size:.9rem;cursor:pointer;color:var(--text)}
+.chip-knopf.an{background:var(--f);border-color:var(--f);color:#fff}.chip-knopf .anz{opacity:.75;font-variant-numeric:tabular-nums}
+.wo-finde summary{color:var(--blau2)}.wo-finde p{margin:4px 0;font-size:.9rem}
+.unten{display:none}
+.mehr-blatt{position:fixed;inset:0;background:rgba(15,30,45,.45);z-index:30;display:flex;align-items:flex-end}
+.mehr-blatt[hidden]{display:none!important}
+.blatt-innen{background:#fff;width:100%;border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;max-height:80vh;overflow:auto}
+.blatt-ziel{display:flex;align-items:center;gap:10px;text-align:left;font:inherit;font-weight:600;background:#F6F9FC;border:0;border-radius:12px;padding:12px;cursor:pointer;color:var(--text)}
+.blatt-ziel .punkt{width:10px;height:10px;border-radius:50%;background:var(--f)}
+@media (max-width:760px){.hero2{grid-template-columns:1fr}.schnell{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:700px){
+  nav#nav{display:none!important}
+  .unten{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:25;background:#fff;border-top:1px solid var(--rand);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around}
+  .unten[hidden]{display:none!important}
+  .unten button{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;font:inherit;font-size:.72rem;color:var(--grau);padding:4px 6px;border-radius:10px;cursor:pointer;flex:1}
+  .unten button span{font-size:1.25rem;line-height:1}
+  .unten button.an{color:var(--f);font-weight:700;background:var(--f-hell)}
+  body{padding-bottom:76px}
+  .teilen-leiste{bottom:64px}
+}
+@media print{.unten,.schnell,.mehr-blatt{display:none!important}}
 </style>
 </head>
 <body>
@@ -163,6 +209,8 @@ table.spick a{color:var(--blau2)}@media print{table.spick a{color:inherit;text-d
 </div>
 <nav id="nav" hidden></nav>
 <div id="brot" class="kein-druck" hidden></div>
+<div id="mehr-blatt" class="mehr-blatt kein-druck" hidden></div>
+<nav id="unten" class="unten kein-druck" hidden aria-label="Hauptnavigation"></nav>
 <main id="main"><p class="grau">Einen Moment …</p></main>
 <div id="trainer"><div class="box" id="trainer-box"></div></div>
 <script src="../config.js"></script>

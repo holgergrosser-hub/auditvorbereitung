@@ -181,14 +181,42 @@ function kachelHtml(k, g) {
   return '<button class="kachel' + (fertig ? ' fertig' : '') + '" data-k="' + k + '" style="--f:' + g.farbe + ';--f-hell:' + g.hell + '"><span class="k-icon" aria-hidden="true">' + ki[0] + '</span><span class="k-titel">' + esc(ki[1]) + (fertig ? ' <span class="k-ok">✓</span>' : '') + '</span>'
     + '<span class="k-text">' + esc(ki[2]) + '</span><span class="k-status">' + esc(st.text) + '</span>' + balken + '</button>';
 }
+/* Kleiner Fortschrittskreis (Schrittanzeige wie "2 von 4") */
+function miniRing(anteil, text) {
+  const u = 2 * Math.PI * 9, a = Math.max(0, Math.min(1, anteil || 0));
+  return '<span class="mini-ring"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--rand)" stroke-width="3.5"/>'
+    + (a ? '<circle cx="12" cy="12" r="9" fill="none" stroke="var(--f)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="' + (u * a).toFixed(1) + ' ' + u.toFixed(1) + '" transform="rotate(-90 12 12)"/>' : '') + '</svg>' + esc(text) + '</span>';
+}
 function reifeRing(r) {
   const u = 2 * Math.PI * 34, farbe = r.stufe === 'bereit' ? 'var(--gruen)' : r.stufe === 'fast' ? 'var(--gelb)' : '#0B7285';
   return '<svg viewBox="0 0 84 84" class="ring" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="var(--rand)" stroke-width="9"/><circle cx="42" cy="42" r="34" fill="none" stroke="' + farbe + '" stroke-width="9" stroke-linecap="' + (r.prozent ? 'round' : 'butt') + '" stroke-dasharray="' + (r.prozent ? u * r.prozent / 100 : 0).toFixed(1) + ' ' + u.toFixed(1) + '" transform="rotate(-90 42 42)"/><text x="42" y="48" text-anchor="middle" font-size="19" font-weight="700" fill="var(--text)">' + r.prozent + '%</text></svg>';
+}
+/* Untere Leiste am Handy: vier feste Ziele + "Mehr" (alle übrigen Bereiche) */
+const UNTEN = [['heute', '🏠', 'Heute'], ['fahrplan', '🧭', 'Üben'], ['finden', '🔎', 'Nachschlagen'], ['tag', '📋', 'Audit-Tag']];
+function zeichneUnten() {
+  const el = $('#unten'); if (!el) return;
+  const da = tabs().map(t => t[0]);
+  const aktiv = (k) => S.ansicht === k;
+  const vier = UNTEN.filter(u => da.indexOf(u[0]) >= 0), rest = tabs().filter(t => !UNTEN.some(u => u[0] === t[0]));
+  el.innerHTML = vier.map(u => '<button data-unten="' + u[0] + '" class="' + (aktiv(u[0]) ? 'an' : '') + '"><span aria-hidden="true">' + u[1] + '</span>' + u[2] + '</button>').join('')
+    + (rest.length ? '<button data-unten="mehr" class="' + (rest.some(t => t[0] === S.ansicht) ? 'an' : '') + '"><span aria-hidden="true">⋯</span>Mehr</button>' : '');
+  el.hidden = false;
+  $$('[data-unten]', el).forEach(b => b.onclick = () => {
+    if (b.dataset.unten !== 'mehr') return zeige(b.dataset.unten);
+    const blatt = $('#mehr-blatt'); if (!blatt) return;
+    blatt.innerHTML = '<div class="blatt-innen"><div class="zeile" style="justify-content:space-between"><b>Weitere Bereiche</b><button class="link" id="blatt-zu">schließen</button></div>'
+      + rest.map(t => { const gg = gruppeVon(t[0]); return '<button class="blatt-ziel" data-ziel="' + t[0] + '" style="--f:' + (gg ? gg.farbe : '#1B2733') + '"><span class="punkt"></span>' + t[1] + '</button>'; }).join('') + '</div>';
+    blatt.hidden = false;
+    $('#blatt-zu').onclick = () => { blatt.hidden = true; };
+    blatt.onclick = (e) => { if (e.target === blatt) blatt.hidden = true; };
+    $$('[data-ziel]', blatt).forEach(z => z.onclick = () => { blatt.hidden = true; zeige(z.dataset.ziel); });
+  });
 }
 function zeichneNav() {
   $('#nav').innerHTML = tabs().map(([k, t]) => { const g = gruppeVon(k); return '<button data-k="' + k + '" class="' + (S.ansicht === k ? 'an' : '') + '" style="--f:' + (g ? g.farbe : '#1B2733') + '">' + (g ? '<span class="punkt"></span>' : '') + t + '</button>'; }).join('');
   $('#nav').hidden = false;
   $$('#nav button').forEach(b => b.onclick = () => zeige(b.dataset.k));
+  zeichneUnten();
 }
 const ANSICHT = {};
 function zeige(k) { S.ansicht = k; farbeSetzen(k); $('#main').classList.toggle('breit', k === 'heute'); brotkrume(k); zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); }
@@ -211,26 +239,40 @@ ANSICHT.heute = () => {
   const n1 = schritte[0], g1 = n1 ? gruppeVon(n1[0]) : null;
   const da = tabs().map(x => x[0]);
   $('#main').innerHTML = (S.ma ? '' : '<div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>')
-    + '<section class="hero">'
-    + '<div class="hero-feld hero-termin"><span class="eyebrow">Stufe ' + a0.stufe + (a0.zertifizierer ? ' · ' + esc(a0.zertifizierer) : '') + '</span>'
-    + '<div class="gross">' + (t != null && t >= 0 ? (t === 0 ? 'Heute' : t + '<small>' + (t === 1 ? ' Tag' : ' Tage') + '</small>') : '–') + '</div>'
-    + '<div>' + (a0.datum ? esc(datumDe(a0.datum)) : 'Termin offen') + '</div>'
-    + '<details class="stufe-erkl"><summary>' + esc(st.titel) + '</summary><p>' + esc(st.was) + '</p><p class="grau">' + esc(st.ueben) + '</p></details>'
-    + (anderes ? '<button class="link" data-stufe="' + anderes.id + '">zu Stufe ' + anderes.stufe + (anderes.datum ? ' (' + kurzDatum(anderes.datum) + ')' : '') + ' wechseln</button>' : '') + '</div>'
+    + '<section class="hero2">'
+    + '<div class="haupt-karte" style="--f:' + (g1 ? g1.farbe : '#0B7285') + '">'
+    + '<div class="hk-termin"><span class="eyebrow">Stufe ' + a0.stufe + (a0.zertifizierer ? ' · ' + esc(a0.zertifizierer) : '') + '</span>'
+    + '<span class="hk-tage">' + (t != null && t >= 0 ? (t === 0 ? 'Heute ist Audit' : 'in ' + t + (t === 1 ? ' Tag' : ' Tagen')) : 'Termin offen') + '</span>'
+    + '<span class="hk-datum">' + (a0.datum ? esc(datumDe(a0.datum)) : '') + '</span></div>'
+    + (n1 ? '<button class="hk-weiter" data-weiter="' + n1[0] + '"><span class="eyebrow">Als Nächstes</span><b>' + esc(n1[1]) + '</b><span class="grau">' + esc(n1[2]) + '</span><span class="hk-pfeil" aria-hidden="true">→</span></button>'
+      + (schritte.length > 1 ? '<div class="hk-danach">danach: ' + schritte.slice(1, 3).map(x => esc(x[1])).join(' · ') + '</div>' : '')
+      : '<div class="hk-weiter fertig"><span class="eyebrow">Als Nächstes</span><b>Alles erledigt ✓</b><span class="grau">Wiederholen Sie täglich 5 Minuten.</span></div>')
+    + '</div>'
     + '<div class="hero-feld hero-reife">' + reifeRing(r) + '<div><span class="eyebrow">Prüfungsreife</span><div><b>' + (r.stufe === 'bereit' ? 'Gut vorbereitet' : r.stufe === 'fast' ? 'Fast geschafft' : 'Jeden Tag ein bisschen') + '</b></div>'
-    + '<details class="reife-teile"><summary>Woraus setzt sich das zusammen?</summary>' + r.teile.map(x => '<div class="teil"><span>' + esc(x.name) + '</span><div class="balken"><span style="width:' + x.prozent + '%;background:var(--blau2)"></span></div><span class="grau">' + x.prozent + ' %</span></div>').join('') + '</details></div></div>'
-    + (n1 ? '<button class="hero-feld hero-weiter" data-weiter="' + n1[0] + '" style="--f:' + (g1 ? g1.farbe : '#0B7285') + ';--f-hell:' + (g1 ? g1.hell : '#E3FAFC') + '"><span class="eyebrow">Als Nächstes</span><b class="weiter-titel">' + esc(n1[1]) + ' →</b><span>' + esc(n1[2]) + '</span>'
-      + (schritte.length > 1 ? '<span class="grau">danach: ' + schritte.slice(1, 3).map(x => esc(x[1])).join(', ') + '</span>' : '') + '</button>'
-      : '<div class="hero-feld hero-weiter fertig"><span class="eyebrow">Als Nächstes</span><b class="weiter-titel">Alles erledigt ✓</b><span>Wiederholen Sie täglich 5 Minuten.</span></div>')
+    + '<details class="reife-teile"><summary>Woraus setzt sich das zusammen?</summary>' + r.teile.map(x => '<div class="teil"><span>' + esc(x.name) + '</span><div class="balken"><span style="width:' + x.prozent + '%;background:var(--blau2)"></span></div><span class="grau">' + x.prozent + ' %</span></div>').join('') + '</details>'
+    + '<details class="stufe-erkl"><summary>Was prüft der Auditor in Stufe ' + a0.stufe + '?</summary><p>' + esc(st.was) + '</p><p class="grau">' + esc(st.ueben) + '</p></details>'
+    + (anderes ? '<button class="link" data-stufe="' + anderes.id + '">zu Stufe ' + anderes.stufe + (anderes.datum ? ' (' + kurzDatum(anderes.datum) + ')' : '') + ' wechseln</button>' : '') + '</div></div>'
     + '</section>'
+    + '<nav class="schnell" aria-label="Schnellzugriff">'
+    + '<button data-schnell="ueben"><span class="rund">🎯</span>Frage üben</button>'
+    + '<button data-schnell="finden"><span class="rund">🔎</span>Wo steht das?</button>'
+    + (kiAn() ? '<button data-schnell="ki"><span class="rund">🤖</span>KI fragen</button>' : '<button data-schnell="tag"><span class="rund">📋</span>Spickzettel</button>')
+    + (!S.start.demo ? '<button data-schnell="senden" title="An ' + esc(bn('akk')) + ' senden"><span class="rund">✉</span>Senden</button>' : '')
+    + '</nav>'
     + '<div class="gruppen">' + GRUPPEN.map(g => { const ks = g.keys.filter(k => da.indexOf(k) >= 0); if (!ks.length) return '';
       return '<section class="gruppe" style="--f:' + g.farbe + ';--f-hell:' + g.hell + ';--n:' + ks.length + '"><h3 class="gruppe-titel">' + (g.nr ? '<span class="gruppe-nr">' + g.nr + '</span>' : '') + esc(g.name) + '</h3><div class="kacheln">' + ks.map(k => kachelHtml(k, g)).join('') + '</div></section>'; }).join('') + '</div>'
-    + (lektion.length || offeneAufg || S.antworten.length ? '<h3 class="gruppe-titel neutral">Für heute</h3>' : '')
-    + (lektion.length ? '<div class="karte"><div class="zeile" style="justify-content:space-between"><b>Ihre 5 Minuten</b><button class="knopf klein" id="lektion" style="--f:#0B7285">▶ Los geht’s</button></div><p class="grau">Drei Punkte – zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 110)) + (String(f.frage).length > 110 ? ' …' : '') + '</span></div>').join('') + '</div>' : '')
-    + (S.ma && S.antworten.length ? '<details class="karte aufklapp"><summary><b>Ihre Baustellen</b> <span class="grau">– was noch hakt</span></summary>' + baustellenHtml().replace(/^<h3>[^<]*<\/h3>/, '') + '</details>' : '')
-    + (aufgaben.length ? '<details class="karte aufklapp"' + (offeneAufg ? ' open' : '') + '><summary><b>Ihre Aufgaben</b> <span class="chip ' + (offeneAufg ? 'bald' : 'ok') + '">' + (offeneAufg ? offeneAufg + ' offen' : 'alle erledigt') + '</span></summary>' + aufgaben.map(a => { const e = eintrag('aufgabe', a.id); return '<label class="check"><input type="checkbox" data-a="' + esc(a.id) + '" ' + (e && e.daten.erledigt ? 'checked' : '') + '><span><b>' + esc(a.todo) + '</b><br><span class="grau">' + (a.bis_stufe ? 'bis Stufe ' + a.bis_stufe : '') + (a.verantwortlich ? ' · ' + esc(a.verantwortlich) : '') + (a.termin ? ' · bis ' + esc(a.termin) : '') + '</span></span></label>'; }).join('') + '</details>' : '');
+    + (lektion.length ? '<section class="abschnitt" style="--f:#0B7285;--f-hell:#E3FAFC"><div class="zeile" style="justify-content:space-between"><span class="etikett">⏱ Für heute</span><button class="knopf klein" id="lektion">▶ Los geht’s</button></div><h3 class="satz">Ihre 5 Minuten: drei Punkte wiederholen</h3><p class="grau">Zuerst die, die beim letzten Mal schwer waren.</p>' + lektion.map(f => '<div class="lek"><span class="dot ' + L.ampel(antwortenZu(f.id)) + '"></span><span class="np">' + esc(f.normkapitel || '–') + '</span><span>' + esc(String(f.frage).slice(0, 110)) + (String(f.frage).length > 110 ? ' …' : '') + '</span></div>').join('') + '</section>' : '')
+    + (S.ma && S.antworten.length ? '<details class="abschnitt aufklapp" style="--f:#C92A2A;--f-hell:#FFE3E3"><summary><span class="etikett">🔧 Baustellen</span><span class="satz">Was noch hakt</span><span class="chevron" aria-hidden="true">⌄</span></summary>' + baustellenHtml().replace(/^<h3>[^<]*<\/h3>/, '') + '</details>' : '')
+    + (aufgaben.length ? '<details class="abschnitt aufklapp" style="--f:#6741D9;--f-hell:#F3F0FF"' + (offeneAufg ? ' open' : '') + '><summary><span class="etikett">✅ Aufgaben</span><span class="satz">Vor dem Audit erledigen</span><span class="chip ' + (offeneAufg ? 'bald' : 'ok') + '">' + (offeneAufg ? offeneAufg + ' offen' : 'alle erledigt') + '</span><span class="chevron" aria-hidden="true">⌄</span></summary>' + aufgaben.map(a => { const e = eintrag('aufgabe', a.id); return '<label class="check"><input type="checkbox" data-a="' + esc(a.id) + '" ' + (e && e.daten.erledigt ? 'checked' : '') + '><span><b>' + esc(a.todo) + '</b><br><span class="grau">' + (a.bis_stufe ? 'bis Stufe ' + a.bis_stufe : '') + (a.verantwortlich ? ' · ' + esc(a.verantwortlich) : '') + (a.termin ? ' · bis ' + esc(a.termin) : '') + '</span></span></label>'; }).join('') + '</details>' : '');
   const l = $('#lektion'); if (l) l.onclick = () => reihe(lektion.map(f => ({ art: 'frage', item: f, modus: ursachen()[f.id] })), 'Tageslektion');
   $$('.kachel').forEach(x => x.onclick = () => zeige(x.dataset.k));
+  $$('[data-schnell]').forEach(b => b.onclick = () => {
+    const w = b.dataset.schnell;
+    if (w === 'ueben') { const lb = $('#lektion'); if (lb) lb.click(); else zeige('fahrplan'); }
+    else if (w === 'senden') sendenPanel();
+    else if (w === 'ki') { zeige('finden'); const f = $('#suche'); if (f) { f.placeholder = 'Ihre Frage, z. B. Wer bewertet unsere Lieferanten?'; f.focus(); } }
+    else zeige(w);
+  });
   $$('[data-weiter]').forEach(x => x.onclick = () => { if (x.dataset.weiter === 'lektion') { const b = $('#lektion'); if (b) b.click(); } else zeige(x.dataset.weiter); });
   $$('[data-bau]').forEach(b => b.onclick = () => { const f = S.fragen.find(x => x.id === b.dataset.bau); reihe([{ art: 'frage', item: f, modus: b.dataset.modus || null }], null, false); });
   $$('[data-bu]').forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + b.dataset.bu, { ursache: b.dataset.u }); ANSICHT.heute(); });
@@ -333,7 +375,8 @@ ANSICHT.technik = () => {
   const handy = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || window.innerWidth < 700;
   const chrome = !!(navigator.userAgentData && navigator.userAgentData.brands && navigator.userAgentData.brands.some(b => /Chrome|Chromium|Edge/.test(b.brand))) || /Chrome\//.test(navigator.userAgent);
   const zeile = (k, titel, text, knopf) => '<div class="check"><div class="haken ' + (c[k] ? 'ja' : '') + '" data-h="' + k + '">' + (c[k] ? '✓' : '') + '</div><div style="flex:1"><b>' + titel + '</b><div class="grau">' + text + '</div>' + (knopf || '') + '</div></div>';
-  $('#main').innerHTML = '<h2>Technik-Check</h2><p>Bitte spätestens eine Woche vor dem Audit erledigen. Wer am Tag vorher noch installiert, wird im Audit nervös.</p>'
+  const erledigt = ['laptop', 'chrome', 'dokument_offen', 'bildschirm'].filter(x => c[x]).length;
+  $('#main').innerHTML = '<div class="zeile" style="justify-content:space-between"><h2>Technik-Check</h2>' + miniRing(erledigt / 4, erledigt + ' von 4 erledigt') + '</div><p>Bitte spätestens eine Woche vor dem Audit erledigen. Wer am Tag vorher noch installiert, wird im Audit nervös.</p>'
     + (handy ? '<div class="hinweis">Sie sind gerade am Handy. Im Audit brauchen Sie einen Laptop oder PC – am Handy ist alles zu klein, und Bildschirm teilen klappt schlecht.</div>' : '')
     + '<div class="karte">'
     + zeile('laptop', 'Ich mache das Audit am Laptop oder PC', 'Nicht am Handy oder Tablet.', '<button class="knopf klein" data-c="laptop" ' + (handy ? 'disabled' : '') + '>' + (c.laptop ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
@@ -540,6 +583,7 @@ function planDurchgangHtml() {
       return '<div class="karte block"><div class="zeile"><span class="zeit">' + esc(b.punkt.zeit || '') + '</span><b>' + esc(b.punkt.thema) + '</b></div>'
         + (doks.length ? doks.map(d => { const zeilen = b.fragen.map(f => ({ f, o: L.orteJeDokument(f.hilfe, S.start.dokumente)[d] })).filter(x => x.o);
           return '<div class="fund-zeile"><label class="check fund"><input type="checkbox" data-plan="' + esc(b.punkt.id + ':' + d) + '" ' + (fertig(b.punkt.id, d) ? 'checked' : '') + '><span><b>' + esc(kurzName(d)) + '</b> <span class="grau">– für ' + zeilen.length + (zeilen.length === 1 ? ' Punkt' : ' Punkte') + '</span></span><span class="zeile"><button class="knopf klein zweit" data-d="' + esc(d) + '">öffnen</button>' + kopieKnopf(d, '') + '</span></label>'
+            + '<details class="wo-finde"><summary>ⓘ Wo finde ich das?</summary><p>' + (d0(d).link ? 'Das Original liegt in Ihrem Laufwerk: Knopf <b>öffnen</b>. ' : '') + (d0(d).kopie ? 'Kein Zugang oder Anmeldung klappt nicht? Knopf <b>PDF-Kopie</b> – sie öffnet direkt die richtige Seite. ' : '') + 'Fehlt das Dokument ganz, schicken Sie ' + esc(bn('dat')) + ' eine Nachricht (oben „✉“).</p></details>'
             + '<details><summary>Welche Stellen?</summary><table class="spick">' + zeilen.map(x => '<tr><td class="np">' + esc(x.f.normkapitel || '–') + '</td><td>' + esc(x.f.titel || String(x.f.frage).slice(0, 60)) + '</td><td>' + esc(x.o.slice(0, 3).join(', ')) + '</td></tr>').join('') + '</table></details></div>'; }).join('')
           + '<div class="grau">' + b.fragen.length + ' Fragen der Prüfliste gehören zu diesem Punkt.</div>'
         : '<div class="grau">' + (/eröffnung/i.test(b.punkt.thema) ? 'Vorstellung: Wer sind Sie, was macht die Firma, wie ist sie entstanden? Firmenname und Geltungsbereich (Handbuch Seite 3) parat haben.' : /abschluss/i.test(b.punkt.thema) ? 'Der Auditor sagt, was ihm aufgefallen ist. Zuhören, mitschreiben, nachfragen – nicht diskutieren.' : /planung/i.test(b.punkt.thema) ? 'Termin und Teilnehmer für Stufe 2 abstimmen.' : '') + '</div>') + '</div>'; }).join('');
@@ -556,19 +600,20 @@ ANSICHT.fahrplan = () => {
   if (brauchtMa(zeig ? 'Fahrplan' : 'Fragen üben')) return;
   const lv = (S.start.level || {})[S.audit.auditor_level] || {};
   const typ = (eintrag('auditor', 'typ') || {}).daten || {};
-  let html = '<h2>' + (zeig ? 'Fahrplan: Finden Sie die Dokumente' : 'Fragen üben') + '</h2>'
+  let html = '<div class="zeile" style="justify-content:space-between"><h2>' + (zeig ? 'Fahrplan: Finden Sie die Dokumente' : 'Fragen üben') + '</h2>' + miniRing((S.fragen.length - z.offen) / n, (S.fragen.length - z.offen) + ' von ' + S.fragen.length + ' geübt') + '</div>'
     + (zeig ? '<p>So üben Sie in zwei Schritten. Sie müssen nichts auswendig lernen.</p>' + planDurchgangHtml()
       + '<h3 class="schritt">Schritt 2: Einzelne Fragen der Prüfliste üben</h3><p>Das ist die Prüfliste des Auditors. Er fragt diese Punkte ab – nicht unbedingt in dieser Reihenfolge. Üben Sie: <b>Frage lesen → Dokument öffnen → zeigen.</b></p>'
       : '<p>So fragt der Auditor in Stufe 2. Antworten Sie, wie Sie es im Audit sagen würden: <b>Was wir machen – wo es steht – ein Beispiel.</b></p>')
     + '<div class="karte"><div class="balken"><span style="width:' + (z.gruen / n * 100) + '%;background:var(--gruen)"></span><span style="width:' + (z.gelb / n * 100) + '%;background:var(--gelb)"></span><span style="width:' + (z.rot / n * 100) + '%;background:var(--rot)"></span></div>'
     + '<div class="legende"><span><span class="dot gruen"></span> sicher (' + z.gruen + ')</span><span><span class="dot gelb"></span> mit Hilfe / langsam (' + z.gelb + ')</span><span><span class="dot rot"></span> weiß nicht (' + z.rot + ')</span><span><span class="dot"></span> offen (' + z.offen + ')</span></div>'
-    + '<div class="zeile"><label>Zeigen: <select id="filter"><option value="alle">alle</option><option value="offen">nur offene</option><option value="ueben">gelb und rot</option></select></label>'
+    + '<div class="chips" role="group" aria-label="Fragen filtern">' + [['alle', 'Alle', S.fragen.length], ['offen', 'Offen', z.offen], ['ueben', 'Schwer', z.gelb + z.rot], ['sicher', 'Sicher', z.gruen]].map(c => '<button class="chip-knopf ' + (S.filter === c[0] ? 'an' : '') + '" data-filter="' + c[0] + '">' + c[1] + ' <span class="anz">' + c[2] + '</span></button>').join('') + '</div>'
+    + '<div class="zeile">'
     + '<button class="knopf" id="naechste">▶ ' + (zeig ? 'Nächste offene üben' : 'Nächste Frage') + '</button>'
     + (zeig ? '<button class="knopf zweit" id="probe">Generalprobe: alles am Stück</button>' : '') + '</div></div>'
     + (!zeig ? '<div class="karte"><b>Auditor nach Maß</b> – wie soll Ihr Übungsauditor sein? <span class="grau">Nach Stufe 1 wissen Sie, wie Ihr echter Auditor „tickt“.</span><div class="typen">'
       + Object.entries(L.AUDITOR_TYPEN).map(([k, t]) => '<label class="typ ' + (typ.typ === k ? 'an' : '') + '"><input type="radio" name="typ" value="' + k + '" ' + (typ.typ === k || (!typ.typ && k === 'sachlich') ? 'checked' : '') + '><b>' + esc(t.name) + '</b><span class="grau">' + esc(t.text) + '</span></label>').join('')
       + '</div><button class="knopf" id="runde">▶ Übungsrunde mit diesem Auditor (10 Fragen inkl. Stolperfallen)</button> <span class="grau">Standard laut Berater: ' + esc(lv.name || '') + '</span></div>' : '');
-  const sicht = S.fragen.filter(f => { const a = L.ampel(antwortenZu(f.id)); return S.filter === 'alle' || (S.filter === 'offen' ? a === 'offen' : (a === 'gelb' || a === 'rot')); });
+  const sicht = S.fragen.filter(f => { const a = L.ampel(antwortenZu(f.id)); return S.filter === 'alle' || (S.filter === 'offen' ? a === 'offen' : S.filter === 'sicher' ? a === 'gruen' : (a === 'gelb' || a === 'rot')); });
   let kap = null;
   sicht.forEach(f => {
     const k = kapitelVon(f); if (k !== kap) { kap = k; html += '<h3>' + esc(KAPITEL[k]) + '</h3>'; }
@@ -584,7 +629,7 @@ ANSICHT.fahrplan = () => {
   if (!sicht.length) html += '<div class="karte grau">' + (S.fragen.length ? 'Keine Fragen in dieser Auswahl. 🎉' : 'Für Sie sind noch keine Fragen hinterlegt.') + '</div>';
   $('#main').innerHTML = html;
   planDurchgangBinden();
-  $('#filter').value = S.filter; $('#filter').onchange = (e) => { S.filter = e.target.value; ANSICHT.fahrplan(); };
+  $$('[data-filter]').forEach(b => b.onclick = () => { S.filter = b.dataset.filter; ANSICHT.fahrplan(); });
   $('#naechste').onclick = () => { const f = S.fragen.find(x => L.ampel(antwortenZu(x.id)) === 'offen') || S.fragen.find(x => /gelb|rot/.test(L.ampel(antwortenZu(x.id)))); if (f) reihe([{ art: 'frage', item: f }], null, true); else hinweisBox('Alles geübt. Super!', 'ok'); };
   const pr = $('#probe'); if (pr) pr.onclick = () => reihe(S.fragen.map(f => ({ art: 'frage', item: f })), 'Generalprobe');
   $$('input[name=typ]').forEach(r => r.onchange = async () => { await speichereEintrag('auditor', 'typ', { typ: r.value }); $$('.typ').forEach(x => x.classList.toggle('an', $('input', x).checked)); });
@@ -638,7 +683,7 @@ function reiheEnde() {
 function schliessen() { clearInterval(uhr); S.queue = null; $('#trainer').style.display = 'none'; try { speechSynthesis.cancel(); } catch (e) { /* */ } zeichneKopf(); (ANSICHT[S.ansicht] || ANSICHT.heute)(); }
 function kopfTrainer(info) {
   const q = S.queue;
-  return '<div class="zeile" style="justify-content:space-between"><span class="grau">' + esc(info) + (q && q.items.length > 1 ? ' · ' + q.pos + ' von ' + q.items.length : '') + '</span><button class="knopf klein zweit" id="t-zu">' + (q && q.items.length > 1 ? 'Beenden' : 'Schließen') + '</button></div>';
+  return '<div class="zeile" style="justify-content:space-between"><span class="grau zeile">' + esc(info) + (q && q.items.length > 1 ? miniRing(q.pos / q.items.length, 'Punkt ' + q.pos + ' von ' + q.items.length) : '') + '</span><button class="knopf klein zweit" id="t-zu">' + (q && q.items.length > 1 ? 'Beenden' : 'Schließen') + '</button></div>';
 }
 
 /* Fehlerbuch: Ursache mit einem Klick (Vorschlag aus dem Verhalten ist vorausgewaehlt) */

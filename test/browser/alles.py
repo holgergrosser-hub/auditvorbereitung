@@ -79,7 +79,7 @@ async def main():
         async def k_start():
             await k.goto(S['link']); await k.wait_for_selector('#sel-ma', timeout=20000); await k.wait_for_timeout(600)
             await k.select_option('#sel-ma', label='Erika Beispiel (Geschäftsführerin)'); await k.wait_for_timeout(800); await shot(k, '02_heute')
-            assert await k.locator('.kachel').count() >= 7; return (await k.locator('.hero-weiter .weiter-titel').text_content())
+            assert await k.locator('.kachel').count() >= 7; return (await k.locator('.hk-weiter b').text_content())
         await pruefe('K2 Start, „Wer übt?“, Übersicht mit Kacheln', k_start)
         async def k_technik():
             await k.click('.kachel[data-k=technik]'); await k.wait_for_timeout(300)
@@ -213,7 +213,7 @@ async def main():
         await pruefe('K23 Handy: gleiche Daten, nichts ragt über den Rand', k_handy)
         async def k_ruhe():
             psql("update audits set datum = current_date + 1 where stufe = 1 and kunde_id = '" + S['kid'] + "'")
-            await k.reload(); await k.wait_for_timeout(1500); tabs = await k.locator('nav button').all_inner_texts(); await shot(k, '11_ruhe')
+            await k.reload(); await k.wait_for_timeout(1500); tabs = await k.locator('#nav button').all_inner_texts(); await shot(k, '11_ruhe')
             psql("update audits set datum = current_date + 7 where stufe = 1 and kunde_id = '" + S['kid'] + "'")
             assert len(tabs) <= 3, tabs; return 'Reiter im Ruhemodus: ' + ', '.join(t.strip() for t in tabs)
         await pruefe('K24 Ruhemodus am Tag vor dem Audit', k_ruhe)
