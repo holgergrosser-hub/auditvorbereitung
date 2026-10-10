@@ -52,12 +52,20 @@ body{margin:0;background:#E9EEF3;color:var(--text);font:15px/1.4 system-ui,"Sego
       datei = j.url;
     } catch (e) { return melden('Keine Verbindung. Bitte später noch einmal versuchen.'); }
     if (datei.indexOf(cfg.supabaseUrl) !== 0) return melden('Kein gültiges Dokument angegeben.');
+  } else if (q.get('e')) { // eigene Dokumente (Testmonat): Datei liegt nur in diesem Browser (IndexedDB), nie auf einem Server
+    try {
+      const w = String(q.get('w') || '').replace(/[^0-9a-f]/g, ''), id = String(q.get('e')).replace(/[^A-Za-z0-9_-]/g, '');
+      const blob = await new Promise((ok, nein) => { const r = indexedDB.open('av_eigen_' + w, 1); r.onupgradeneeded = () => r.result.createObjectStore('kv');
+        r.onerror = () => nein(r.error); r.onsuccess = () => { const db = r.result, g = db.transaction('kv').objectStore('kv').get('datei:' + id); g.onsuccess = () => { db.close(); ok(g.result); }; g.onerror = () => nein(g.error); }; });
+      if (!blob) return melden('Dieses Dokument liegt nicht in diesem Browser. Eigene Dokumente gibt es nur auf dem Gerät, auf dem Sie sie eingerichtet haben.');
+      datei = URL.createObjectURL(blob);
+    } catch (e) { return melden('Das Dokument ließ sich in diesem Browser nicht öffnen.'); }
   } else if (!/^dok\/[A-Za-z0-9_.-]+\.pdf$/.test(datei)) return melden('Kein gültiges Dokument angegeben.');
   const von = Math.max(1, parseInt(q.get('s') || '1', 10) || 1), bisRoh = parseInt(q.get('b') || '', 10);
   const titel = q.get('t') || 'Dokument';
   document.title = titel + (q.get('s') ? ' – Seite ' + von : '');
   document.getElementById('titel').textContent = titel;
-  const roh = document.getElementById('roh'); roh.href = datei; roh.setAttribute('download', '');
+  const roh = document.getElementById('roh'); roh.href = datei; roh.setAttribute('download', (q.get('t') || 'Dokument') + '.pdf');
   if (!window.pdfjsLib) return weiter('Der Seitenbetrachter konnte nicht geladen werden.');
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs/pdf.worker.min.js';
   let pdf;
@@ -94,7 +102,7 @@ body{margin:0;background:#E9EEF3;color:var(--text);font:15px/1.4 system-ui,"Sego
   zurueck.onclick = () => springe(start, true);
   window.__pdfBereit = { start, bis, n };
   function melden(t) { const m = document.getElementById('meldung'); m.hidden = false; m.textContent = t; }
-  function weiter(t) { melden(t + ' Sie werden zur PDF-Datei weitergeleitet …'); setTimeout(() => { location.href = datei + '#page=' + von; }, 1500); }
+  function weiter(t) { if (/^blob:/.test(datei)) return melden(t); melden(t + ' Sie werden zur PDF-Datei weitergeleitet …'); setTimeout(() => { location.href = datei + '#page=' + von; }, 1500); }
 })();
 </script>
 </body>

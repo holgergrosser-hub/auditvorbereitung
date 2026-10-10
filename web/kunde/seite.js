@@ -7,6 +7,8 @@
 import L from '../logik.js';
 import { erstelleDemo } from './demo.js';
 import { lokaleApi } from './lokal.js';
+import * as E from './eigene.js';
+import { MARKE, fussHtml } from './marke.js';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
@@ -53,15 +55,48 @@ const KAPITEL = { '0': 'Zum Einstieg: Überblick über Ihre Dokumentation', '4':
 const datumDe = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Termin noch offen';
 const kurzDatum = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('de-DE') : 'offen';
 
+/* Eigene Dokumente: Übungen laufen über die lokale Schnittstelle (Browser), an den Server gehen nur Verbesserungsvorschläge */
+function eigeneApi(server, paket, test) {
+  const lokal = lokaleApi(L, paket, { schluessel: 'eigen_' + E.ablage(token) });
+  const f = async (aktion, d) => {
+    if (aktion === 'start') return Object.assign(await lokal('start'), { test, eigen: true });
+    if (aktion === 'nachricht') {
+      if (!d || d.art !== 'feedback') throw new Error('Mit eigenen Dokumenten geht nichts an den Berater – nur Ihre Verbesserungsvorschläge.');
+      return server('nachricht', Object.assign({}, d, { mitarbeiter_id: null })); // Namen/IDs vom Gerät gehen nicht mit
+    }
+    const j = await lokal(aktion, d); if (j && j.fehler) throw new Error(j.fehler); return j;
+  };
+  f.lokal = true; f.eigen = true; f.export = lokal.export; f.speicherWarnung = lokal.speicherWarnung;
+  return f;
+}
+/* KI mit eigenen Dokumenten: die passenden Textstellen von diesem Gerät mitgeben (der Server speichert sie nicht) */
+async function eigeneAuszuege(text, max) {
+  if (!S.start || !S.start.eigen) return null;
+  return L.auszuegeSuchen(text, await auszuege(), max || 8).map(x => ({ dokument_id: x.auszug.dokument_id, ort: x.auszug.ort, titel: dokTitel(x.auszug.dokument_id), text: String(x.auszug.text).slice(0, 1400) }));
+}
+
 /* Name des Beraters statt "Ihr Berater" (aus dem Paket: kunde.berater_name) */
 function bn(fall) { const n = S.start && S.start.kunde && S.start.kunde.berater_name; return n || { nom: 'Ihr Berater', dat: 'Ihrem Berater', akk: 'Ihren Berater', kurz: 'Berater' }[fall]; }
 function fehler(e) { $('#main').innerHTML = '<div class="karte"><h2>Das hat nicht geklappt</h2><p>' + esc(e.message || e) + '</p><p class="grau">Bitte melden Sie sich bei ' + esc(bn('dat')) + '.</p></div>'; }
 function hinweisBox(t, art) { const d = document.createElement('div'); d.className = art === 'ok' ? 'ok-box' : 'hinweis'; d.textContent = t; $('#main').prepend(d); setTimeout(() => d.remove(), 9000); }
 
 async function start() {
+  const fu = $('#fuss'); if (fu) fu.innerHTML = fussHtml();
   try { api = await verbinden(); } catch (e) { return fehler(e); }
   if (!api.lokal && !token) return fehler(new Error('Bitte öffnen Sie den persönlichen Link aus Ihrer E-Mail.'));
   try { S.start = await api('start'); } catch (e) { return fehler(e); }
+  // Testmonat: Beispielfirma (Server) oder eigene Dokumente (nur in diesem Browser, E-A33)
+  if (S.start.test && !api.eigen) {
+    const m = E.modus(token);
+    $('#modus').textContent = 'Kostenloser Testmonat';
+    if (!m) { $('#wahl').hidden = true; return E.auswahlZeigen($('#main'), token, start); }
+    if (m === 'eigen') {
+      const paket = await E.paketLaden(token);
+      if (!paket) { $('#wahl').hidden = true; return E.einrichtenZeigen($('#main'), L, token, start); }
+      api = eigeneApi(api, paket, S.start.test);
+      try { S.start = await api('start'); } catch (e) { return fehler(e); }
+    }
+  }
   const st = S.start;
   $('#firma').textContent = st.kunde.name; document.title = 'Auditvorbereitung · ' + st.kunde.name;
   if (!st.audits.length) return fehler(new Error('Ihre Vorbereitung wird gerade eingerichtet. Sie bekommen Bescheid, sobald es losgeht.'));
@@ -115,7 +150,7 @@ function reife() {
 function zeichneKopf() {
   const r = reife();
   $('#reife').innerHTML = '<span class="reife ' + r.stufe + '" title="' + esc(r.teile.map(t => t.name + ' ' + t.prozent + ' %').join(' · ')) + '">Prüfungsreife ' + r.prozent + ' %</span>'
-    + (!S.start.demo ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an ' + esc(bn('akk')) + ' schicken">✉ An ' + esc(bn('kurz')) + ' senden</button>' : '');
+    + (!S.start.demo && !S.start.eigen ? '<button class="kopf-senden kein-druck" id="kopf-senden" title="Übungsstand und Nachricht an ' + esc(bn('akk')) + ' schicken">✉ An ' + esc(bn('kurz')) + ' senden</button>' : '');
   const ks = $('#kopf-senden'); if (ks) ks.onclick = sendenPanel;
   if (S.start.test) { $('#reife').insertAdjacentHTML('beforeend', '<button class="kopf-senden kein-druck" id="kopf-feedback" title="Was sollen wir verbessern?">💡 Verbesserung</button>'); $('#kopf-feedback').onclick = feedbackPanel; }
   zeichneNav();
@@ -259,7 +294,7 @@ ANSICHT.heute = () => {
     + '<button data-schnell="ueben"><span class="rund">🎯</span>Frage üben</button>'
     + '<button data-schnell="finden"><span class="rund">🔎</span>Wo steht das?</button>'
     + (kiAn() ? '<button data-schnell="ki"><span class="rund">🤖</span>KI fragen</button>' : '<button data-schnell="tag"><span class="rund">📋</span>Spickzettel</button>')
-    + (!S.start.demo ? '<button data-schnell="senden" title="An ' + esc(bn('akk')) + ' senden"><span class="rund">✉</span>Senden</button>' : '')
+    + (!S.start.demo && !S.start.eigen ? '<button data-schnell="senden" title="An ' + esc(bn('akk')) + ' senden"><span class="rund">✉</span>Senden</button>' : '')
     + '</nav>'
     + testKarte()
     + '<div class="gruppen">' + GRUPPEN.map(g => { const ks = g.keys.filter(k => da.indexOf(k) >= 0); if (!ks.length) return '';
@@ -277,6 +312,11 @@ ANSICHT.heute = () => {
     else zeige(w);
   });
   $$('[data-feedback]').forEach(b => b.onclick = feedbackPanel);
+  $$('[data-eigen]').forEach(b => b.onclick = async () => {
+    const w = b.dataset.eigen;
+    if (w === 'neu') { $('#wahl').hidden = true; return E.einrichtenZeigen($('#main'), L, token, () => location.reload(), await E.paketLaden(token)); }
+    E.modusSetzen(token, w); location.reload();
+  });
   $$('[data-weiter]').forEach(x => x.onclick = () => { if (x.dataset.weiter === 'lektion') { const b = $('#lektion'); if (b) b.click(); } else zeige(x.dataset.weiter); });
   $$('[data-bau]').forEach(b => b.onclick = () => { const f = S.fragen.find(x => x.id === b.dataset.bau); reihe([{ art: 'frage', item: f, modus: b.dataset.modus || null }], null, false); });
   $$('[data-bu]').forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'ursache:' + b.dataset.bu, { ursache: b.dataset.u }); ANSICHT.heute(); });
@@ -316,7 +356,7 @@ function wegweiserHtml() {
 }
 /* Ergebnis an den Berater: in der Testfassung per Netlify-Formular (Berater sieht es in Netlify), sonst liegt alles in der Datenbank */
 function sendenHtml() {
-  if (S.start.demo) return '';
+  if (S.start.demo || S.start.eigen) return '';
   const zuletzt = (() => { try { return localStorage.getItem('av_gesendet') || ''; } catch (e) { return ''; } })();
   return '<h3>Ihr Stand an ' + esc(bn('akk')) + '</h3><div class="karte"><p>' + esc(bn('nom')) + ' sieht Ihren Übungsstand erst, wenn Sie ihn senden. Den Knopf <b>✉ An ' + esc(bn('kurz')) + ' senden</b> finden Sie jederzeit oben in der Kopfzeile – auch für Änderungswünsche an Ihren Dokumenten vor dem Audit.</p><div class="zeile"><button class="knopf" id="senden">Jetzt senden</button><span class="grau" id="senden-info">' + (zuletzt ? 'Zuletzt gesendet: ' + esc(zuletzt) : 'Noch nicht gesendet') + '</span></div></div>';
 }
@@ -324,6 +364,8 @@ function sendenHtml() {
 function testTage() { const t = S.start.test; return t ? L.tageBis(t.bis) : null; }
 function testZeile() {
   const t = S.start.test, g = t.grenzen || {}, v = t.verbraucht || {}, tage = testTage();
+  if (S.start.eigen) return 'Kostenloser Testmonat mit Ihren eigenen Dokumenten – noch ' + (tage == null ? '?' : tage) + (tage === 1 ? ' Tag' : ' Tage')
+    + (cfg.ki && g.ki_tag ? ' · KI heute bis ' + g.ki_tag + ' Fragen' : '') + '. 🔒 Dokumente und Antworten bleiben auf diesem Gerät.';
   return 'Kostenloser Testmonat mit der erfundenen Beispielfirma – noch ' + (tage == null ? '?' : tage) + (tage === 1 ? ' Tag' : ' Tage')
     + (cfg.ki && g.ki_tag ? ' · KI heute ' + (v.ki_heute || 0) + ' von ' + g.ki_tag : '') + '. Ihre Eingaben werden gespeichert.';
 }
@@ -331,8 +373,10 @@ function testKarte() {
   if (!S.start.test) return '';
   const tage = testTage();
   return '<div class="karte test-karte"><b>💡 Ihr Testmonat' + (tage != null ? ' · noch ' + tage + (tage === 1 ? ' Tag' : ' Tage') : '') + '</b>'
-    + '<p>Sie üben mit einer erfundenen Beispielfirma. Was hat geholfen, was fehlt, was stört? Zwei Minuten Rückmeldung machen das Werkzeug für alle besser.</p>'
-    + '<button class="knopf" data-feedback>Verbesserung vorschlagen</button></div>';
+    + '<p>' + (S.start.eigen ? 'Sie üben mit Ihren eigenen Dokumenten – sie bleiben auf diesem Gerät.' : 'Sie üben mit einer erfundenen Beispielfirma.') + ' Was hat geholfen, was fehlt, was stört? Zwei Minuten Rückmeldung machen das Werkzeug für alle besser.</p>'
+    + '<div class="zeile"><button class="knopf" data-feedback>Verbesserung vorschlagen</button>'
+    + (S.start.eigen ? '<button class="knopf zweit" data-eigen="neu">Dokumente ändern</button><button class="link" data-eigen="beispiel">zur Beispielfirma wechseln</button>'
+      : '<button class="link" data-eigen="eigen">mit eigenen Dokumenten üben</button>') + '</div></div>';
 }
 function feedbackPanel() {
   const alt = $('#feedback-panel'); if (alt) { alt.remove(); return; }
@@ -461,17 +505,19 @@ function teilenAnzeige() {
 }
 function kopieUrl(d, ort) { // eigener Seitenbetrachter (pdf.html) statt #page: der Browser springt sonst nicht zuverlaessig auf die Seite
   if (!d || !d.kopie) return '';
+  const eigen = /^eigen:/.test(d.kopie);
   let von = 0, bis = 0; const m = String(ort || '').match(/Seite\s+(\d+)(?:\s*[–-]\s*(\d+))?/); if (m) { von = Number(m[1]); bis = Number(m[2] || m[1]); }
   const r = String(ort || '').match(/„([^“]+)“/); if (r && d.kopie_seiten && d.kopie_seiten[r[1]]) von = bis = d.kopie_seiten[r[1]];
   const seite = (von ? '&s=' + von + '&b=' + bis : '') + '&t=' + encodeURIComponent(d.titel);
+  if (eigen) return 'pdf.html?e=' + encodeURIComponent(d.id) + seite + '&w=' + encodeURIComponent(E.ablage(token)); // aus IndexedDB dieses Browsers
   if (api && !api.lokal && token) return 'pdf.html?k=' + encodeURIComponent(d.id) + seite + '&z=' + encodeURIComponent(token); // Servermodus: signierter Link holt pdf.html selbst
   return 'pdf.html?d=' + encodeURIComponent(d.kopie) + seite;
 }
 function kopieKnopf(dokId, ort) { const d = S.start.dokumente.find(x => x.id === dokId); const u = kopieUrl(d, ort); return u ? '<a class="knopf klein zweit" target="_blank" rel="noopener" href="' + esc(u) + '" title="Falls Sie keinen Zugriff auf die Originaldatei haben">PDF-Kopie</a>' : ''; }
 async function oeffne(id, ort) {
   // Mit Seite/Reiter: immer den Seitenbetrachter (springt sicher auf die Stelle); Google-Links koennen keine Seite ansteuern
-  const d = S.start.dokumente.find(x => x.id === id), u = ort ? kopieUrl(d, ort) : '';
-  if (u && /&s=\d/.test(u)) { const w = window.open(u, '_blank'); if (!w) location.href = u; return; }
+  const d = S.start.dokumente.find(x => x.id === id), u = ort || (d && /^eigen:/.test(d.kopie)) ? kopieUrl(d, ort) : '';
+  if (u && (/&s=\d/.test(u) || /[?&]e=/.test(u))) { const w = window.open(u, '_blank'); if (!w) location.href = u; return; }
   const fenster = window.open('', '_blank');
   try {
     const j = await api('dokument', { dokument_id: id });
@@ -585,7 +631,8 @@ function kiGespraech() {
 async function kiAntwort(frage) {
   const el = $('#ki-antwort'); if (!el) return;
   el.innerHTML = '<div class="karte ki-antwort"><span class="eyebrow">🤖 Antwort aus Ihren Dokumenten</span><p class="grau">Die KI liest die passenden Stellen …</p></div>';
-  const k = await ki('wissensfrage', { frage });
+  const eig = await eigeneAuszuege(frage, 8);
+  const k = await ki('wissensfrage', eig ? { frage, auszuege: eig } : { frage });
   if (!$('#ki-antwort')) return;
   if (!k) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="karte ki-antwort"><span class="eyebrow">🤖 Antwort aus Ihren Dokumenten</span><p>' + esc(k.antwort) + '</p>'
@@ -820,7 +867,7 @@ async function trainer(f, modus) {
       + (fb.hinweise.length ? '<ul>' + fb.hinweise.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : '') + '</div>'
       + '<div class="zeile">Wie sicher waren Sie? <button class="knopf gruen" data-s2="sicher">Sicher</button><button class="knopf" style="background:var(--gelb)" data-s2="unsicher">Unsicher</button><button class="knopf zweit" id="t-hilfe-k2">Wo steht das?</button></div>';
     $('#t-hilfe-k2').onclick = () => { hilfe = true; zeigeHilfe(); };
-    ki('antwort_feedback', { frage: f.frage, antwort: $('#t-text').value, hilfe: f.hilfe }).then(k => { if (k && k.verbesserung) $('#t-erg .karte').insertAdjacentHTML('beforeend', '<div class="grau" style="margin-top:6px"><b>KI-Coach:</b> ' + esc(k.lob || '') + ' ' + esc(k.verbesserung) + (k.bessere_antwort ? '<br><i>So ginge es: ' + esc(k.bessere_antwort) + '</i>' : '') + '</div>'); });
+    eigeneAuszuege(f.frage + ' ' + (f.hilfe || ''), 4).then(eig => ki('antwort_feedback', Object.assign({ frage: f.frage, antwort: $('#t-text').value, hilfe: f.hilfe }, eig ? { auszuege: eig } : {}))).then(k => { if (k && k.verbesserung) $('#t-erg .karte').insertAdjacentHTML('beforeend', '<div class="grau" style="margin-top:6px"><b>KI-Coach:</b> ' + esc(k.lob || '') + ' ' + esc(k.verbesserung) + (k.bessere_antwort ? '<br><i>So ginge es: ' + esc(k.bessere_antwort) + '</i>' : '') + '</div>'); });
     $$('[data-s2]', box).forEach(b => b.onclick = () => fertig(b.dataset.s2, true));
   };
   const g = $('#t-gefunden');
@@ -1080,7 +1127,8 @@ ANSICHT.tag = () => {
           : '<div class="grau">' + (/eröffnung/i.test(b.punkt.thema) ? 'Sich vorstellen: Firma, Entwicklung, Mitarbeiter. Geltungsbereich: Handbuch Seite 3.' : /abschluss/i.test(b.punkt.thema) ? 'Zuhören, mitschreiben, Fragen stellen.' : '') + '</div>') + '</div>').join('')
       : '<div class="spick-block"><div class="spick-zeit"><b>Ablauf</b></div>' + meine.map(p => '<div>' + esc(p.zeit || '') + ' · ' + esc(p.thema) + '</div>').join('') + '</div>')
     + (bsp.length ? '<div class="spick-box"><b>Meine Beispiele:</b>' + bsp.map(x => { const f = S.fragen.find(y => y.id === x.frage_id) || {}; return '<div>• <b>' + esc(x.prozess || f.titel || f.normkapitel || '') + ':</b> ' + esc(x.text) + '</div>'; }).join('') + '</div>' : '')
-    + '<div class="spick-box"><b>Merksätze:</b> Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen · „Das schaue ich nach“ ist erlaubt</div></div>';
+    + '<div class="spick-box"><b>Merksätze:</b> Zeigen statt erzählen · Nichts erfinden · Der Auditor hilft beim Finden · Nur gültige Dokumente öffnen · „Das schaue ich nach“ ist erlaubt</div>'
+    + '<div class="spick-fuss">Auditvorbereitung mit ' + esc(MARKE.firma) + ' · ' + esc(MARKE.websiteText) + '</div></div>';
   $('#drucken').onclick = () => window.print();
   dokKnoepfe($('#main'));
   const t = $('#trotz'); if (t) t.onclick = () => { S.trotzRuhe = true; laden(); };
@@ -1089,26 +1137,47 @@ ANSICHT.tag = () => {
 /* ------------------------------------------------ Nach dem Audit: Rueckmeldung + Ergebnis an den Berater (Ideen 1, 8, 11) */
 ANSICHT.danach = () => {
   const r = (eintrag('rueckmeldung', 'audit') || {}).daten || {};
-  const k = S.start.kunde;
+  const ERG = [['bestanden', 'Bestanden – Empfehlung zur Zertifizierung'], ['auflagen', 'Bestanden mit Abweichungen (Korrekturen nachreichen)'], ['offen', 'Noch offen / nicht bestanden']];
   $('#main').innerHTML = '<h2>Nach dem Audit</h2><p>Direkt danach kurz festhalten – das hilft bei der Vorbereitung auf die nächste Stufe und für das nächste Jahr.</p>'
-    + '<div class="karte"><label><b>Wie war der Auditor?</b><select id="r-typ"><option value="">– bitte wählen –</option>' + Object.entries(L.AUDITOR_TYPEN).map(([k2, t]) => '<option value="' + k2 + '" ' + (r.typ === k2 ? 'selected' : '') + '>' + esc(t.name) + ' – ' + esc(t.text) + '</option>').join('') + '</select></label>'
+    + '<div class="karte"><label><b>Wie ist das Audit ausgegangen?</b><select id="r-ergebnis"><option value="">– bitte wählen –</option>' + ERG.map(e => '<option value="' + e[0] + '" ' + (r.ergebnis === e[0] ? 'selected' : '') + '>' + esc(e[1]) + '</option>').join('') + '</select></label>'
+    + '<label><b>Wie war der Auditor?</b><select id="r-typ"><option value="">– bitte wählen –</option>' + Object.entries(L.AUDITOR_TYPEN).map(([k2, t]) => '<option value="' + k2 + '" ' + (r.typ === k2 ? 'selected' : '') + '>' + esc(t.name) + ' – ' + esc(t.text) + '</option>').join('') + '</select></label>'
     + '<label><b>Welche Fragen kamen?</b> <span class="grau">(eine pro Zeile, so wörtlich wie möglich)</span><textarea id="r-fragen" rows="6">' + esc(r.fragen || '') + '</textarea></label>'
     + '<label><b>Was lief gut?</b><textarea id="r-gut">' + esc(r.gut || '') + '</textarea></label>'
     + '<label><b>Wo war es schwer?</b><textarea id="r-schwer">' + esc(r.schwer || '') + '</textarea></label>'
     + '<label><b>Was hat der Auditor festgestellt?</b> <span class="grau">(Hinweise, Abweichungen)</span><textarea id="r-fest">' + esc(r.fest || '') + '</textarea></label>'
     + '<button class="knopf" id="r-speichern">Speichern</button></div>'
-    + '<h3>Ergebnis an ' + esc(bn('akk')) + '</h3><div class="karte">'
-    + (!S.start.demo ? '<p>' + (api.lokal ? 'Ihre Rückmeldung und Ihr Übungsstand liegen nur in diesem Browser. Ein Klick schickt beides direkt an ' + esc(bn('akk')) + '.' : 'Ihre Rückmeldung ist gespeichert. Mit einem Klick bekommt ' + esc(bn('nom')) + ' zusätzlich Ihre Nachricht.') + '</p><div class="zeile"><button class="knopf" id="r-senden">✉ Ergebnis an ' + esc(bn('akk')) + ' senden</button></div>'
-      + (api.lokal ? '<p class="grau">Nur falls das Senden nicht klappt: <button class="link" id="r-export">Datei herunterladen</button> und per E-Mail schicken.</p>' : '')
-      : S.start.demo ? '<p class="grau">Demo – hier würde der Kunde sein Ergebnis an den Berater schicken.</p>' : '<p>Ihre Angaben sind gespeichert – ' + esc(bn('nom')) + ' sieht sie.</p>') + '</div>';
+    + '<div id="r-karten">' + nachAuditKarten(r) + '</div>'
+    + (S.start.eigen ? '<div class="karte grau">🔒 Ihre Rückmeldung bleibt auf diesem Gerät. Was Sie am Werkzeug verbessern würden, schicken Sie gern über „💡 Verbesserung“.</div>'
+      : '<h3>Ergebnis an ' + esc(bn('akk')) + '</h3><div class="karte">'
+      + (!S.start.demo ? '<p>' + (api.lokal ? 'Ihre Rückmeldung und Ihr Übungsstand liegen nur in diesem Browser. Ein Klick schickt beides direkt an ' + esc(bn('akk')) + '.' : 'Ihre Rückmeldung ist gespeichert. Mit einem Klick bekommt ' + esc(bn('nom')) + ' zusätzlich Ihre Nachricht.') + '</p><div class="zeile"><button class="knopf" id="r-senden">✉ Ergebnis an ' + esc(bn('akk')) + ' senden</button></div>'
+        + (api.lokal ? '<p class="grau">Nur falls das Senden nicht klappt: <button class="link" id="r-export">Datei herunterladen</button> und per E-Mail schicken.</p>' : '')
+        : '<p class="grau">Demo – hier würde der Kunde sein Ergebnis an den Berater schicken.</p>') + '</div>');
+  const werte = () => ({ ergebnis: $('#r-ergebnis').value, typ: $('#r-typ').value, fragen: $('#r-fragen').value, gut: $('#r-gut').value, schwer: $('#r-schwer').value, fest: $('#r-fest').value });
   $('#r-speichern').onclick = async () => {
-    await speichereEintrag('rueckmeldung', 'audit', { typ: $('#r-typ').value, fragen: $('#r-fragen').value, gut: $('#r-gut').value, schwer: $('#r-schwer').value, fest: $('#r-fest').value });
-    if ($('#r-typ').value) await speichereEintrag('auditor', 'typ', { typ: $('#r-typ').value, quelle: 'rueckmeldung' });
+    const w = werte();
+    await speichereEintrag('rueckmeldung', 'audit', w);
+    if (w.typ) await speichereEintrag('auditor', 'typ', { typ: w.typ, quelle: 'rueckmeldung' });
+    $('#r-karten').innerHTML = nachAuditKarten(w); karteKnoepfe();
     hinweisBox('Gespeichert. Danke!', 'ok');
   };
+  karteKnoepfe();
   const ex = $('#r-export'); if (ex) ex.onclick = () => herunterladen();
   const rs = $('#r-senden'); if (rs) rs.onclick = async () => { $('#r-speichern').click(); sendenPanel(''); };
 };
+/* Ende des Weges (E-A34): Bewertungsbitte an ALLE, die ein Ergebnis eingetragen haben (Google-Richtlinie: keine Auswahl nur Zufriedener),
+   dazu der nächste logische Schritt (Folgejahr). Nicht im Testmonat (Beispielfirma bzw. fremde Teilnehmer) und nicht vor dem Ergebnis. */
+function nachAuditKarten(r) {
+  if (!r || !r.ergebnis || S.start.test) return '';
+  const geschafft = r.ergebnis !== 'offen';
+  return '<div class="karte marke-karte"><b>' + (geschafft ? 'Herzlichen Glückwunsch! 🎉' : 'Danke für Ihre Rückmeldung.') + '</b>'
+    + '<p>' + (geschafft ? 'Wenn Sie anderen Unternehmen helfen möchten, die vor dem gleichen Schritt stehen: Eine kurze Google-Bewertung ist die beste Weiterempfehlung.'
+      : 'Eine kurze, ehrliche Google-Bewertung hilft anderen Unternehmen bei der Wahl ihres Beraters – und mir, besser zu werden.') + '</p>'
+    + '<a class="knopf" href="' + esc(MARKE.bewerten) + '" target="_blank" rel="noopener">★ Google-Bewertung schreiben</a></div>'
+    + '<div class="karte marke-karte" style="--f:#0B7285"><b>Und nächstes Jahr?</b><p>Dann kommt das Überwachungsaudit – meist ohne dass vorher jemand alles vorbereitet. '
+    + 'Die Auditvorbereitung kann aktiv bleiben: Sie erinnert an Prüffristen aus dem Rundgang und an das interne Audit, und vor dem Audit üben wir gemeinsam.</p>'
+    + (S.start.demo ? '' : '<button class="knopf zweit" id="r-folgejahr">Folgejahr-Betreuung anfragen</button>') + '</div>';
+}
+function karteKnoepfe() { const b = $('#r-folgejahr'); if (b) b.onclick = () => sendenPanel('Ich interessiere mich für die Betreuung im Folgejahr (Überwachungsaudit). Bitte melden Sie sich.'); }
 function herunterladen() {
   const daten = api.export(); const blob = new Blob([JSON.stringify(daten, null, 1)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Auditvorbereitung_' + S.start.kunde.name.replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_').slice(0, 40) + '_' + new Date().toISOString().slice(0, 10) + '.json';

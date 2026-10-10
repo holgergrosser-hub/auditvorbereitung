@@ -19,6 +19,14 @@ header .info{opacity:.9;font-size:.95rem}
 .teilen-leiste{position:fixed;left:0;right:0;bottom:0;z-index:20;padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))!important;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#B42318;color:#fff;padding:6px 16px;font-size:.92rem}.teilen-leiste .knopf{background:#fff;color:#B42318}
 .ki-antwort{border-left:4px solid #D9480F}.ki-antwort .eyebrow{color:#D9480F}.so-sagen{background:#FFF4E6;border-radius:8px;padding:6px 10px}
 .senden-leiste{border:2px solid var(--blau);background:#EEF4FF}
+.fuss{max-width:1100px;margin:28px auto 96px;padding:0 16px;color:var(--grau);font-size:.85rem;text-align:center;line-height:1.7}.fuss a{color:inherit}
+.spick-fuss{margin-top:8px;font-size:.8rem;color:var(--grau);text-align:right}
+.karte.marke-karte{border-left:6px solid var(--f,#E0A800)}
+.wahl[hidden]{display:none!important}
+.eigen-wahl{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:12px 0}
+.eigen-karte{display:flex;flex-direction:column;gap:6px;text-align:left;background:#fff;border:1px solid var(--rand);border-top:6px solid var(--f);border-radius:14px;padding:16px;font:inherit;color:inherit;cursor:pointer}
+.eigen-karte b{font-size:1.15rem;color:var(--f)}.eigen-karte:hover{box-shadow:0 6px 16px rgba(20,40,60,.12)}
+.eigen-schutz{border-left:6px solid #6741D9;background:#F3F0FF}
 .test-karte{border-left:6px solid #E0A800;background:#FFF8E1}.fb-note{display:inline-flex;gap:4px;align-items:center;margin-right:10px;font-weight:400}
 .kopf-senden{margin-left:8px;background:#fff;color:var(--blau);border:0;border-radius:99px;padding:5px 14px;font-weight:700;font-size:.95rem;cursor:pointer}.kopf-senden:hover{background:#E7F0FF}
 .senden-panel textarea{width:100%;margin:6px 0;font:inherit;padding:8px;border:1px solid var(--rand);border-radius:8px;box-sizing:border-box}
@@ -213,6 +221,7 @@ details.abschnitt summary .satz{margin:0}.chevron{margin-left:auto;color:var(--g
 <div id="mehr-blatt" class="mehr-blatt kein-druck" hidden></div>
 <nav id="unten" class="unten kein-druck" hidden aria-label="Hauptnavigation"></nav>
 <main id="main"><p class="grau">Einen Moment …</p></main>
+<footer id="fuss" class="fuss kein-druck"></footer>
 <div id="trainer"><div class="box" id="trainer-box"></div></div>
 <script src="../config.js"></script>
 <script type="module" src="./seite.js"></script>

@@ -38,6 +38,7 @@ async function zugangZumToken(t: string) {
   if (!data || data.gesperrt || new Date(data.gueltig_bis + 'T23:59:59') < new Date()) return null;
   return data as { kunde_id: string; gueltig_bis: string };
 }
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // fremde IDs (z. B. vom Geraet) nie an die Datenbank
 const MAIL = /^[^\s@<>]{1,64}@[^\s@<>]{1,200}\.[a-z]{2,}$/i;
 // deno-lint-ignore no-explicit-any
 const zahl = (g: any, k: string) => (g && Number.isFinite(Number(g[k])) && g[k] !== null && g[k] !== '' ? Number(g[k]) : null);
@@ -115,7 +116,7 @@ Deno.serve(async (req) => {
     if (d.aktion === 'nachricht') { // Kostenbremse: hoechstens 30 Nachrichten je Kunde und Tag (im Testmonat laut Grenze)
       if (!(await buchen(kundeId, 'nachricht', zahl(grenzen, 'nachrichten_tag') ?? 30, null))) return antwort({ fehler: 'Heute schon sehr viele Nachrichten – bitte morgen wieder.' }, 429);
       let maId = null;
-      if (d.mitarbeiter_id) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
+      if (UUID.test(String(d.mitarbeiter_id || ''))) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
       const fb = d.art === 'feedback';
       const daten = fb && d.daten && typeof d.daten === 'object' ? d.daten : null;
       if (daten && JSON.stringify(daten).length > 8000) return antwort({ fehler: 'Zu viele Daten' }, 413);
@@ -132,8 +133,8 @@ Deno.serve(async (req) => {
 
     if (d.aktion === 'eintrag' || d.aktion === 'eintraege') {
       let auditId = null, maId = null;
-      if (d.audit_id) { const a = pflicht(await db.from('audits').select('id, kunde_id').eq('id', d.audit_id).maybeSingle()); if (!a || a.kunde_id !== kundeId) return antwort({ fehler: 'Audit nicht gefunden' }, 404); auditId = a.id; }
-      if (d.mitarbeiter_id) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
+      if (d.audit_id) { if (!UUID.test(String(d.audit_id))) return antwort({ fehler: 'Audit nicht gefunden' }, 404); const a = pflicht(await db.from('audits').select('id, kunde_id').eq('id', d.audit_id).maybeSingle()); if (!a || a.kunde_id !== kundeId) return antwort({ fehler: 'Audit nicht gefunden' }, 404); auditId = a.id; }
+      if (UUID.test(String(d.mitarbeiter_id || ''))) { const m = pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()); if (m && m.kunde_id === kundeId) maId = m.id; }
       if (d.aktion === 'eintraege') {
         let q = db.from('kunden_eintraege').select('audit_id, mitarbeiter_id, art, schluessel, daten, geaendert_am').eq('kunde_id', kundeId);
         if (auditId) q = q.or('audit_id.eq.' + auditId + ',audit_id.is.null');
@@ -157,6 +158,7 @@ Deno.serve(async (req) => {
     }
 
     if (d.aktion === 'fakt') {
+      if (!UUID.test(String(d.fakt_id || ''))) return antwort({ fehler: 'Nicht gefunden' }, 404);
       const f = pflicht(await db.from('faktencheck').select('id, kunde_id').eq('id', d.fakt_id).maybeSingle());
       if (!f || f.kunde_id !== kundeId) return antwort({ fehler: 'Nicht gefunden' }, 404);
       if (!['stimmt', 'stimmt_nicht'].includes(d.antwort)) return antwort({ fehler: 'Antwort fehlt' }, 400);
@@ -165,6 +167,7 @@ Deno.serve(async (req) => {
     }
 
     if (d.aktion === 'dokument') {
+      if (!UUID.test(String(d.dokument_id || ''))) return antwort({ fehler: 'Dokument nicht gefunden' }, 404);
       const dok = pflicht(await db.from('dokumente').select('pfad, kopie_pfad, kunde_id, titel, gueltig, link').eq('id', d.dokument_id).maybeSingle());
       if (!dok || dok.kunde_id !== kundeId || !dok.gueltig) return antwort({ fehler: 'Dokument nicht gefunden' }, 404);
       if (d.pdf) { // Seitenbetrachter: immer die PDF-Kopie
@@ -181,9 +184,9 @@ Deno.serve(async (req) => {
     }
 
     // ab hier: gehoert zu einem Audit dieses Kunden
-    const audit = d.audit_id ? pflicht(await db.from('audits').select('id, kunde_id, stufe').eq('id', d.audit_id).maybeSingle()) : null;
+    const audit = UUID.test(String(d.audit_id || '')) ? pflicht(await db.from('audits').select('id, kunde_id, stufe').eq('id', d.audit_id).maybeSingle()) : null;
     if (!audit || audit.kunde_id !== kundeId) return antwort({ fehler: 'Audit nicht gefunden' }, 404);
-    const ma = d.mitarbeiter_id ? pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()) : null;
+    const ma = UUID.test(String(d.mitarbeiter_id || '')) ? pflicht(await db.from('mitarbeiter').select('id, kunde_id').eq('id', d.mitarbeiter_id).maybeSingle()) : null;
     const mitarbeiterId = ma && ma.kunde_id === kundeId ? ma.id : null;
 
     if (d.aktion === 'fragen') {
@@ -205,6 +208,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (!UUID.test(String(d.frage_id || ''))) return antwort({ fehler: 'Frage nicht gefunden' }, 404);
     const frage = pflicht(await db.from('fragen').select('id, audit_id').eq('id', d.frage_id).maybeSingle());
     if (!frage || frage.audit_id !== audit.id) return antwort({ fehler: 'Frage nicht gefunden' }, 404);
 

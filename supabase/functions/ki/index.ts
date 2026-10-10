@@ -63,6 +63,18 @@ async function auszuegeDesKunden(kundeId: string): Promise<{ ausz: any[]; titel:
   const { data } = await db.from('auszuege').select('id, dokument_id, ort, seite, reiter, text').in('dokument_id', doks.map((x: any) => x.id)).limit(5000);
   return { ausz: data || [], titel };
 }
+// Testmonat mit eigenen Dokumenten (E-A33): die Textstellen kommen vom Geraet des Teilnehmers, werden nur an die KI
+// durchgereicht und NIRGENDS gespeichert (auch nicht protokolliert). Hoechstens 8 Stellen zu je 1.400 Zeichen.
+// deno-lint-ignore no-explicit-any
+function auszuegeVomGeraet(d: any, max: number): { treffer: any[]; titel: Record<string, string> } | null {
+  if (!Array.isArray(d.auszuege)) return null;
+  const titel: Record<string, string> = {};
+  const treffer = d.auszuege.slice(0, max).filter((x: any) => x && x.text).map((x: any, i: number) => {
+    const id = kurz(x.dokument_id, 40) || 'g' + i; titel[id] = kurz(x.titel, 200);
+    return { auszug: { dokument_id: id, ort: kurz(x.ort, 60), text: kurz(x.text, 1400) } };
+  });
+  return { treffer, titel };
+}
 // deno-lint-ignore no-explicit-any
 const auszugText = (t: any[], titel: Record<string, string>) => t.map((x: any, i: number) => '[' + (i + 1) + '] ' + (titel[x.auszug.dokument_id] || 'Dokument') + ', ' + (x.auszug.ort || '') + ':\n' + kurz(x.auszug.text, 1400)).join('\n\n');
 
@@ -112,8 +124,10 @@ Deno.serve(async (req) => {
     if (d.aktion === 'wissensfrage') { // "Frag Ihre Dokumente": Antwort NUR aus den eigenen Dokumenten, mit Quellen
       const frage = kurz(d.frage, 500).trim();
       if (frage.length < 3) return antwort({ fehler: 'Bitte eine Frage eingeben.' }, 400);
-      const { ausz, titel } = await auszuegeDesKunden(kundeId);
-      const treffer = L.auszuegeSuchen(frage, ausz, 8);
+      const geraet = auszuegeVomGeraet(d, 8);
+      let treffer: any[], titel: Record<string, string>;
+      if (geraet) ({ treffer, titel } = geraet);
+      else { const k = await auszuegeDesKunden(kundeId); titel = k.titel; treffer = L.auszuegeSuchen(frage, k.ausz, 8); }
       if (!treffer.length) return antwort({ beantwortet: false, antwort: 'Dazu habe ich in Ihren Dokumenten nichts gefunden. Fragen Sie im Zweifel Ihren Berater.', quellen: [] });
       const roh = await claude('Du hilfst einer kleinen Firma bei der Vorbereitung auf ihr ISO-Zertifizierungsaudit. Du antwortest AUSSCHLIESSLICH mit Informationen aus den nummerierten Auszügen ihrer eigenen Dokumente. '
         + 'Erfinde nichts, ergänze kein Normwissen, das nicht in den Auszügen steht. Wenn die Auszüge die Frage nicht beantworten, sag das ehrlich. Sie-Form, einfache Sprache, höchstens 5 Sätze. Antworte nur mit JSON.',
@@ -127,8 +141,10 @@ Deno.serve(async (req) => {
 
     if (d.aktion === 'antwort_feedback') { // Feedback nach Holgers Formel, ergaenzt die Regeln ohne KI
       const regel = L.antwortFeedback(d.antwort);
-      const { ausz, titel } = await auszuegeDesKunden(kundeId);
-      const belege = L.auszuegeSuchen(kurz(d.frage, 600) + ' ' + kurz(d.hilfe, 400), ausz, 4);
+      const geraet = auszuegeVomGeraet(d, 4);
+      let belege: any[], titel: Record<string, string>;
+      if (geraet) ({ treffer: belege, titel } = geraet);
+      else { const k = await auszuegeDesKunden(kundeId); titel = k.titel; belege = L.auszuegeSuchen(kurz(d.frage, 600) + ' ' + kurz(d.hilfe, 400), k.ausz, 4); }
       const roh = await claude('Du bist ein erfahrener ISO-Berater und coachst einen Kunden für sein Zertifizierungsaudit. Antworte nur mit JSON.',
         [{ role: 'user', content: 'Auditorfrage: ' + kurz(d.frage, 600) + '\nAntwort des Kunden: ' + kurz(d.antwort, 2000) + '\nFundstelle in seinen Dokumenten: ' + kurz(d.hilfe, 800) + (belege.length ? '\nAuszüge aus seinen Dokumenten:\n' + auszugText(belege, titel) : '')
           + '\nBewerte nach der Formel „Was wir machen – wo es steht (zeigen) – ein Beispiel“. Keine Superlative, nichts erfinden. '
@@ -149,7 +165,7 @@ Deno.serve(async (req) => {
     }
     return antwort({ fehler: 'Unbekannte Aktion' }, 400);
   } catch (e) {
-    console.error(e);
+    console.error(e instanceof Error ? e.message.slice(0, 200) : 'Fehler'); // keine Inhalte ins Protokoll
     return antwort({ fehler: 'Interner Fehler' }, 500);
   }
 });

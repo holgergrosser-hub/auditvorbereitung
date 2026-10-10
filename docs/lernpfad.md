@@ -17,12 +17,14 @@
 | A13 | Supabase-Projekt | Eigenes Projekt (Frankfurt), öffentlicher Schlüssel vs. Geheimschlüssel, Backoffice-Nutzer | ✓ Projekt steht, Migrationen eingespielt |
 | A14 | Ausspielen | Claude spielt über die Supabase-Verbindung ein (GitHub Action als Reserve); Mini-Supabase für Tests ohne Internet | ✓ |
 | A15 | Backoffice für viele Kunden | Übersicht aller Kunden, Import, persönlicher Link, Nachrichten, Ergebnisse | ✓ lokal getestet, live nach Netlify-Anschluss |
-| A16 | Testmonat mit Grenzen | Anfrageformular, Freischalten mit Vorlage-Kopie, Grenzen je Teilnehmer, Feedback sammeln | ✓ lokal getestet (43/43) |
+| A16 | Testmonat mit Grenzen | Anfrageformular, Freischalten mit Vorlage-Kopie, Grenzen je Teilnehmer, Feedback sammeln, eigene Dokumente nur im Browser | ✓ lokal getestet (51/51) |
 
 ## Begriffe A16 (in Alltagssprache)
 - **Vorlage:** ein Kunde, der als Kopiervorlage dient. Beispiel: Die erfundene „Beispiel Haustechnik GmbH“ wird für jeden LinkedIn-Teilnehmer kopiert, damit jeder seinen eigenen Übungsstand hat.
 - **Kontingent (Grenze je Teilnehmer):** wie viel jemand verbrauchen darf. Beispiel: 20 KI-Fragen am Tag – die 21. bekommt die Antwort „für heute aufgebraucht“, alle Übungen ohne KI gehen weiter.
 - **Atomar:** zählen und prüfen in einem einzigen Schritt. Beispiel: Klickt jemand zweimal gleichzeitig, wird trotzdem nur bis 20 gezählt.
+- **IndexedDB:** ein Speicher im Browser, der auch große Dateien fasst. Beispiel: Die eigenen PDFs eines Testteilnehmers liegen nur dort – auf seinem Laptop, nirgends sonst.
+- **Durchreichen:** Daten gehen durch einen Server hindurch, ohne dass er sie ablegt. Beispiel: Die Textstellen zur KI-Frage laufen durch die Funktion `ki` zur KI und sind danach weg.
 - **Honigtopf-Feld:** ein unsichtbares Formularfeld. Menschen sehen es nicht, Spam-Programme füllen es aus – und werden still verworfen.
 
 ## Begriffe A13–A15 (in Alltagssprache)

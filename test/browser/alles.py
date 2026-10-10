@@ -283,7 +283,7 @@ async def main():
         await pruefe('T3 Backoffice: freischalten, Chat-Text mit Schlüssel', t_frei)
         async def t_schluessel():
             await t.goto(B + '/test/'); await t.fill('#schluessel', 'falsch'); await t.click('#schluessel-form button'); m = await t.locator('#s-meldung').inner_text()
-            await t.fill('#schluessel', S['schluessel']); await t.click('#schluessel-form button'); await t.wait_for_selector('.test-karte', timeout=15000)
+            await t.fill('#schluessel', S['schluessel']); await t.click('#schluessel-form button'); await t.wait_for_selector('[data-m=beispiel]', timeout=15000); await t.click('[data-m=beispiel]'); await t.wait_for_selector('.test-karte', timeout=15000)
             modus = await t.locator('#modus').inner_text(); assert 'Testmonat' in modus and await t.locator('#kopf-feedback').count() == 1; await shot(t, '22_test_kunde')
             return 'falscher Schlüssel: „' + m[:40] + '…“ · ' + modus[:90]
         await pruefe('T4 Teilnehmer kommt mit Schlüssel hinein (Testmonat-Anzeige)', t_schluessel)
@@ -313,6 +313,68 @@ async def main():
             assert psql("select count(*) from kunden where art='test'") == '0'; assert os.path.exists(sp + '/dokumente/' + pfad), 'Datei der Vorlage gelöscht!'
             return 'Teilnehmer gelöscht, Datei der Vorlage bleibt: ' + pfad[:40]
         await pruefe('T8 Teilnehmer löschen lässt Dateien der Vorlage stehen', t_loeschen)
+
+        # ---------------------------------------------------------------- Eigene Dokumente im Testmonat (E-A33): bleiben im Browser
+        Q = os.path.dirname(os.path.abspath(__file__)) + '/../testkunde/quellen/'
+        async def e_start():
+            post('kunde', {'aktion': 'testanfrage', 'name': 'Otto Eigen', 'firma': 'Eigen GmbH', 'email': 'otto@example.com', 'feedback_zugesagt': True, 'datenschutz_ok': True})
+            S['tok2'] = psql("select set_config('request.jwt.claims', '{\"email\":\"test@example.com\"}', true), testkunde_anlegen((select id from testanfragen where email='otto@example.com'))").split('|')[-1]
+            assert re.match(r'^[0-9a-f]{48}$', S['tok2']), S['tok2']
+            S['e'] = await ctx.new_page(); e = S['e']; e.on('pageerror', lambda x: fehler.append('Eigen: ' + str(x)))
+            S['req'] = []; e.on('request', lambda r: S['req'].append((r.url, r.post_data or '')) if '/functions/v1/' in r.url or '/rest/v1/' in r.url else None)
+            await e.goto(B + '/kunde/?t=' + S['tok2']); await e.wait_for_selector('.eigen-karte', timeout=15000); await shot(e, '30_eigen_auswahl')
+            return 'Auswahl: ' + ' | '.join([x.strip()[:30] for x in await e.locator('.eigen-karte b').all_text_contents()])
+        await pruefe('E1 Testmonat: Auswahl Beispielfirma oder eigene Dokumente', e_start)
+        async def e_einrichten():
+            e = S['e']; await e.click('[data-m=eigen]'); await e.wait_for_selector('#e-firma'); await e.click('#e-los'); m0 = await e.locator('#e-protokoll').inner_text()
+            await e.fill('#e-firma', 'Eigen GmbH'); await e.fill('#e-ma', 'Otto, Paula'); await e.fill('#e-d1', '2026-11-20')
+            await e.set_input_files('#e-dateien', [Q + 'UPH.pdf', Q + 'MB.pdf', Q + 'Notfallplan.pdf']); await e.click('#e-los')
+            await e.wait_for_function("document.querySelector('#e-protokoll').innerText.includes('Fertig')", timeout=60000); prot = await e.locator('#e-protokoll').inner_text(); await shot(e, '31_eigen_eingerichtet')
+            await e.click('#e-los'); await e.wait_for_selector('.test-karte', timeout=15000); await e.select_option('#sel-ma', index=1); await e.wait_for_timeout(800)
+            modus = await e.locator('#modus').inner_text(); assert 'eigenen Dokumenten' in modus and await e.locator('#kopf-senden').count() == 0 and await e.locator('#kopf-feedback').count() == 1
+            await shot(e, '32_eigen_heute'); return 'ohne Firma: „' + m0.strip()[:40] + '“ · ' + prot.strip().split('\n')[-1][:140]
+        await pruefe('E2 Eigene PDFs einrichten (im Browser gelesen), Senden ausgeblendet', e_einrichten)
+        async def e_fahrplan():
+            e = S['e']; await e.click('nav button[data-k=fahrplan]'); await e.wait_for_timeout(800); t = await e.locator('#main').inner_text()
+            assert 'Vorschlag aus Ihren Dokumenten' in t or 'UPH' in t, t[:300]; return 'Fahrplan mit Standardfragen und Fundstellen-Vorschlägen (' + str(t.count('Vorschlag aus Ihren Dokumenten')) + ' sichtbar)'
+        await pruefe('E3 Fahrplan aus Standardfragen mit Fundstellen aus den eigenen PDFs', e_fahrplan)
+        async def e_suche():
+            e = S['e']; await e.click('nav button[data-k=finden]'); await e.wait_for_timeout(400); await e.fill('#suche', 'Lieferantenbewertung'); await e.click('#suchen'); await e.wait_for_timeout(600)
+            bt = e.locator('#ergebnis .auszug button[data-ort]').first; lab = await bt.text_content()
+            async with ctx.expect_page() as neu: await bt.click()
+            v = await neu.value; await v.wait_for_function('window.__pdfBereit', timeout=30000); info = await v.evaluate('window.__pdfBereit'); u = v.url; await shot(v, '33_eigen_betrachter'); await v.close()
+            assert '?e=' in u; m = re.search(r'Seite (\d+)', lab); assert not m or int(m.group(1)) == info['start'], (lab, info)
+            return lab.strip() + ' → Betrachter aus diesem Browser, Seite ' + str(info['start']) + ' von ' + str(info['n'])
+        await pruefe('E4 „Wo steht das?“ und Seitenbetrachter aus dem Browser-Speicher', e_suche)
+        async def e_ki():
+            e = S['e']; vor = psql("select coalesce(sum(anzahl),0) from nutzung n join kunden k on k.id=n.kunde_id where k.teilnehmer like 'Otto%' and n.art='ki'")
+            await e.fill('#suche', 'Wer bewertet bei uns die Lieferanten?'); await e.click('#suchen'); await e.wait_for_selector('.ki-antwort button[data-ort]', timeout=30000)
+            ki = [b for (u, b) in S['req'] if '/functions/v1/ki' in u and 'wissensfrage' in b]; assert ki and '"auszuege"' in ki[-1]
+            nach = psql("select coalesce(sum(anzahl),0) from nutzung n join kunden k on k.id=n.kunde_id where k.teilnehmer like 'Otto%' and n.art='ki'"); assert int(nach) == int(vor) + 1
+            return 'KI bekam ' + str(ki[-1].count('"dokument_id"')) + ' Textstellen vom Gerät · Kontingent gezählt (' + vor + '→' + nach + ')'
+        await pruefe('E5 KI fragen: Textstellen nur durchgereicht, Grenze zählt', e_ki)
+        async def e_feedback():
+            e = S['e']; await e.click('#kopf-feedback'); await e.wait_for_selector('#fb-los'); await e.check('input[name=fb-note][value="5"]'); await e.fill('#fb-hilft', 'Eigene Dokumente!'); await e.click('#fb-los'); await e.wait_for_selector('.ok-box', timeout=8000)
+            return 'Feedback am Server: ' + psql("select count(*) from nachrichten n join kunden k on k.id=n.kunde_id where k.teilnehmer like 'Otto%' and n.art='feedback'")
+        await pruefe('E6 Verbesserung vorschlagen geht auch mit eigenen Dokumenten', e_feedback)
+        async def e_nichts():
+            kunde_req = [b for (u, b) in S['req'] if '/functions/v1/kunde' in u]
+            aktionen = sorted(set(json.loads(b).get('aktion') for b in kunde_req if b))
+            assert set(aktionen) <= {'start', 'nachricht'}, aktionen
+            assert not any('Lieferant' in b for b in kunde_req), 'Dokumenttext an die Kunden-Funktion!'
+            assert not any('/rest/v1/' in u for (u, b) in S['req'])
+            antw = psql("select count(*) from antworten a join fragen f on f.id=a.frage_id join audits au on au.id=f.audit_id join kunden k on k.id=au.kunde_id where k.teilnehmer like 'Otto%'")
+            eintr = psql("select count(*) from kunden_eintraege e join kunden k on k.id=e.kunde_id where k.teilnehmer like 'Otto%'")
+            assert antw == '0' and eintr == '0'; return 'Server bekam nur: ' + ', '.join(aktionen) + ' · Antworten/Einträge in der Datenbank: ' + antw + '/' + eintr
+        await pruefe('E7 Nichts von den Dokumenten oder Übungen landet auf dem Server', e_nichts)
+        async def e_marke():
+            d = await ctx.new_page(); await d.goto(B + '/kunde/?demo'); await d.wait_for_selector('#fuss a'); fu = await d.locator('#fuss').inner_text()
+            await d.click('nav button[data-k=danach]'); await d.wait_for_timeout(400); vorher = await d.locator('.marke-karte').count()
+            await d.select_option('#r-ergebnis', 'bestanden'); await d.click('#r-speichern'); await d.wait_for_timeout(500); nachher = await d.locator('.marke-karte').count()
+            href = await d.locator('.marke-karte a').first.get_attribute('href'); await shot(d, '34_nach_audit_karten'); await d.close()
+            assert 'Impressum' in fu and 'Datenschutz' in fu and vorher == 0 and nachher == 2 and 'writereview' in href
+            return 'Fußzeile mit Impressum/Datenschutz · Karten vor/nach Ergebnis: ' + str(vorher) + '/' + str(nachher)
+        await pruefe('M1 Fußzeile, Bewertungs- und Folgejahr-Karte erst nach dem Ergebnis', e_marke)
 
         ERG.append({'name': 'Keine Skriptfehler auf den Seiten', 'ok': not fehler, 'info': '; '.join(fehler)[:300]})
         json.dump(ERG, open(W + '/alles-bericht.json', 'w'), ensure_ascii=False, indent=1)

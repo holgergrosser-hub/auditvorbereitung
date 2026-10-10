@@ -14,7 +14,7 @@ aufbereitet, sondern steckt einmal im Werkzeug, und jeder Kunde macht es besser.
 | **3. Hohe Wechselkosten** | Der Übungsstand, die Prüfungsreife und die Stolperfallen eines Kunden wachsen mit jedem Audit | Nicht als Falle bauen: Der Kunde behält seine Daten (Export als Datei). Er bleibt, weil es ihm nützt, nicht weil er nicht wegkommt. |
 | **4. Prozess-Schatz** | **Fragenbank aus echten Audits** + Holgers Formel „Was wir machen – wo es steht – ein Beispiel“ + Stolperfallen | Jede Rückmeldung nach einem Audit („Der Auditor fragte nach …“) wandert anonym in die Fragenbank. Nach 100 Audits weiß das Werkzeug, was TÜV, DEKRA & Co. wirklich fragen. Das kann niemand nachbauen. |
 | **5. Ökosystem** | Später: andere Berater nutzen das Werkzeug für ihre Kunden | Nicht jetzt. Erst wenn der Standard steht (Ziel: 20 eigene Kunden + Testmonat-Rückmeldungen). Dann Berater als Mandanten. |
-| **6. Vertrauen** | Keine automatischen Mails, keine verdeckte Hilfe im Audit, Server in Frankfurt, nur eigene Dokumente als KI-Grundlage | „Holger schaut immer drüber.“ Das ist Teil des Produkts, nicht eine Lücke. |
+| **6. Vertrauen** | Eigene Dokumente bleiben auf dem Gerät des Kunden, keine automatischen Mails, keine verdeckte Hilfe im Audit, Server in Frankfurt, nur eigene Dokumente als KI-Grundlage | „Holger schaut immer drüber.“ Das ist Teil des Produkts, nicht eine Lücke. |
 
 **Echtzeit** (SAPs erste Revolution) haben wir schon: Was der Kunde übt, sieht Holger sofort im Backoffice, ohne Datei hin und her.
 
@@ -30,7 +30,7 @@ aufbereitet, sondern steckt einmal im Werkzeug, und jeder Kunde macht es besser.
 3. **Testmonat über LinkedIn.** Fremde testen mit der erfundenen Beispielfirma, 30 Tage, Grenzen je Teilnehmer, als Gegenleistung Verbesserungsvorschläge. *Gebaut.*
    - Ziel: 20 Teilnehmer, 10 Rückmeldungen, daraus die 5 häufigsten Wünsche umsetzen.
    - Messgröße: Anteil „würde es mit eigenen Dokumenten nutzen: ja“.
-4. **Eigene Dokumente selbst hochladen.** Der meistgenannte Wunsch wird vermutlich sein: „Ich will das mit meinen Unterlagen.“ Dann Self-Upload mit Texterkennung im Browser, Holger prüft vor der Freigabe.
+4. **Eigene Dokumente – beim Kunden.** Im Testmonat schon möglich: PDFs werden nur im Browser des Teilnehmers gelesen, Holger sieht nichts (E-A33). Nächster Schritt: Scans per Texterkennung, Excel-Reiter, Prüfliste des Zertifizierers einlesen.
 5. **Fragenbank füllen.** Nach jedem echten Audit: Rückmeldung „Was wurde gefragt?“ → Fragenbank (anonym). Das ist der Burggraben.
 6. **Ökosystem.** Andere Berater als Mandanten, erst wenn 2.–5. stabil laufen.
 
