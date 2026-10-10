@@ -468,7 +468,9 @@ ANSICHT.technik = () => {
     + '<div class="karte">'
     + zeile('laptop', 'Ich mache das Audit am Laptop oder PC', 'Nicht am Handy oder Tablet.', '<button class="knopf klein" data-c="laptop" ' + (handy ? 'disabled' : '') + '>' + (c.laptop ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
     + zeile('chrome', 'Browser Google Chrome', chrome ? 'Sie nutzen Chrome bzw. Edge. Gut.' : 'Bitte Google Chrome installieren und diese Seite darin öffnen.', '<button class="knopf klein" data-c="chrome" ' + (chrome ? '' : 'disabled') + '>' + (c.chrome ? 'Bestätigt' : 'Ja, bestätigen') + '</button>')
-    + zeile('dokument_offen', 'Ihre Dokumente öffnen sich am Laptop', 'Öffnen Sie testweise Ihr Handbuch. Kommt eine Anmeldung, melden Sie sich mit dem Konto an, über das Sie die Dokumente bekommen haben. Bearbeiten Sie Dokumente nur dort, nicht in Word/Excel auf dem eigenen Rechner – sonst entstehen zwei Versionen.', '<button class="knopf klein" id="dok-test">Handbuch öffnen</button> <button class="knopf klein zweit" data-c="dokument_offen">Hat geklappt</button>')
+    + zeile('dokument_offen', 'Ihre Dokumente öffnen sich am Laptop', S.start.test
+      ? (S.start.eigen ? 'Öffnen Sie testweise Ihr erstes Dokument. Es kommt aus diesem Browser – Sie brauchen keine Anmeldung.' : 'Öffnen Sie testweise das Handbuch der Beispielfirma. Es öffnet sich hier im Seitenbetrachter – im echten Audit wären das Ihre eigenen Dokumente.')
+      : 'Öffnen Sie testweise Ihr Handbuch. Kommt eine Anmeldung, melden Sie sich mit dem Konto an, über das Sie die Dokumente bekommen haben. Bearbeiten Sie Dokumente nur dort, nicht in Word/Excel auf dem eigenen Rechner – sonst entstehen zwei Versionen.', '<button class="knopf klein" id="dok-test">Handbuch öffnen</button> <button class="knopf klein zweit" data-c="dokument_offen">Hat geklappt</button>')
     + zeile('bildschirm', 'Bildschirm teilen klappt', 'Klicken Sie auf „Testen“, wählen Sie <b>Gesamter Bildschirm</b> und dann „Teilen“. So zeigen Sie dem Auditor im Online-Audit Ihre Dokumente – und im Fahrplan macht das Programm damit Ihr Übungsfoto. <span class="grau">Am Mac einmalig nötig: Systemeinstellungen → Datenschutz &amp; Sicherheit → Bildschirmaufnahme → Chrome einschalten, Chrome neu starten. Klappt das Teilen nicht, können Sie im Fahrplan auch ein eigenes Bildschirmfoto einfügen.</span>', '<button class="knopf klein" id="teilen-test">Bildschirm teilen testen</button><div id="teilen-erg"></div>')
     + '</div>';
   $$('[data-c]').forEach(b => b.onclick = () => technik(b.dataset.c));
@@ -561,7 +563,7 @@ function markiere(text, treffer) {
   return t.replace(/\n/g, '<br>');
 }
 function auszugHtml(x, treffer) {
-  return '<div class="auszug"><div class="zeile" style="justify-content:space-between"><b>' + esc(dokTitel(x.auszug.dokument_id)) + ' · ' + esc(x.auszug.ort || '') + '</b><span class="zeile">' + stelleKnopf(x.auszug.dokument_id, x.auszug.ort) + (d0(x.auszug.dokument_id).link ? '<button class="knopf klein zweit" data-d="' + esc(x.auszug.dokument_id) + '">live öffnen</button>' : '') + '</span></div><div class="auszug-text">' + markiere(x.auszug.text, treffer || x.treffer) + '</div></div>';
+  return '<div class="auszug"><div class="zeile" style="justify-content:space-between"><b>' + esc(dokTitel(x.auszug.dokument_id)) + ' · ' + esc(x.auszug.ort || '') + '</b><span class="zeile">' + stelleKnopf(x.auszug.dokument_id, x.auszug.ort) + '</span></div><div class="auszug-text" hidden>' + markiere(x.auszug.text, treffer || x.treffer) + '</div></div>';
 }
 async function hilfeHtml(f) {
   const a = await auszuege();
@@ -590,7 +592,8 @@ ANSICHT.finden = async () => {
   dokKnoepfe($('#main'));
   const los = (mitKi) => {
     const q = $('#suche').value.trim(); if (!q) return;
-    const r = L.auszuegeSuchen(q, a, 5);
+    // nur Treffer, die fast so gut passen wie der beste – sonst erscheinen Dokumente, in denen das Wort nur nebenbei vorkommt
+    const alle = L.auszuegeSuchen(q, a, 5), r = alle.filter(x => x.punkte >= 0.5 * alle[0].punkte);
     $('#ergebnis').innerHTML = '<div id="ki-antwort"></div>' + (r.length ? r.map(x => auszugHtml(x)).join('') : '<div class="karte grau">Nichts gefunden. Probieren Sie ein anderes Wort (z. B. „Lieferant“ statt „Zulieferer“).</div>');
     dokKnoepfe($('#ergebnis'));
     // Ganze Fragen ("Wer bewertet unsere Lieferanten?") beantwortet zusätzlich die KI – nur aus den eigenen Dokumenten
