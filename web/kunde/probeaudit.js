@@ -169,6 +169,7 @@ export function probeaudit(ctx) {
   $m('#pa-text').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); antworten(); } };
   if ($m('#pa-mic')) $m('#pa-mic').onclick = () => (micWill || rec) ? micStopp() : micStart();
   $m('#pa-skip').onclick = () => { $m('#pa-text').value = 'Diese Frage möchte ich überspringen.'; antworten(); };
+  if (oeffneHilfe) oeffneHilfe(main); // Knöpfe der Karte „Ihre Themen im Audit“ (Dokumente öffnen)
   $m('#pa-was').onclick = () => { const b = $m('#pa-wasbox'); b.hidden = !b.hidden; if (!b.hidden) { const f = P.aktuell; b.innerHTML = f ? hilfe(f) : 'Der Auditor möchte wissen, wie Sie das in Ihrer Firma machen – und das Dokument dazu sehen.'; if (oeffneHilfe) oeffneHilfe(b); } };
   $m('#pa-ende').onclick = () => { if (!P.ende) { P.ende = true; still(); zeichne(); auswerten(); } };
   zeichne();

@@ -176,9 +176,11 @@ async def main():
             await d.select_option('#sel-ma', label='Sabine Büro (Büro und Einkauf)'); await d.wait_for_timeout(1200)
             await d.click('nav button[data-k=fahrplan]'); await d.wait_for_selector('.rolle-karte', timeout=15000)
             rk = await d.locator('.rolle-karte').inner_text(); kap = await d.eval_on_selector_all('.karte[data-f] .np', 'x => x.map(e => e.innerText)')
+            doks = await d.eval_on_selector_all('.rolle-doks li', 'x => x.map(e => e.innerText.replace(/\\s+/g, " "))'); knoepfe = await d.locator('.rolle-doks [data-d]').count()
             await shot(d, '42_rolle_einkauf'); await d.close()
             assert 'Einkauf' in rk and 'Qualitätspolitik' in rk and not any(k.startswith(('4.', '6.', '9.')) for k in kap), (rk, kap)
-            return 'Themen: ' + rk.split('\n')[1][:90] + ' · Fragen: ' + ', '.join(kap)
+            assert len(doks) >= 2 and knoepfe == len(doks) and any('Einkauf' in x for x in doks), doks
+            return 'Themen: ' + rk.split('\n')[1][:70] + ' · Fragen: ' + ', '.join(kap) + ' · Dokumente: ' + ' | '.join(x[:60] for x in doks)
         await pruefe('R1 Rolle Büro und Einkauf: nur ihre Prozesse und die Politik', k_rolle)
         async def k_lektion():
             await k.click('nav button[data-k=heute]'); await k.wait_for_timeout(500); await k.click('#lektion'); await k.wait_for_timeout(600)

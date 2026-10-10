@@ -720,7 +720,32 @@ function rolleHtml() {
     + '<div>' + (eigene.length ? 'Der Auditor fragt Sie zu: <b>' + eigene.map(name).join(', ') + '</b>' : 'Eigene Prozesse haben wir im Handbuch nicht gefunden.')
     + (r.prozesse && r.prozesse.length ? ' <span class="grau">– laut ' + r.prozesse.map(p => 'Prozess „' + esc(p.name) + '“').join(', ') + '</span>' : '') + '.</div>'
     + '<div>Das muss jeder kennen: ' + L.FUER_ALLE.map(name).join(', ') + '.</div>'
+    + rolleDokumenteHtml(r)
     + '<div class="grau">Kontext, Risiken, Ziele, internes Audit und Managementbewertung beantwortet die Geschäftsführung bzw. der QMB.</div></div>';
+}
+
+/* Welche Dokumente soll sich diese Person vorher ansehen? Ihre Prozessbeschreibungen und die Fundstellen ihrer Fragen,
+   je mit Knopf direkt auf die Seite (ohne das kann man im Probeaudit nicht antworten) */
+function rolleDokumente(r) {
+  const liste = [], schon = new Set();
+  const dazu = (thema, dokId, ort, was) => {
+    const o = String(ort || '').replace(/^S\. /, 'Seite '), k = dokId + '|' + o;
+    if (!dokId || schon.has(k) || !S.start.dokumente.some(d => d.id === dokId)) return; schon.add(k); liste.push({ thema, dokId, ort: o, was });
+  };
+  (r.prozesse || []).forEach(p => dazu((p.kapitel || []).map(k => KAP_NAMEN[k]).filter(Boolean)[0] || p.name, p.dokument_id, p.ort, 'Prozess „' + p.name + '“'));
+  S.fragen.filter(f => f.normkapitel).forEach(f => {
+    const k = String(f.normkapitel).split(/[,\s]+/)[0], orte = L.orteJeDokument(f.hilfe, S.start.dokumente);
+    // zuerst die Dokumente aus der Fundstelle (z. B. „QM-Übersicht, Reiter Lieferantenbewertung“), dann die zugeordneten
+    [...new Set(Object.keys(orte).concat((f.dokumente || []).map(d => d.id)))].slice(0, 3).forEach(id => {
+      const d = S.start.dokumente.find(x => x.id === id); if (d) dazu(KAP_NAMEN[k] || ('Kapitel ' + k), id, (orte[id] || [])[0] || '', d.titel);
+    });
+  });
+  return liste.slice(0, 10);
+}
+function rolleDokumenteHtml(r) {
+  const l = rolleDokumente(r); if (!l.length) return '';
+  return '<div><b>📂 Das sehen Sie sich vorher an</b> – dort stehen die Antworten:</div><ul class="rolle-doks">'
+    + l.map(x => '<li><span>' + esc(x.thema) + ':</span> ' + esc(x.was) + (x.ort ? ' <span class="grau">(' + esc(x.ort) + ')</span>' : '') + ' ' + stelleKnopf(x.dokId, x.ort, 'Öffnen') + '</li>').join('') + '</ul>';
 }
 
 /* ------------------------------------------------ Fahrplan / Fragen (P01, P04, P09, Ideen 1–4) */
