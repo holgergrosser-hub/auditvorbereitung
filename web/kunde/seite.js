@@ -11,7 +11,7 @@ import * as E from './eigene.js';
 import { MARKE, fussHtml } from './marke.js';
 import { probeaudit } from './probeaudit.js';
 import { stimmeAnlegen } from './stimme.js';
-import { beispielZu, praxisHtml } from './wissen.js';
+import { beispielZu, praxisHtml, nachfragenLaden } from './wissen.js';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
@@ -54,6 +54,7 @@ async function ki(aktion, daten) {
 }
 
 const stimme = stimmeAnlegen(ki, kiAn); // natürliche Stimme (Google) über den Server, sonst Browserstimme
+nachfragenLaden(); // echte Auditor-Nachfragen im Hintergrund nachladen
 
 const S = { start: null, audit: null, ma: null, fragen: [], planpunkte: [], antworten: [], eintraege: [], auszuege: null, ansicht: 'heute', stream: null, filter: 'alle', trotzRuhe: false, queue: null };
 const KAPITEL = { '0': 'Zum Einstieg: Überblick über Ihre Dokumentation', '4': '4 Kontext der Organisation', '5': '5 Führung', '6': '6 Planung', '7': '7 Unterstützung', '8': '8 Betrieb', '9': '9 Bewertung der Leistung', '10': '10 Verbesserung' };

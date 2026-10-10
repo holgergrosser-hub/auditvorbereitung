@@ -4,7 +4,9 @@
  * wie im iso9001-portal (WISSEN.faq). Keine Firmen-, Personen- oder Produktnamen – das Repo ist öffentlich.
  * Nutzt: Fahrplan („Wo steht das?“, „Mein Beispiel“), Probeaudit („Was meint der Auditor?“, Nachhaken, KI-Auditor).
  */
-import { NACHFRAGEN } from './nachfragen.js';
+// Die echten Nachfragen (mehrere hundert KB) werden erst nachgeladen, damit die Seite schnell startet.
+let NACHFRAGEN = [];
+export async function nachfragenLaden() { try { NACHFRAGEN = (await import('./nachfragen.js')).NACHFRAGEN; } catch (e) { /* ohne Nachfragen weiter */ } return NACHFRAGEN.length; }
 export const PRAXIS = [ { "kap": "4.3", "q": "Was gehört in den Geltungsbereich?", "a": "Ein Satz: was Sie tun, für wen, mit welchen Leistungen. Alle Tätigkeiten, mit denen Sie Geld verdienen, gehören hinein. Entwicklung (8.3) darf nur ausgeschlossen werden, wenn Sie ausschließlich nach Vorgabe des Kunden arbeiten.", "tags": "scope anwendungsbereich geltungsbereich eingrenzen ausschluss" },
   { "kap": "4.1", "q": "Müssen wir die Prozesse erst optimieren, bevor wir zertifizieren?", "a": "Nein. Für die Zertifizierung beschreiben Sie Ihre Abläufe so, wie sie heute funktionieren. Verbesserung läuft danach Schritt für Schritt – das ist ein eigenes Projekt.", "tags": "chaos optimieren verbessern vorher prozesse" },
   { "kap": "4.2", "q": "Welche Zulassungen müssen wir angeben?", "a": "Nur behördliche Genehmigungen, die Sie für Ihre Tätigkeit brauchen und die heute gültig sind (z. B. Erlaubnis zur Arbeitnehmerüberlassung, Sachkunde § 34a, Handwerksrolle). ISO 9001 selbst ist keine Zulassung. Wenn Sie keine brauchen: „keine“.", "tags": "zulassung genehmigung erlaubnis" },
@@ -37,7 +39,7 @@ export const PRAXIS = [ { "kap": "4.3", "q": "Was gehört in den Geltungsbereich
 /* Themen der Übungsfragen: passendes Beispiel (Platzhalter für „Mein Beispiel“) und typische Nachfrage des Auditors.
    Die Beispiele zeigen die Formel „Was wir machen – wo es steht – ein Beispiel“ an einem kleinen Betrieb. */
 export const THEMEN = [
-  { kap: [], rx: /notfall|brand|feuer|unfall|evakuier|erste hilfe|ersthelfer|leckage|auslaufen/i, beispiel: 'Unser Notfallplan hängt am Eingang; die letzte Räumungsübung war im April, das Protokoll liegt im QM-Ordner. Die Feuerlöscher sind bis 03/2027 geprüft.', nachfrage: 'Wann haben Sie den Notfall zuletzt geübt, und was kam dabei heraus?' },
+  { kap: [], rx: /notfall|brandschutz|feuerlösch|räumung|evakuier|erste hilfe|ersthelfer|arbeitsunfall/i, beispiel: 'Unser Notfallplan hängt am Eingang; die letzte Räumungsübung war im April, das Protokoll liegt im QM-Ordner. Die Feuerlöscher sind bis 03/2027 geprüft.', nachfrage: 'Wann haben Sie den Notfall zuletzt geübt, und was kam dabei heraus?' },
   { kap: [], rx: /umwelt|abfall|entsorg|umweltaspekt|energie|gefahrstoff|emission/i, beispiel: 'Unsere Abfälle trennen wir nach dem Entsorgungskonzept; die Nachweise vom Entsorger heften wir im Umweltordner ab, zuletzt im September.', nachfrage: 'Welcher Umweltaspekt ist bei Ihnen der wichtigste, und was tun Sie dagegen?' },
   { kap: [], rx: /gefährdung|arbeitsschutz|arbeitssicherheit|psa|schutzausrüstung|sicherheitsunterweis/i, beispiel: 'Die Gefährdungsbeurteilung für die Montage haben wir im Frühjahr aktualisiert; daraus kam, dass jeder Monteur eine Absturzsicherung bekommt – unterwiesen im Mai.', nachfrage: 'Wie beteiligen Sie die Mitarbeiter an der Gefährdungsbeurteilung?' },
   { kap: ['4.3'], rx: /geltungsbereich|anwendungsbereich|ausschl/i, beispiel: 'Wir montieren und warten … für Gewerbekunden in der Region – so steht es im Handbuch Kapitel 1. Entwicklung schließen wir aus, weil wir nur nach Vorgabe des Kunden arbeiten.', nachfrage: 'Gibt es Leistungen, mit denen Sie Geld verdienen, die nicht im Geltungsbereich stehen?' },
@@ -84,15 +86,26 @@ export function themaZu(f) {
 }
 export const beispielZu = (f) => themaZu(f).beispiel;
 
+const FUELL = new Set(['nehmen', 'zeigen', 'werden', 'welche', 'ihren', 'ihrer', 'ihrem', 'haben', 'letzt', 'wurde', 'woran', 'erken', 'darau', 'danac', 'sicher', 'festg', 'sind', 'diese', 'diesem', 'einer', 'einem', 'durch', 'gemac', 'passi']);
+// Wortstämme (erste 6 Buchstaben) ohne Füllwörter – damit „Notfallsituationen“ und „Notfall“ zusammenpassen
+const staemme = (t) => [...new Set((String(t).toLowerCase().match(/[a-zäöüß]{5,}/g) || []).map(x => x.slice(0, 6)).filter(x => !FUELL.has(x) && !FUELL.has(x.slice(0, 5))))];
 /** Echte Nachfragen von Auditoren (aus der Wissensbasis, anonymisiert) zum Thema der Frage */
-export function nachfragenZu(f, max = 2, liste = NACHFRAGEN) {
+export function nachfragenZu(f, max = 2, liste) {
+  liste = liste || NACHFRAGEN;
   const t = themaZu(f); if (!t.rx || !liste.length) return [];
-  const passend = liste.filter(n => t.rx.test(n.frage));
+  // passend zum Thema, dann nach gemeinsamen Wörtern mit der Übungsfrage; aus den besten acht je Frage eine feste Auswahl
+  const w = new Set(staemme(((f && f.frage) || '') + ' ' + ((f && f.titel) || '')));
+  const passt = (n) => staemme(n.frage).filter(x => w.has(x)).length;
+  const gesehen = new Set();
+  const passend = liste.filter(n => t.rx.test(n.frage)).map(n => ({ n, p: passt(n) })).filter(x => x.p > 0)
+    .sort((a, b) => b.p - a.p || a.n.frage.length - b.n.frage.length)
+    .filter(x => { const k = x.n.frage.toLowerCase().replace(/[^a-zäöüß]/g, '').slice(0, 50); if (gesehen.has(k)) return false; gesehen.add(k); return true; })
+    .slice(0, 8).map(x => x.n);
   const start = [...String((f && (f.id || f.frage)) || '')].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % (passend.length || 1); // je Frage fest, aber verschieden
-  return passend.slice(start).concat(passend.slice(0, start)).slice(0, max).map(n => n.frage);
+  return passend.slice(start).concat(passend.slice(0, start)).slice(0, max); // [{frage, nachweis, branche}]
 }
 /** Nachhaken ohne KI: echte Nachfrage aus der Praxis, sonst die typische des Themas */
-export const nachfrageZu = (f) => nachfragenZu(f, 1)[0] || themaZu(f).nachfrage;
+export const nachfrageZu = (f) => (nachfragenZu(f, 1)[0] || {}).frage || themaZu(f).nachfrage;
 
 /** Passende Einträge aus Holgers Beratungspraxis (höchstens max). */
 export function praxisZu(f, max = 2) {
@@ -112,6 +125,6 @@ export function praxisHtml(f, esc, max = 2) {
   return '<div class="praxis">'
     + (p.length ? '<div class="praxis-kopf">💬 Aus der Beratungspraxis – das fragen andere Betriebe dazu</div>'
       + p.map(e => '<details><summary>' + esc(e.q) + ' <span class="np">' + esc(e.kap) + '</span></summary><div>' + esc(e.a) + '</div></details>').join('') : '')
-    + (n.length ? '<div class="praxis-kopf" style="margin-top:6px">🎯 So haken Auditoren in der Praxis nach</div><ul class="praxis-nach">' + n.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '')
+    + (n.length ? '<div class="praxis-kopf" style="margin-top:6px">🎯 So haken Auditoren in der Praxis nach</div>' + n.map(x => '<details><summary>' + esc(x.frage) + '</summary><div>' + (x.nachweis ? '<b>Das will er sehen:</b> ' + esc(x.nachweis) : '') + '</div></details>').join('') : '')
     + '</div>';
 }

@@ -15,10 +15,13 @@ test('Praxiswissen nach Kapitel, internes Audit ohne Zertifizierungsaudit-Fragen
 test('Echte Nachfragen nach Thema, sonst Standard-Nachfrage', () => {
   const L = [{ frage: 'Wann haben Sie den wichtigsten Lieferanten zuletzt bewertet?' }, { frage: 'Wie oft kalibrieren Sie den Messschieber?' }];
   const f = { id: 'x', frage: 'Wie bewerten Sie Ihre Lieferanten?', normkapitel: '8.4' };
-  assert.deepEqual(nachfragenZu(f, 2, L), ['Wann haben Sie den wichtigsten Lieferanten zuletzt bewertet?']);
+  assert.deepEqual(nachfragenZu(f, 2, L).map(x => x.frage), ['Wann haben Sie den wichtigsten Lieferanten zuletzt bewertet?']);
   assert.ok(nachfrageZu(f).length > 10);
 });
-test('Keine Firmen- oder Personennamen im Praxiswissen', () => {
+test('Keine Firmen- oder Personennamen im Praxiswissen und in den Nachfragen', async () => {
+  const { NACHFRAGEN } = await import('../web/kunde/nachfragen.js');
   const r = [/\b(gmbh|ug|kg|ag|mbh)\b/i, /@|https?:\/\//i, /\b([Hh]err|[Ff]rau)\s+[A-ZÄÖÜ]/];
   PRAXIS.forEach(e => r.forEach(x => assert.doesNotMatch(e.q + ' ' + e.a, x, e.q)));
+  assert.ok(NACHFRAGEN.length > 100);
+  NACHFRAGEN.forEach(e => r.concat([/sparkasse|volksbank|\bDr\.\s+[A-Z]/]).forEach(x => assert.doesNotMatch(e.frage + ' ' + e.nachweis + ' ' + e.branche, x, e.frage)));
 });

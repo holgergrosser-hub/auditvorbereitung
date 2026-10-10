@@ -72,7 +72,7 @@ export function probeaudit(ctx) {
   // Holgers Beratungspraxis zu den Fragen des Themas (anonymisiert, wissen.js) – der KI-Auditor hakt damit realistischer nach
   function praxisDesThemas(t) {
     const m = new Map();
-    (t.fragen || []).forEach(f => { praxisZu(f, 2).forEach(e => m.set(e.q, { q: e.q, a: e.a })); nachfragenZu(f, 1).forEach(x => m.set(x, { q: x, a: 'So hakt ein Auditor in der Praxis nach.' })); });
+    (t.fragen || []).forEach(f => { praxisZu(f, 2).forEach(e => m.set(e.q, { q: e.q, a: e.a })); nachfragenZu(f, 1).forEach(x => m.set(x.frage, { q: 'Typische Nachfrage: ' + x.frage, a: 'Erwarteter Nachweis: ' + (x.nachweis || 'ein echtes Beispiel') })); });
     return [...m.values()].slice(0, 4);
   }
   async function kiNaechste() {
