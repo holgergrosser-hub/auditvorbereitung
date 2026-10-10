@@ -108,8 +108,8 @@ async function testanfragen() {
   $('#zurueck').onclick = uebersicht;
   const [liste, vorlage] = await Promise.all([
     sb.from('testanfragen').select('*').order('angelegt_am', { ascending: false }).limit(300),
-    sb.from('kunden').select('id, name').eq('art', 'vorlage').limit(1)]);
-  const a = pflicht(liste), v = pflicht(vorlage)[0];
+    sb.from('kunden').select('id, name').eq('art', 'vorlage').order('angelegt_am', { ascending: false })]);
+  const a = pflicht(liste), vl = pflicht(vorlage), v = vl[0] ? { name: vl.length > 1 ? vl.length + ' Musterfirmen (der Teilnehmer wählt selbst; zuerst ' + vl[0].name + ')' : vl[0].name } : null;
   const zeile = (x) => '<div class="karte" style="border-left:6px solid ' + (x.status === 'neu' ? 'var(--gelb)' : x.status === 'freigeschaltet' ? 'var(--gruen)' : 'var(--rand)') + '">'
     + '<div class="zeile" style="justify-content:space-between"><b>' + esc(x.name) + ' · ' + esc(x.firma) + '</b><span class="grau">' + new Date(x.angelegt_am).toLocaleString('de-DE') + '</span></div>'
     + '<div>' + esc(x.email) + (x.linkedin ? ' · <a href="' + esc(/^https?:/.test(x.linkedin) ? x.linkedin : 'https://' + x.linkedin) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + '</div>'
@@ -269,7 +269,7 @@ REITER.link = async (k, el) => {
 REITER.verwalten = async (k, el) => {
   el.innerHTML = '<div class="karte"><b>Kundendaten</b><label for="v-name">Firma</label><input id="v-name" value="' + esc(k.name) + '" style="width:100%"><label for="v-berater">Berater (erscheint als „An … senden“)</label><input id="v-berater" value="' + esc(k.berater_name || '') + '" style="width:100%">'
     + '<p><button class="knopf" id="v-speichern">Speichern</button></p></div>'
-    + (k.art !== 'test' ? '<div class="karte"><b>Vorlage für den Testmonat</b><p class="grau">Die Vorlage wird für jeden freigeschalteten LinkedIn-Teilnehmer kopiert. Nur eine erfundene Beispielfirma verwenden – nie echte Kundendaten.</p>'
+    + (k.art !== 'test' ? '<div class="karte"><b>Vorlage für den Testmonat</b><p class="grau">Alle Vorlagen (Musterfirmen) stehen den Teilnehmern im Testmonat zur Auswahl. Nur erfundene Firmen verwenden – nie echte Kundendaten.</p>'
       + '<label class="zeile" style="font-weight:400"><input type="checkbox" id="v-vorlage" ' + (k.art === 'vorlage' ? 'checked' : '') + '> Diesen Kunden als Vorlage verwenden</label></div>' : '')
     + (k.art === 'test' ? '<div class="karte"><b>Grenzen dieses Teilnehmers</b><p class="grau">Leer = ohne Grenze. Die Laufzeit steuert der Link (Reiter „Link“).</p><div class="zeile">'
       + [['ki_tag', 'KI-Fragen je Tag'], ['ki_gesamt', 'KI-Fragen gesamt'], ['nachrichten_tag', 'Nachrichten je Tag'], ['fotos_gesamt', 'Fotos gesamt']].map(g => '<label style="margin:0">' + g[1] + '<br><input type="number" min="0" style="width:110px" data-grenze="' + g[0] + '" value="' + esc((k.grenzen || {})[g[0]] ?? '') + '"></label>').join('')
@@ -278,7 +278,6 @@ REITER.verwalten = async (k, el) => {
     + '<label for="v-loeschen">Zur Bestätigung den Firmennamen eintippen</label><input id="v-loeschen" style="width:100%"><p><button class="knopf rot" id="v-weg" disabled>Endgültig löschen</button></p></div>';
   $('#v-speichern').onclick = async () => { pflicht(await sb.from('kunden').update({ name: $('#v-name').value.trim(), berater_name: $('#v-berater').value.trim() }).eq('id', k.id)); kundeZeigen(k.id, 'verwalten'); };
   if ($('#v-vorlage')) $('#v-vorlage').onchange = async () => {
-    if ($('#v-vorlage').checked) pflicht(await sb.from('kunden').update({ art: 'kunde' }).eq('art', 'vorlage')); // nur eine Vorlage
     pflicht(await sb.from('kunden').update({ art: $('#v-vorlage').checked ? 'vorlage' : 'kunde' }).eq('id', k.id)); kundeZeigen(k.id, 'verwalten');
   };
   if ($('#v-grenzen')) $('#v-grenzen').onclick = async () => {
@@ -340,7 +339,7 @@ async function importLaeuft(paket, zip, pdfs, gesamt, berater) {
   try {
     const p = paket, kk = p.kunde;
     const k = pflicht(await sb.from('kunden').insert({ name: kk.name, ort: kk.ort || null, berater_email: kk.berater_email || null, berater_name: berater || kk.berater_name || null,
-      firma_laut_zertifizierer: kk.firma_laut_zertifizierer || null, rundgang: p.rundgang || null, technik_check: {} }).select('id').single());
+      firma_laut_zertifizierer: kk.firma_laut_zertifizierer || null, rundgang: p.rundgang || null, technik_check: {}, beschreibung: kk.beschreibung || null, branche: kk.branche || null }).select('id').single());
     kid = k.id; log('✓ Kunde angelegt');
     const maMap = {};
     for (const m of p.mitarbeiter || []) { const r = pflicht(await sb.from('mitarbeiter').insert({ kunde_id: kid, name: m.name, bereich: m.bereich || 'alle', funktion: m.funktion || null, email: m.email || null }).select('id').single()); maMap[m.id] = r.id; }

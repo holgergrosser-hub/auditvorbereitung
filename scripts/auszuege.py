@@ -39,8 +39,10 @@ def stuecke(text, maxlen=MAX):
 def pdf(datei):
     seiten = int(re.search(r'Pages:\s+(\d+)', subprocess.run(['pdfinfo', datei], capture_output=True, text=True).stdout).group(1))
     texte = [subprocess.run(['pdftotext', '-f', str(s), '-l', str(s), datei, '-'], capture_output=True, text=True).stdout for s in range(1, seiten + 1)]
-    # Kopf-/Fusszeilen: Zeilen, die auf mehr als der Haelfte der Seiten vorkommen
-    zaehler = collections.Counter(l.strip() for t in texte for l in set(t.splitlines()) if l.strip())
+    # Kopf-/Fusszeilen: Zeilen am Seitenanfang oder -ende (je 4 Zeilen), die auf mehr als der Haelfte der Seiten vorkommen.
+    # Nur Rand-Zeilen zaehlen, sonst verschwinden Tabellenbeschriftungen, die auf vielen Seiten stehen (z. B. „Prozess-Nr.“).
+    rand = lambda t: (lambda z: set(z[:4] + z[-4:]))([l.strip() for l in t.splitlines() if l.strip()])
+    zaehler = collections.Counter(l for t in texte for l in rand(t))
     kopf = {l for l, n in zaehler.items() if seiten > 2 and n > seiten / 2}
     out = []
     for s, t in enumerate(texte, 1):

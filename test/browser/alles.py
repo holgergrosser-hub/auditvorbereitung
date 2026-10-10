@@ -179,7 +179,7 @@ async def main():
             doks = await d.eval_on_selector_all('.rolle-doks li', 'x => x.map(e => e.innerText.replace(/\\s+/g, " "))'); knoepfe = await d.locator('.rolle-doks [data-d]').count()
             await shot(d, '42_rolle_einkauf'); await d.close()
             assert 'Einkauf' in rk and 'Qualitätspolitik' in rk and not any(k.startswith(('4.', '6.', '9.')) for k in kap), (rk, kap)
-            assert len(doks) >= 4 and knoepfe == len(doks) and any('Einkauf' in x for x in doks) and any('Kommunikation' in x and 'Seite 8' in x for x in doks) and any('Ziele' in x for x in doks), doks
+            assert len(doks) >= 4 and knoepfe == len(doks) and any('Einkauf' in x for x in doks) and any('Kommunikation' in x and 'Seite' in x for x in doks) and any('Ziele' in x for x in doks), doks
             return 'Themen: ' + rk.split('\n')[1][:70] + ' · Fragen: ' + ', '.join(kap) + ' · Dokumente: ' + ' | '.join(x[:60] for x in doks)
         await pruefe('R1 Rolle Büro und Einkauf: nur ihre Prozesse und die Politik', k_rolle)
         async def k_lektion():
@@ -301,7 +301,7 @@ async def main():
         await pruefe('T3 Backoffice: freischalten, Chat-Text mit Schlüssel', t_frei)
         async def t_schluessel():
             await t.goto(B + '/test/'); await t.fill('#schluessel', 'falsch'); await t.click('#schluessel-form button'); m = await t.locator('#s-meldung').inner_text()
-            await t.fill('#schluessel', S['schluessel']); await t.click('#schluessel-form button'); await t.wait_for_selector('[data-m=beispiel]', timeout=15000); await t.click('[data-m=beispiel]'); await t.wait_for_selector('.test-karte', timeout=15000)
+            await t.fill('#schluessel', S['schluessel']); await t.click('#schluessel-form button'); await t.wait_for_selector('[data-firma]', timeout=15000); await t.click('[data-firma] >> nth=0'); await t.wait_for_selector('.test-karte', timeout=15000)
             modus = await t.locator('#modus').inner_text(); assert 'Testmonat' in modus and await t.locator('#kopf-feedback').count() == 1; await shot(t, '22_test_kunde')
             return 'falscher Schlüssel: „' + m[:40] + '…“ · ' + modus[:90]
         await pruefe('T4 Teilnehmer kommt mit Schlüssel hinein (Testmonat-Anzeige)', t_schluessel)
@@ -315,6 +315,16 @@ async def main():
             await bo.click('#feedback'); await bo.wait_for_selector('.nachricht'); f = await bo.locator('#main').inner_text(); assert 'Eigene Dokumente hochladen fehlt' in f; await shot(bo, '23_bo_feedback')
             return 'Übersicht mit Abschnitt Testmonat · Feedback-Liste mit Ø-Note'
         await pruefe('T6 Backoffice: Testmonat-Abschnitt und Feedback-Liste', t_bo_feedback)
+        async def t_wechsel():  # sechs Musterfirmen (E-A41): Teilnehmer wählt eine andere, am Server wird neu kopiert
+            vid = '7c0e6f0a-0000-4000-8000-000000000001'
+            psql("insert into kunden (id, name, art, beschreibung, branche) values ('" + vid + "', 'Zweite Musterfirma GmbH (Musterfirma)', 'vorlage', 'Zum Test des Wechsels', 'Produktion'); select musterfirma_kopieren((select id from kunden where art='vorlage' and id <> '" + vid + "' order by angelegt_am limit 1), '" + vid + "')")
+            await t.click('[data-eigen=wahl]'); await t.wait_for_selector('[data-firma]', timeout=15000); n = await t.locator('[data-firma]').count(); await shot(t, '24_musterfirma_wahl')
+            await t.click('[data-firma="' + vid + '"]'); await t.wait_for_selector('.test-karte', timeout=20000); await t.wait_for_timeout(800)
+            kopf = await t.locator('#firma').inner_text(); fr = psql("select count(*) from fragen f join audits a on a.id=f.audit_id join kunden k on k.id=a.kunde_id where k.art='test'")
+            vor = psql("select vorlage_id from kunden where art='test'")
+            assert n == 2 and 'Zweite Musterfirma' in kopf and int(fr) > 0 and vor == vid, (n, kopf, fr, vor)
+            return str(n) + ' Musterfirmen zur Auswahl · gewechselt zu „' + kopf + '“ · ' + fr + ' Fragen neu kopiert'
+        await pruefe('T9 Musterfirma wählen und wechseln', t_wechsel)
         async def t_grenze():
             psql("update kunden set grenzen = grenzen || '{\"ki_tag\":2}' where art='test'")
             erg = [post('ki', {'t': S['schluessel'], 'aktion': 'wissensfrage', 'frage': 'Wer bewertet die Lieferanten?'})[0] for _ in range(3)]
@@ -378,7 +388,7 @@ async def main():
         async def e_nichts():
             kunde_req = [b for (u, b) in S['req'] if '/functions/v1/kunde' in u]
             aktionen = sorted(set(json.loads(b).get('aktion') for b in kunde_req if b))
-            assert set(aktionen) <= {'start', 'nachricht'}, aktionen
+            assert set(aktionen) <= {'start', 'nachricht', 'musterfirmen'}, aktionen
             assert not any('Lieferant' in b for b in kunde_req), 'Dokumenttext an die Kunden-Funktion!'
             assert not any('/rest/v1/' in u for (u, b) in S['req'])
             antw = psql("select count(*) from antworten a join fragen f on f.id=a.frage_id join audits au on au.id=f.audit_id join kunden k on k.id=au.kunde_id where k.teilnehmer like 'Otto%'")

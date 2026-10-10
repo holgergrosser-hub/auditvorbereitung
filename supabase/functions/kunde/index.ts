@@ -125,6 +125,21 @@ Deno.serve(async (req) => {
       return antwort({ ok: true });
     }
 
+    // Testmonat: Musterfirmen zur Auswahl (alle Vorlagen) und Wechsel (E-A41) – Uebungsstand der alten Firma wird verworfen
+    if (d.aktion === 'musterfirmen') {
+      if (!grenzen) return antwort({ firmen: [], aktuell: null });
+      const [f, k] = await Promise.all([db.from('kunden').select('id, name, beschreibung, branche').eq('art', 'vorlage').order('name'), db.from('kunden').select('vorlage_id').eq('id', kundeId).single()]);
+      return antwort({ firmen: pflicht(f).map((x: any) => ({ id: x.id, name: String(x.name || '').replace(/\s*\((Musterfirma|Testkunde)\)\s*$/, ''), beschreibung: x.beschreibung || '', branche: x.branche || '' })), aktuell: pflicht(k).vorlage_id });
+    }
+    if (d.aktion === 'musterfirma_waehlen') {
+      if (!grenzen) return antwort({ fehler: 'Nur im Testmonat' }, 403);
+      if (!UUID.test(String(d.vorlage_id || ''))) return antwort({ fehler: 'Musterfirma nicht gefunden' }, 404);
+      const { data, error } = await db.rpc('musterfirma_wechseln', { p_kunde: kundeId, p_vorlage: d.vorlage_id });
+      if (error) throw error;
+      if (data !== true) return antwort({ fehler: 'Heute schon dreimal gewechselt – morgen geht es wieder.' }, 429);
+      return antwort({ ok: true });
+    }
+
     if (d.aktion === 'auszuege') {
       const doks = pflicht(await db.from('dokumente').select('id').eq('kunde_id', kundeId).eq('gueltig', true));
       if (!doks.length) return antwort({ auszuege: [] });
@@ -200,7 +215,7 @@ Deno.serve(async (req) => {
       let rolle = null;
       if (mitarbeiterId) {
         const dokIds = dk.map((x: any) => x.id);
-        const pz = dokIds.length ? pflicht(await db.from('auszuege').select('dokument_id, ort, text').in('dokument_id', dokIds).ilike('text', '%Normbezug%').limit(500)) : [];
+        const pz = dokIds.length ? pflicht(await db.from('auszuege').select('dokument_id, seite, ort, text').in('dokument_id', dokIds).limit(5000)) : [];
         rolle = L.rolleThemen(ma, pz);
       }
       const auswahl = L.fragenFuerBereich(fr, pp, String(d.bereich || 'alle'), String(mitarbeiterId || ''), rolle);

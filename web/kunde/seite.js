@@ -72,7 +72,7 @@ function eigeneApi(server, paket, test) {
     }
     const j = await lokal(aktion, d); if (j && j.fehler) throw new Error(j.fehler); return j;
   };
-  f.lokal = true; f.eigen = true; f.export = lokal.export; f.speicherWarnung = lokal.speicherWarnung;
+  f.lokal = true; f.eigen = true; f.server = server; f.export = lokal.export; f.speicherWarnung = lokal.speicherWarnung;
   return f;
 }
 /* KI mit eigenen Dokumenten: die passenden Textstellen von diesem Gerät mitgeben (der Server speichert sie nicht) */
@@ -86,6 +86,12 @@ function bn(fall) { const n = S.start && S.start.kunde && S.start.kunde.berater_
 function fehler(e) { $('#main').innerHTML = '<div class="karte"><h2>Das hat nicht geklappt</h2><p>' + esc(e.message || e) + '</p><p class="grau">Bitte melden Sie sich bei ' + esc(bn('dat')) + '.</p></div>'; }
 function hinweisBox(t, art) { const d = document.createElement('div'); d.className = art === 'ok' ? 'ok-box' : 'hinweis'; d.textContent = t; $('#main').prepend(d); setTimeout(() => d.remove(), 9000); }
 
+/* Testmonat: Musterfirma wählen oder wechseln (E-A41). Der Wechsel kopiert am Server die gewählte Vorlage neu. */
+async function musterfirmaWahl() {
+  let mf = { firmen: [], aktuell: null };
+  try { mf = await api('musterfirmen'); } catch (e) { /* ohne Liste: nur Beispielfirma und eigene Dokumente */ }
+  E.auswahlZeigen($('#main'), token, () => location.reload(), mf.firmen, mf.aktuell, async (id) => { await api('musterfirma_waehlen', { vorlage_id: id }); });
+}
 async function start() {
   const fu = $('#fuss'); if (fu) fu.innerHTML = fussHtml();
   try { api = await verbinden(); } catch (e) { return fehler(e); }
@@ -95,7 +101,7 @@ async function start() {
   if (S.start.test && !api.eigen) {
     const m = E.modus(token);
     $('#modus').textContent = 'Kostenloser Testmonat';
-    if (!m) { $('#wahl').hidden = true; return E.auswahlZeigen($('#main'), token, start); }
+    if (!m) { $('#wahl').hidden = true; return musterfirmaWahl(); }
     if (m === 'eigen') {
       const paket = await E.paketLaden(token);
       if (!paket) { $('#wahl').hidden = true; return E.einrichtenZeigen($('#main'), L, token, start); }
@@ -324,6 +330,7 @@ ANSICHT.heute = () => {
   $$('[data-eigen]').forEach(b => b.onclick = async () => {
     const w = b.dataset.eigen;
     if (w === 'neu') { $('#wahl').hidden = true; return E.einrichtenZeigen($('#main'), L, token, () => location.reload(), await E.paketLaden(token)); }
+    if (w === 'wahl') { $('#wahl').hidden = true; if (api.eigen && api.server) api = api.server; return musterfirmaWahl(); }
     E.modusSetzen(token, w); location.reload();
   });
   $$('[data-weiter]').forEach(x => x.onclick = () => { if (x.dataset.weiter === 'lektion') { const b = $('#lektion'); if (b) b.click(); } else zeige(x.dataset.weiter); });
@@ -375,17 +382,17 @@ function testZeile() {
   const t = S.start.test, g = t.grenzen || {}, v = t.verbraucht || {}, tage = testTage();
   if (S.start.eigen) return 'Kostenloser Testmonat mit Ihren eigenen Dokumenten – noch ' + (tage == null ? '?' : tage) + (tage === 1 ? ' Tag' : ' Tage')
     + (cfg.ki && g.ki_tag ? ' · KI heute bis ' + g.ki_tag + ' Fragen' : '') + '. 🔒 Dokumente und Antworten bleiben auf diesem Gerät.';
-  return 'Kostenloser Testmonat mit der erfundenen Beispielfirma – noch ' + (tage == null ? '?' : tage) + (tage === 1 ? ' Tag' : ' Tage')
+  return 'Kostenloser Testmonat mit der Musterfirma „' + esc(String(S.start.kunde.name || '').replace(/\s*\((Musterfirma|Testkunde)\)\s*$/, '')) + '“ – noch ' + (tage == null ? '?' : tage) + (tage === 1 ? ' Tag' : ' Tage')
     + (cfg.ki && g.ki_tag ? ' · KI heute ' + (v.ki_heute || 0) + ' von ' + g.ki_tag : '') + '. Ihre Eingaben werden gespeichert.';
 }
 function testKarte() {
   if (!S.start.test) return '';
   const tage = testTage();
   return '<div class="karte test-karte"><b>💡 Ihr Testmonat' + (tage != null ? ' · noch ' + tage + (tage === 1 ? ' Tag' : ' Tage') : '') + '</b>'
-    + '<p>' + (S.start.eigen ? 'Sie üben mit Ihren eigenen Dokumenten – sie bleiben auf diesem Gerät.' : 'Sie üben mit einer erfundenen Beispielfirma.') + ' Was hat geholfen, was fehlt, was stört? Zwei Minuten Rückmeldung machen das Werkzeug für alle besser.</p>'
+    + '<p>' + (S.start.eigen ? 'Sie üben mit Ihren eigenen Dokumenten – sie bleiben auf diesem Gerät.' : 'Sie üben mit der erfundenen Musterfirma ' + esc(S.start.kunde.name.replace(/\s*\((Musterfirma|Testkunde)\)\s*$/, '')) + '.') + ' Was hat geholfen, was fehlt, was stört? Zwei Minuten Rückmeldung machen das Werkzeug für alle besser.</p>'
     + '<div class="zeile"><button class="knopf" data-feedback>Verbesserung vorschlagen</button>'
-    + (S.start.eigen ? '<button class="knopf zweit" data-eigen="neu">Dokumente ändern</button><button class="link" data-eigen="beispiel">zur Beispielfirma wechseln</button>'
-      : '<button class="link" data-eigen="eigen">mit eigenen Dokumenten üben</button>') + '</div></div>';
+    + (S.start.eigen ? '<button class="knopf zweit" data-eigen="neu">Dokumente ändern</button><button class="link" data-eigen="wahl">zu einer Musterfirma wechseln</button>'
+      : '<button class="knopf zweit" data-eigen="wahl">Andere Musterfirma wählen</button><button class="link" data-eigen="eigen">mit eigenen Dokumenten üben</button>') + '</div></div>';
 }
 function feedbackPanel() {
   const alt = $('#feedback-panel'); if (alt) { alt.remove(); return; }

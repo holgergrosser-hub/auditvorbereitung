@@ -85,12 +85,28 @@ export function paketBauen(L, angaben, doks) {
 }
 
 /* ---------------------------------------------------------------- Oberfläche: Auswahl und Einrichten */
-export function auswahlZeigen(main, token, weiter) {
-  main.innerHTML = '<h2>Womit möchten Sie üben?</h2><div class="eigen-wahl">'
-    + '<button class="eigen-karte" data-m="beispiel" style="--f:#0B7285"><span class="eyebrow">Sofort loslegen</span><b>Mit der Beispielfirma</b><span>Eine erfundene Firma mit Handbuch, Prozessen, Auditplan und Fragen. Ideal, um das Werkzeug kennenzulernen.</span></button>'
+/**
+ * Auswahl im Testmonat: eine der Musterfirmen (Server, E-A41) oder die eigenen Dokumente (nur im Browser, E-A33).
+ * firmen: [{id, name, branche, beschreibung}], aktuell: id der jetzigen Musterfirma, waehlen(id): Wechsel am Server
+ */
+export function auswahlZeigen(main, token, weiter, firmen, aktuell, waehlen) {
+  const liste = (firmen || []).length ? firmen : [{ id: '', name: 'Beispielfirma', branche: 'Sofort loslegen', beschreibung: 'Eine erfundene Firma mit Handbuch, Prozessen, Auditplan und Fragen.' }];
+  main.innerHTML = '<h2>Womit möchten Sie üben?</h2>'
+    + '<p>Wählen Sie eine <b>Musterfirma</b> aus Ihrer Branche – jede hat eine vollständige Dokumentation (Handbuch mit Prozessen, Nachweise, ein abgeschlossener Auftrag, Auditplan des Zertifizierers). Oder üben Sie mit Ihren eigenen Dokumenten.</p>'
+    + '<div class="eigen-wahl">'
+    + liste.map(f => '<button class="eigen-karte" data-firma="' + esc(f.id) + '" style="--f:#0B7285"><span class="eyebrow">' + esc(f.branche || 'Musterfirma') + (f.id && f.id === aktuell ? ' · gewählt' : '') + '</span><b>' + esc(f.name) + '</b><span>' + esc(f.beschreibung || '') + '</span></button>').join('')
     + '<button class="eigen-karte" data-m="eigen" style="--f:#6741D9"><span class="eyebrow">Ihr echtes Audit</span><b>Mit Ihren eigenen Dokumenten</b><span>Sie wählen Ihre PDFs aus. Sie werden <b>nur in diesem Browser</b> gelesen und gespeichert – es wird nichts hochgeladen, auch Holger Grosser sieht sie nie.</span></button>'
-    + '</div><p class="grau">Sie können später wechseln. Ihre eigenen Dokumente gibt es nur auf diesem Gerät und in diesem Browser.</p>';
+    + '</div><p class="grau">Sie können später wechseln. Beim Wechsel der Musterfirma beginnen die Übungen neu. Ihre eigenen Dokumente gibt es nur auf diesem Gerät und in diesem Browser.</p><p id="wahl-hinweis" class="hinweis" hidden></p>';
+  const hinweis = (t) => { const h = main.querySelector('#wahl-hinweis'); h.textContent = t; h.hidden = !t; };
   main.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { modusSetzen(token, b.dataset.m); weiter(); });
+  main.querySelectorAll('[data-firma]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.firma;
+    if (id && id !== aktuell && waehlen) {
+      main.querySelectorAll('button').forEach(x => { x.disabled = true; }); hinweis('Die Musterfirma wird eingerichtet …');
+      try { await waehlen(id); } catch (e) { main.querySelectorAll('button').forEach(x => { x.disabled = false; }); return hinweis(e.message || 'Das hat nicht geklappt.'); }
+    }
+    modusSetzen(token, 'beispiel'); weiter();
+  });
 }
 
 export function einrichtenZeigen(main, L, token, weiter, alt) {

@@ -191,11 +191,19 @@ function rolleThemen(ma, auszuege) {
   const woerter = [...new Set(n.split(' ').filter(w => w.length >= 4 && !ROLLE_FUELL.has(w)))];
   const enthaelt = (t) => woerter.some(w => (' ' + norm(t) + ' ').includes(' ' + w + ' '));
   const zaehle = (t) => woerter.reduce((s, w) => s + (((' ' + norm(t) + ' ').match(new RegExp(' ' + w + ' ', 'g')) || []).length), 0);
-  // Eine Seite kann mehrere Prozessbeschreibungen enthalten: je „Prozess-Nr.“ getrennt pruefen
-  (auszuege || []).flatMap(a => String(a.text || '').split(/(?=Prozess-Nr\.)/).map(t => ({ t, a }))).forEach(({ t, a }) => {
+  // Auszuege einer Seite zusammenfassen (die Suche teilt Seiten an Ueberschriften: Stammdaten, Ablauf, Hinweise),
+  // dann je „Prozess-Nr.“ getrennt pruefen – eine Seite kann mehrere Prozessbeschreibungen enthalten
+  const seiten = new Map();
+  (auszuege || []).forEach(a => {
+    const s = a.seite || (String(a.ort || '').match(/Seite\s+\d+/) || [])[0] || a.ort || a.id;
+    const k = a.dokument_id + '|' + s;
+    if (!seiten.has(k)) seiten.set(k, { a: Object.assign({}, a, { ort: (String(a.ort || '').match(/Seite\s+\d+/) || [a.ort])[0] }), titel: String(a.ort || '').replace(/^Seite\s+\d+\s*/, '') || String(a.text || '').split('\n')[0].trim().slice(0, 80), t: [] });
+    seiten.get(k).t.push(String(a.text || ''));
+  });
+  [...seiten.values()].flatMap(x => x.t.join('\n').split(/(?=Prozess-Nr\.)/).map(t => ({ t, a: x.a, titel: x.titel }))).forEach(({ t, a, titel }) => {
     const ks = [...t.matchAll(/Normbezug[^\n]*?Kapitel\s+((?:\d+(?:\.\d+)*(?:\s*(?:,|und)\s*)?)+)/gi)].flatMap(m => kapitelListe(m[1].replace(/und/g, ',')));
     if (!ks.length) return;
-    const name = (t.match(/Prozessname\s*\n\s*([^\n]+)/) || [])[1] || '';
+    const name = (t.match(/Prozessname\s*\n\s*([^\n]+)/) || [])[1] || titel || '';
     const verantw = (t.match(/Verantwortlich\s*\n\s*([^\n]+)/) || [])[1] || '';
     if (enthaelt(name) || enthaelt(verantw) || zaehle(t) >= 2) {
       ks.forEach(k => kap.add(k));

@@ -7,3 +7,6 @@ test/bilder/
 web/kunde/demo-lokal.json
 test/testkunde/netlify/
 test/testkunde/befunde.json
+test/musterfirmen/*/
+!test/musterfirmen/firmen/
+__pycache__/
