@@ -15,6 +15,7 @@ import crypto from 'node:crypto';
 const PORT = Number(process.env.PORT || 54321), SECRET = process.env.JWT_SECRET || 'testgeheimnis-mindestens-32-zeichen-lang!!';
 const WEB = path.resolve(new URL('../../web/', import.meta.url).pathname), SPEICHER = process.env.SPEICHER || '/tmp/mini-speicher';
 const ANON = jwt({ role: 'anon' }), SERVICE = jwt({ role: 'service_role' });
+const TTS = []; // Anfragen an die Ersatz-Stimme (fuer Tests)
 fs.mkdirSync(SPEICHER, { recursive: true });
 function b64(x) { return Buffer.from(x).toString('base64url'); }
 function jwt(claims) { const k = b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' })), p = b64(JSON.stringify(Object.assign({ exp: Math.floor(Date.now() / 1000) + 86400 }, claims))); return k + '.' + p + '.' + crypto.createHmac('sha256', SECRET).update(k + '.' + p).digest('base64url'); }
@@ -45,6 +46,13 @@ http.createServer(async (req, res) => {
     if (u.pathname.startsWith('/rest/v1/')) return weiter(req, res, 'http://127.0.0.1:3001' + u.pathname.slice(8) + u.search, inhalt);
     if (u.pathname.startsWith('/functions/v1/kunde')) return weiter(req, res, 'http://127.0.0.1:8000/' + u.search, inhalt);
     if (u.pathname.startsWith('/functions/v1/ki')) return weiter(req, res, 'http://127.0.0.1:8002/' + u.search, inhalt);
+    if (u.pathname === '/fake-tts') { // Ersatz fuer Google Text-to-Speech: 0,05 s Stille, merkt sich die Anfragen
+      const d = JSON.parse(inhalt.toString() || '{}'); TTS.push({ text: d.input && d.input.text, stimme: d.voice && d.voice.name });
+      const n = 800, b = Buffer.alloc(44 + n, 128); b.write('RIFF', 0); b.writeUInt32LE(36 + n, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+      b.writeUInt32LE(16000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(n, 40);
+      return json(res, 200, { audioContent: b.toString('base64') });
+    }
+    if (u.pathname === '/fake-tts-log') return json(res, 200, TTS);
     if (u.pathname === '/fake-anthropic') { // Ersatz fuer die Anthropic-API: feste Antworten je Aufgabe
       const d = JSON.parse(inhalt.toString() || '{}'), sys = String(d.system || ''), txt = JSON.stringify(d.messages || []);
       let t = 'Welche Dokumente gehören zu Ihrem Managementsystem?';

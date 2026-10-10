@@ -5,11 +5,11 @@
  * - Ohne KI (kein Schlüssel, Kontingent aufgebraucht, Testfassung): Fragen aus dem Fahrplan, Nachhaken nach festen Regeln.
  * Nur zum Üben – im echten Audit gibt es keine verdeckte Hilfe.
  */
+import { praxisZu, nachfrageZu } from './wissen.js';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const STIMMEN = ['Anna', 'Helena', 'Petra', 'Katja', 'Google Deutsch', 'Deutsch'];
 
 export function probeaudit(ctx) {
-  const { L, S, esc, main, ki, kiAn, api, speichereEintrag, eintrag, fallen, hilfe, eigeneAuszuege, oeffneHilfe } = ctx;
+  const { L, S, esc, main, ki, kiAn, api, speichereEintrag, eintrag, fallen, hilfe, eigeneAuszuege, oeffneHilfe, stimme } = ctx;
   const typGemerkt = ((eintrag('auditor', 'typ') || {}).daten || {}).typ;
   const P = { verlauf: [], thema: 0, frageNr: 0, aktuell: null, nachgehakt: false, ende: false, mitKi: kiAn(), vorlesen: true, freihaendig: false,
     typ: typGemerkt && L.AUDITOR_TYPEN[typGemerkt] ? typGemerkt : 'sachlich', antworten: [] };
@@ -24,17 +24,13 @@ export function probeaudit(ctx) {
     return Object.keys(je).sort((a, b) => (parseInt(a) || 99) - (parseInt(b) || 99)).map(k => ({ titel: (/^\d+$/.test(k) ? 'Kapitel ' + k + ' · ' : '') + (je[k][0].titel || k), fragen: je[k] }));
   }
 
-  /* ---------------- Stimme */
-  let stimme = null;
-  const sprichtOk = 'speechSynthesis' in window;
-  function stimmeWaehlen() { if (!sprichtOk) return null; const v = speechSynthesis.getVoices().filter(x => x.lang && x.lang.toLowerCase().startsWith('de')); for (const n of STIMMEN) { const t = v.find(x => x.name.includes(n)); if (t) return t; } return v[0] || null; }
-  if (sprichtOk) { stimme = stimmeWaehlen(); speechSynthesis.onvoiceschanged = () => { stimme = stimmeWaehlen(); }; }
+  /* ---------------- Stimme: natürliche KI-Stimme (Google) über den Server, sonst die Stimme des Browsers (stimme.js) */
+  const sprichtOk = stimme.kannSprechen();
   function sprich(t, danach) {
     if (!sprichtOk || !P.vorlesen) { if (danach) danach(); return; }
-    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'de-DE'; u.rate = 1; u.pitch = 0.95; if (stimme) u.voice = stimme;
-      u.onend = () => { if (danach) danach(); }; speechSynthesis.speak(u); } catch (e) { if (danach) danach(); }
+    stimme.sprich(t, danach);
   }
-  const still = () => { try { speechSynthesis.cancel(); } catch (e) { /* */ } };
+  const still = () => stimme.stopp();
 
   /* ---------------- Mikrofon: läuft weiter, bis Stopp (der Browser beendet die Erkennung sonst nach kurzer Stille) */
   let rec = null, micWill = false, micFest = '', micVorher = '', stilleUhr = null;
@@ -73,12 +69,15 @@ export function probeaudit(ctx) {
     auditorSagt(vorspann + f.frage, f);
   }
   function abschluss() { P.ende = true; auditorSagt('Vielen Dank, damit bin ich durch. Ich fasse gleich zusammen, was mir aufgefallen ist.'); setTimeout(auswerten, 400); }
+  // Holgers Beratungspraxis zu den Fragen des Themas (anonymisiert, wissen.js) – der KI-Auditor hakt damit realistischer nach
+  function praxisDesThemas(t) { const m = new Map(); (t.fragen || []).forEach(f => praxisZu(f, 2).forEach(e => m.set(e.q, { q: e.q, a: e.a }))); return [...m.values()].slice(0, 4); }
   async function kiNaechste() {
     zeichne(true);
     const t = themen[P.thema] || {};
     const eig = eigeneAuszuege ? await eigeneAuszuege(t.titel + ' ' + (t.fragen || []).slice(0, 2).map(f => f.frage).join(' '), 4) : null;
     const k = await ki('gespraech', Object.assign({ verlauf: P.verlauf, typ: P.typ, stufe: S.audit.stufe, thema: P.thema,
-      themen: themen.map(x => ({ titel: x.titel, fragen: x.fragen.slice(0, 3).map(f => f.frage) })), fallen: fallen().map(f => f.frage).slice(0, 8) }, eig ? { auszuege: eig } : {}));
+      themen: themen.map(x => ({ titel: x.titel, fragen: x.fragen.slice(0, 3).map(f => f.frage) })), fallen: fallen().map(f => f.frage).slice(0, 8),
+      praxis: praxisDesThemas(t) }, eig ? { auszuege: eig } : {}));
     if (!k || !k.text) { P.mitKi = false; hinweis('Die KI ist gerade nicht erreichbar – ich mache mit den Fragen aus Ihrem Fahrplan weiter.'); return lokalNaechste(); }
     if (k.thema != null) P.thema = Math.max(P.thema, Math.min(themen.length - 1, k.thema));
     if (k.ende) { P.ende = true; auditorSagt(k.text); setTimeout(auswerten, 400); return; }
@@ -94,7 +93,7 @@ export function probeaudit(ctx) {
     if (P.mitKi) return kiNaechste();
     // Nachhaken nach festen Regeln, höchstens einmal je Frage
     if (!P.nachgehakt && !fb.zeigt) { P.nachgehakt = true; return auditorSagt('Können Sie mir das bitte im Dokument zeigen? Wo steht das bei Ihnen?', P.aktuell); }
-    if (!P.nachgehakt && !fb.beispiel && (P.typ === 'stichprobe' || P.typ === 'paragraphen')) { P.nachgehakt = true; return auditorSagt('Haben Sie dazu ein aktuelles Beispiel? Zeigen Sie mir den letzten Fall.', P.aktuell); }
+    if (!P.nachgehakt && !fb.beispiel) { P.nachgehakt = true; return auditorSagt(P.typ === 'stichprobe' || P.typ === 'paragraphen' ? 'Haben Sie dazu ein aktuelles Beispiel? Zeigen Sie mir den letzten Fall.' : nachfrageZu(P.aktuell), P.aktuell); }
     zeichne(true); setTimeout(lokalNaechste, 500);
   }
   async function auswerten() {
@@ -132,6 +131,8 @@ export function probeaudit(ctx) {
     + 'Antworten Sie nach der Formel <b>Was wir machen – wo es steht – ein Beispiel</b>. Nur zum Üben.' + (P.mitKi ? '' : ' <span class="grau">(Ohne KI: Fragen aus Ihrem Fahrplan, der Auditor hakt nach festen Regeln nach.)</span>') + '</p>'
     + '<div class="karte zeile pa-einst"><label style="margin:0">Auditor <select id="pa-typ">' + Object.entries(L.AUDITOR_TYPEN).map(([k, t]) => '<option value="' + k + '"' + (k === P.typ ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('') + '</select></label>'
     + (sprichtOk ? '<label class="zeile" style="margin:0;font-weight:400"><input type="checkbox" id="pa-vorlesen" checked> Fragen vorlesen</label>' : '')
+    + (stimme.serverMoeglich() ? '<label class="zeile" style="margin:0;font-weight:400" title="Natürliche KI-Stimme von Google. Es wird nur der Text des Auditors übertragen, nichts gespeichert."><input type="checkbox" id="pa-natur"' + (stimme.natuerlich ? ' checked' : '') + '> Natürliche Stimme</label>'
+      + '<label style="margin:0">Stimme <select id="pa-art"><option value="mann"' + (stimme.art === 'mann' ? ' selected' : '') + '>Auditor</option><option value="frau"' + (stimme.art === 'frau' ? ' selected' : '') + '>Auditorin</option></select></label>' : '')
     + (SR && sprichtOk ? '<label class="zeile" style="margin:0;font-weight:400" title="Nach jeder Frage hört das Mikrofon automatisch zu; 3 Sekunden Stille schicken die Antwort ab."><input type="checkbox" id="pa-frei"> 🎧 Freihändig</label>' : '') + '</div>'
     + '<div class="pa-raster"><section class="karte pa-chat"><div id="pa-log" class="pa-log" aria-live="polite"></div>'
     + '<div id="pa-eingabe" hidden><div class="zeile pa-hilfen"><button class="knopf klein zweit" id="pa-was">Was meint der Auditor damit?</button><button class="knopf klein zweit" id="pa-skip">Frage überspringen</button></div>'
@@ -146,7 +147,11 @@ export function probeaudit(ctx) {
   $m('#pa-typ').onchange = () => { P.typ = $m('#pa-typ').value; speichereEintrag('auditor', 'typ', { typ: P.typ, quelle: 'probeaudit' }); };
   if ($m('#pa-vorlesen')) $m('#pa-vorlesen').onchange = () => { P.vorlesen = $m('#pa-vorlesen').checked; if (!P.vorlesen) still(); };
   if ($m('#pa-frei')) $m('#pa-frei').onchange = () => { P.freihaendig = $m('#pa-frei').checked; if (P.freihaendig && $m('#pa-vorlesen')) { $m('#pa-vorlesen').checked = true; P.vorlesen = true; } };
-  $m('#pa-start').onclick = () => { if (!themen.length) return hinweis('Für dieses Audit sind noch keine Fragen hinterlegt.'); if (sprichtOk) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { /* */ } } P.mitKi ? kiNaechste() : lokalNaechste(); };
+  if ($m('#pa-natur')) $m('#pa-natur').onchange = () => { stimme.natuerlich = $m('#pa-natur').checked; };
+  if ($m('#pa-art')) $m('#pa-art').onchange = () => { stimme.art = $m('#pa-art').value; };
+  $m('#pa-start').onclick = () => { if (!themen.length) return hinweis('Für dieses Audit sind noch keine Fragen hinterlegt.');
+    stimme.entsperren(); if ('speechSynthesis' in window) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { /* */ } }
+    P.mitKi ? kiNaechste() : lokalNaechste(); };
   $m('#pa-los').onclick = antworten;
   $m('#pa-text').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); antworten(); } };
   if ($m('#pa-mic')) $m('#pa-mic').onclick = () => (micWill || rec) ? micStopp() : micStart();

@@ -10,6 +10,8 @@ import { lokaleApi } from './lokal.js';
 import * as E from './eigene.js';
 import { MARKE, fussHtml } from './marke.js';
 import { probeaudit } from './probeaudit.js';
+import { stimmeAnlegen } from './stimme.js';
+import { beispielZu, praxisHtml } from './wissen.js';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
@@ -50,6 +52,8 @@ async function ki(aktion, daten) {
     const j = await r.json(); return r.ok && !j.fehler ? j : null;
   } catch (e) { return null; }
 }
+
+const stimme = stimmeAnlegen(ki, kiAn); // natürliche Stimme (Google) über den Server, sonst Browserstimme
 
 const S = { start: null, audit: null, ma: null, fragen: [], planpunkte: [], antworten: [], eintraege: [], auszuege: null, ansicht: 'heute', stream: null, filter: 'alle', trotzRuhe: false, queue: null };
 const KAPITEL = { '0': 'Zum Einstieg: Überblick über Ihre Dokumentation', '4': '4 Kontext der Organisation', '5': '5 Führung', '6': '6 Planung', '7': '7 Unterstützung', '8': '8 Betrieb', '9': '9 Bewertung der Leistung', '10': '10 Verbesserung' };
@@ -574,7 +578,8 @@ async function hilfeHtml(f) {
   const treffer = a.length ? L.auszuegeZurFundstelle(f.hilfe, f.frage, S.start.dokumente, a, 3) : [];
   return '<div><b>Wo steht das?</b> ' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '</div>'
     + (treffer.length ? '<div class="grau" style="margin-top:6px">Auszug aus Ihrer Dokumentation:</div>' + treffer.map(x => auszugHtml(x, L.woerter(f.frage))).join('') : '')
-    + '<div class="doks">' + (f.dokumente || []).map(d => '<button class="knopf klein zweit" data-d="' + d.id + '">' + esc((d.d_nr ? d.d_nr + ' ' : '') + d.titel) + (d.stand ? ' · ' + esc(d.stand) : '') + '</button>').join('') + '</div>';
+    + '<div class="doks">' + (f.dokumente || []).map(d => '<button class="knopf klein zweit" data-d="' + d.id + '">' + esc((d.d_nr ? d.d_nr + ' ' : '') + d.titel) + (d.stand ? ' · ' + esc(d.stand) : '') + '</button>').join('') + '</div>'
+    + praxisHtml(f, esc);
 }
 function dokKnoepfe(el) { $$('[data-d]', el).forEach(b => b.onclick = () => oeffne(b.dataset.d, b.dataset.ort || '')); }
 function stelleKnopf(dokId, ort, text) { // "Seite 33 öffnen" statt "Dokument öffnen", wenn die Stelle bekannt ist
@@ -610,8 +615,9 @@ ANSICHT.finden = async () => {
 /* Probeaudit mit Stimme (web/kunde/probeaudit.js) */
 ANSICHT.probeaudit = () => {
   if (brauchtMa('Probeaudit')) return;
-  const hilfe = (f) => '<div><b>Wo steht das?</b> ' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '</div><div class="doks">' + (f.dokumente || []).map(d => stelleKnopf(d.id, (L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0] ? 'Seite ' + String((L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0]).replace(/^S\. /, '') : '', esc(d.titel) + ' öffnen')).join('') + '</div>';
-  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe });
+  const hilfe = (f) => '<div><b>Wo steht das?</b> ' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '</div><div class="doks">' + (f.dokumente || []).map(d => stelleKnopf(d.id, (L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0] ? 'Seite ' + String((L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0]).replace(/^S\. /, '') : '', esc(d.titel) + ' öffnen')).join('') + '</div>'
+    + '<div class="grau" style="margin-top:6px">So könnte ein Beispiel klingen: „' + esc(beispielZu(f)) + '“</div>' + praxisHtml(f, esc);
+  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe, stimme });
 };
 /* Probegespräch mit dem KI-Auditor (Edge Function "ki", Aktion gespraech): eine Frage nach der anderen */
 function kiGespraech() {
@@ -731,7 +737,7 @@ ANSICHT.fahrplan = () => {
       + '<div style="margin:4px 0">' + esc(f.frage) + '</div>'
       + '<div class="zeile kein-druck"><button class="knopf klein" data-t="ueben">' + (zeig ? 'Zeig mal (60 s)' : 'Antworten') + '</button><button class="knopf klein zweit" data-t="hilfe">Wo steht das?</button><button class="knopf klein zweit" data-t="bsp">Mein Beispiel</button><button class="knopf klein zweit" data-t="vorlesen" title="Frage vorlesen">🔊</button></div>'
       + '<div class="hilfe" hidden></div>'
-      + '<div class="bsp" ' + (bsp ? '' : 'hidden') + '><textarea placeholder="Ihr eigenes Beispiel dazu – das erzählen Sie im Audit (z. B. „Im heißen Sommer haben wir Kühlwesten angeschafft“)">' + esc(bsp ? bsp.text : '') + '</textarea><button class="knopf klein" data-t="bsp-speichern">Beispiel speichern</button></div>'
+      + '<div class="bsp" ' + (bsp ? '' : 'hidden') + '><textarea placeholder="' + esc('Ihr eigenes Beispiel dazu – das erzählen Sie im Audit. So könnte es klingen: „' + beispielZu(f) + '“') + '">' + esc(bsp ? bsp.text : '') + '</textarea><button class="knopf klein" data-t="bsp-speichern">Beispiel speichern</button></div>'
       + '</div></div></div>';
   });
   if (!sicht.length) html += '<div class="karte grau">' + (S.fragen.length ? 'Keine Fragen in dieser Auswahl. 🎉' : 'Für Sie sind noch keine Fragen hinterlegt.') + '</div>';
@@ -763,7 +769,7 @@ async function speichereAntwort(f, d) {
   await api('antwort', daten);
   S.antworten.push(Object.assign({ beantwortet_am: new Date().toISOString() }, daten));
 }
-function vorlesen(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'de-DE'; u.rate = 0.95; speechSynthesis.speak(u); } catch (e) { /* ohne Ton */ } }
+function vorlesen(t) { stimme.entsperren(); stimme.sprich(t); }
 
 /* ------------------------------------------------ Uebungsreihe: Frage (Zeig mal / Antwort) oder Stolperfalle */
 let uhr = null;
@@ -788,7 +794,7 @@ function reiheEnde() {
     + '<p>' + (z.rot + z.gelb ? 'Die gelben und roten Punkte kommen in den nächsten Tageslektionen wieder.' : 'Hervorragend – Sie finden alles.') + '</p><button class="knopf" id="t-zu2">Schließen</button>';
   $('#t-zu2').onclick = schliessen;
 }
-function schliessen() { clearInterval(uhr); S.queue = null; $('#trainer').style.display = 'none'; try { speechSynthesis.cancel(); } catch (e) { /* */ } zeichneKopf(); (ANSICHT[S.ansicht] || ANSICHT.heute)(); }
+function schliessen() { clearInterval(uhr); S.queue = null; $('#trainer').style.display = 'none'; stimme.stopp(); zeichneKopf(); (ANSICHT[S.ansicht] || ANSICHT.heute)(); }
 function kopfTrainer(info) {
   const q = S.queue;
   return '<div class="zeile" style="justify-content:space-between"><span class="grau zeile">' + esc(info) + (q && q.items.length > 1 ? miniRing(q.pos / q.items.length, 'Punkt ' + q.pos + ' von ' + q.items.length) : '') + '</span><button class="knopf klein zweit" id="t-zu">' + (q && q.items.length > 1 ? 'Beenden' : 'Schließen') + '</button></div>';

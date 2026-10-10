@@ -13,6 +13,12 @@ const MODELL = Deno.env.get('KI_MODELL') || 'claude-sonnet-5-5';
 const ERLAUBT = (Deno.env.get('ERLAUBTE_HERKUNFT') || '*').split(',').map(s => s.trim());
 const MAX_JE_TAG = Number(Deno.env.get('KI_MAX_JE_KUNDE_TAG') || '300'); // Kostenbremse je Kunde
 const API_URL = Deno.env.get('KI_API_URL') || 'https://api.anthropic.com/v1/messages'; // nur fuer Tests umstellbar
+// Natuerliche Stimme fuer den Uebungsauditor (Google Cloud Text-to-Speech, E-A37). Ohne GOOGLE_TTS_KEY spricht der Browser selbst.
+const TTS_KEY = Deno.env.get('GOOGLE_TTS_KEY') || '';
+const TTS_STIMME = Deno.env.get('TTS_VOICE') || ''; // z. B. de-DE-Chirp3-HD-Charon; leer = Auswahl nach Wunsch der Seite (mann/frau)
+const TTS_URL = Deno.env.get('TTS_API_URL') || 'https://texttospeech.googleapis.com/v1/text:synthesize'; // nur fuer Tests umstellbar
+const TTS_MAX_JE_TAG = Number(Deno.env.get('TTS_MAX_JE_KUNDE_TAG') || '600');
+const STIMMEN: Record<string, string[]> = { mann: ['de-DE-Chirp3-HD-Charon', 'de-DE-Neural2-B'], frau: ['de-DE-Chirp3-HD-Kore', 'de-DE-Neural2-C'] };
 
 function cors(origin: string | null) {
   const o = ERLAUBT.includes('*') ? '*' : (origin && ERLAUBT.includes(origin) ? origin : ERLAUBT[0]);
@@ -36,11 +42,13 @@ async function istBackoffice(req: Request) {
 }
 // Kostenbremse je Kunde: Zaehler in der Tabelle nutzung (Datenbankfunktion nutzung_buchen, atomar).
 // Im Testmonat (kunden.art = 'test') gelten die Grenzen des Teilnehmers (ki_tag, ki_gesamt), sonst KI_MAX_JE_KUNDE_TAG.
-async function zaehlen(kundeId: string) {
+// Stimme (art 'tts'): Grenzen tts_tag / tts_gesamt, Standard im Testmonat 150 Saetze am Tag, sonst TTS_MAX_JE_KUNDE_TAG.
+async function zaehlen(kundeId: string, art: 'ki' | 'tts' = 'ki') {
   const { data: k } = await db.from('kunden').select('art, grenzen').eq('id', kundeId).maybeSingle();
   const g = k && k.art === 'test' ? (k.grenzen || {}) : {};
   const z = (x: unknown) => (x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? null : Number(x));
-  const { data, error } = await db.rpc('nutzung_buchen', { p_kunde: kundeId, p_art: 'ki', p_max_tag: z(g.ki_tag) ?? MAX_JE_TAG, p_max_gesamt: z(g.ki_gesamt) });
+  const maxTag = art === 'ki' ? (z(g.ki_tag) ?? MAX_JE_TAG) : (z(g.tts_tag) ?? (k && k.art === 'test' ? 150 : TTS_MAX_JE_TAG));
+  const { data, error } = await db.rpc('nutzung_buchen', { p_kunde: kundeId, p_art: art, p_max_tag: maxTag, p_max_gesamt: z(art === 'ki' ? g.ki_gesamt : g.tts_gesamt) });
   if (error) throw error;
   return { ok: data === true, test: !!(k && k.art === 'test') };
 }
@@ -83,8 +91,28 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: h });
   const antwort = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: h });
   try {
-    if (!KEY) return antwort({ fehler: 'KI nicht eingerichtet' }, 503);
     const d = await req.json();
+
+    // ---------------- Stimme: nur der Text des Uebungsauditors wird an Google geschickt, nichts wird gespeichert
+    if (d.aktion === 'tts') {
+      if (!TTS_KEY) return antwort({ fehler: 'Stimme nicht eingerichtet' }, 503);
+      const kid = await kundeZumToken(String(d.t || ''));
+      if (!kid) return antwort({ fehler: 'Link ungültig oder abgelaufen.' }, 401);
+      const text = kurz(d.text, 600).trim();
+      if (!text) return antwort({ fehler: 'Kein Text' }, 400);
+      if (!(await zaehlen(kid, 'tts')).ok) return antwort({ fehler: 'Stimme für heute aufgebraucht' }, 429);
+      const liste = TTS_STIMME ? [TTS_STIMME] : (STIMMEN[d.stimme] || STIMMEN.mann);
+      for (const name of liste) {
+        const r = await fetch(TTS_URL + '?key=' + encodeURIComponent(TTS_KEY), { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input: { text }, voice: { languageCode: 'de-DE', name }, audioConfig: { audioEncoding: 'MP3' } }) });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j.audioContent) return antwort({ audio: j.audioContent, stimme: name });
+        console.error('TTS-Fehler', r.status, name, JSON.stringify(j.error || {}).slice(0, 200)); // ohne den Text
+      }
+      return antwort({ fehler: 'Stimme gerade nicht verfügbar' }, 502);
+    }
+
+    if (!KEY) return antwort({ fehler: 'KI nicht eingerichtet' }, 503);
 
     // ---------------- Backoffice
     if (d.aktion === 'fragenbank_aus_text') {
@@ -129,6 +157,8 @@ Deno.serve(async (req) => {
         + 'Nach dem letzten Thema bedanke dich in einem Satz und schreibe [ENDE]. '
         + 'Themen: ' + (themen.join(' / ') || 'Führung, Auftrag, Einkauf, Reklamationen') + '. Aktuelles Thema: ' + (thema + 1) + '.'
         + (d.fallen ? ' Stolperfallen, die du nach und nach ansprechen darfst: ' + kurz(JSON.stringify(d.fallen), 1500) : '')
+        + (Array.isArray(d.praxis) && d.praxis.length ? '\n\nAus der Beratungspraxis (typische Fragen kleiner Firmen zu diesem Thema mit der fachlich richtigen Antwort) – nutze das für gezielte, realistische Nachfragen, ohne es vorzulesen:\n'
+          + d.praxis.slice(0, 4).map((x: any) => '- ' + kurz(x && x.q, 200) + ' → ' + kurz(x && x.a, 400)).join('\n') : '')
         + (belege ? '\n\nAuszüge aus den Dokumenten der Firma:\n' + belege : '');
       if (d.zum_schluss) { // kurze Rückmeldung zum Gespräch
         const fb = await claude('Du bist ein erfahrener ISO-Berater. Antworte nur mit JSON.', [{ role: 'user', content: 'Übungsgespräch zwischen Auditor und Kunde:\n'

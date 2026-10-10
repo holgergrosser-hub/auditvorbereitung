@@ -33,6 +33,6 @@ const orig = Deno.serve; // @ts-ignore Testumlenkung
 Deno.serve = (h: any) => orig({ port: 8002 }, h);
 await import('./functions/ki/index.ts');
 TS
-(cd $FN && SUPABASE_URL=http://localhost:54321 SUPABASE_SERVICE_ROLE_KEY=$SERVICE ANTHROPIC_API_KEY=test KI_API_URL=http://localhost:54321/fake-anthropic setsid nohup "$DENO" run -A ki8002.ts > /tmp/mini-ki.log 2>&1 < /dev/null &)
+(cd $FN && SUPABASE_URL=http://localhost:54321 SUPABASE_SERVICE_ROLE_KEY=$SERVICE ANTHROPIC_API_KEY=test KI_API_URL=http://localhost:54321/fake-anthropic GOOGLE_TTS_KEY=test TTS_API_URL=http://localhost:54321/fake-tts setsid nohup "$DENO" run -A ki8002.ts > /tmp/mini-ki.log 2>&1 < /dev/null &)
 JWT_SECRET=$SECRET SPEICHER=$TMP/speicher setsid nohup node test/mini-supabase/server.mjs > /tmp/mini-server.log 2>&1 < /dev/null &
 sleep 8; echo "Bereit: http://localhost:54321  (Logs /tmp/mini-*.log)"

@@ -165,8 +165,10 @@ async def main():
             await k.fill('#pa-text', 'Wir bewerten unsere Lieferanten im Januar, steht im Handbuch Seite 14.'); await k.click('#pa-los')
             await k.wait_for_function("document.querySelectorAll('.pa-msg.au').length >= 2 && ![...document.querySelectorAll('.pa-msg.au')].some(m => m.innerText.includes('überlegt'))", timeout=30000)
             await k.click('#pa-ende'); await k.wait_for_selector('#pa-auswertung .karte', timeout=30000)
-            return (await k.locator('#pa-auswertung').inner_text())[:120].replace('\n', ' ')
-        await pruefe('K15 Probeaudit mit dem KI-Auditor (Server)', k_gespraech)
+            tts = await k.evaluate("fetch('/fake-tts-log').then(r => r.json())"); natur = await k.locator('#pa-natur').count()
+            assert natur == 1 and len(tts) >= 1 and tts[0]['stimme'].startswith('de-DE'), (natur, tts[:2])
+            return (await k.locator('#pa-auswertung').inner_text())[:90].replace('\n', ' ') + ' · Google-Stimme: ' + str(len(tts)) + ' Sätze (' + tts[0]['stimme'] + ')'
+        await pruefe('K15 Probeaudit mit dem KI-Auditor (Server) und natürlicher Stimme', k_gespraech)
         async def k_lektion():
             await k.click('nav button[data-k=heute]'); await k.wait_for_timeout(500); await k.click('#lektion'); await k.wait_for_timeout(600)
             assert await k.locator('#trainer-box').is_visible(); t = await k.locator('#trainer-box h2').first.text_content(); await k.click('#t-zu'); await k.wait_for_timeout(300); return t
@@ -389,8 +391,22 @@ async def main():
             await d.click('#pa-was'); was = await d.locator('#pa-wasbox').inner_text()
             await d.click('#pa-ende'); await d.wait_for_selector('#pa-auswertung .karte', timeout=8000); aw = await d.locator('#pa-auswertung').inner_text(); await shot(d, '40_probeaudit'); await d.close()
             assert th >= 2 and 'zeigen' in nach and 'Auswertung' in aw, (th, nach, aw[:80])
-            return str(th) + ' Themen · 1. Frage: „' + f1.split('\n')[-1][:50] + '…“ · Nachhaken: „' + nach.split('\n')[-1][:40] + '“ · ' + aw.split('\n')[0]
+            return str(th) + ' Themen · 1. Frage: „' + f1.split('\n')[1][:50] + '…“ · Nachhaken: „' + nach.split('\n')[1][:40] + '“ · ' + aw.split('\n')[0]
         await pruefe('P1 Probeaudit ohne KI: Themen, Nachhaken, Was meint er?, Auswertung', p_lokal)
+        async def w_wissen():
+            d = await ctx.new_page(); d.on('pageerror', lambda x: fehler.append('Wissen: ' + str(x)))
+            await d.goto(B + '/kunde/?demo'); await d.wait_for_selector('#sel-ma'); await d.select_option('#sel-ma', index=1); await d.wait_for_timeout(500)
+            await d.click('nav button[data-k=fahrplan]'); await d.wait_for_selector('.karte[data-f] .bsp textarea', state='attached')
+            ph = await d.eval_on_selector_all('.karte[data-f] .bsp textarea', 'x => x.map(t => t.placeholder)')
+            n = await d.locator('.karte[data-f]').count(); praxis = 0
+            for i in range(n):
+                kk = d.locator('.karte[data-f]').nth(i); await kk.locator('[data-t=hilfe]').click(); await d.wait_for_timeout(150)
+                if await kk.locator('.hilfe .praxis').count(): praxis += 1
+            await shot(d, '41_fahrplan_praxis'); await d.close()
+            verschieden = len(set(ph)); kuehl = sum('Kühlwesten' in x for x in ph)
+            assert verschieden >= min(4, len(ph)) and kuehl <= 1 and praxis >= 2, (verschieden, len(ph), kuehl, praxis)
+            return str(verschieden) + ' verschiedene Beispiele für ' + str(len(ph)) + ' Fragen · Beratungspraxis bei ' + str(praxis) + ' von ' + str(n) + ' Fragen'
+        await pruefe('W1 Beispiel passt zur Frage, Beratungspraxis unter „Wo steht das?“', w_wissen)
         async def p_ki():
             k = S['e']
             await k.click('nav button[data-k=probeaudit]'); await k.wait_for_selector('#pa-start'); await k.click('#pa-start'); await k.wait_for_selector('.pa-msg.au', timeout=20000)
