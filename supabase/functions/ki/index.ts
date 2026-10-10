@@ -105,20 +105,36 @@ Deno.serve(async (req) => {
     const z = await zaehlen(kundeId);
     if (!z.ok) return antwort({ fehler: z.test ? 'Das KI-Kontingent Ihres Testmonats ist für heute (oder insgesamt) aufgebraucht. Die Übungen ohne KI gehen weiter.' : 'Für heute sind genug KI-Übungen gemacht – morgen geht es weiter.' }, 429);
 
-    if (d.aktion === 'gespraech') { // Auditor nach Mass: naechste Frage/Nachfrage im Gespraech
+    if (d.aktion === 'gespraech') { // Probeaudit: der Auditor geht die Themen des Auditplans durch, eine Frage nach der anderen
       const typ = (L.AUDITOR_TYPEN as any)[d.typ] || L.AUDITOR_TYPEN.sachlich;
-      const verlauf = (Array.isArray(d.verlauf) ? d.verlauf : []).slice(-12).map((m: any) => ({ role: m.rolle === 'kunde' ? 'user' : 'assistant', content: kurz(m.text, 1500) }));
+      const verlauf = (Array.isArray(d.verlauf) ? d.verlauf : []).slice(-16).map((m: any) => ({ role: m.rolle === 'kunde' ? 'user' : 'assistant', content: kurz(m.text, 1500) }));
       if (!verlauf.length || verlauf[0].role !== 'user') verlauf.unshift({ role: 'user', content: 'Guten Tag, wir sind bereit.' });
-      const system = 'Du spielst einen Zertifizierungsauditor (' + typ.name + ': ' + typ.text + ') in einem ÜBUNGSaudit Stufe ' + (d.stufe || 2) + ' für eine kleine Firma. '
-        + 'Stelle immer nur EINE Frage, kurz, in der Sie-Form. Wenn die Antwort keinen Nachweis nennt, frage nach dem Dokument oder einem echten Beispiel. '
-        + 'Erfinde keine Fakten über die Firma. Themen aus dem Auditplan: ' + kurz(JSON.stringify(d.themen || []), 2000)
-        + (d.fallen ? ' Stolperfallen, die du nach und nach ansprechen darfst: ' + kurz(JSON.stringify(d.fallen), 2000) : '');
-      if (d.zum_schluss) { // kurze Rueckmeldung zum Gespraech
+      // Themen: [{titel, fragen:[…]}] (neu) oder Liste von Texten (alt)
+      const themen = (Array.isArray(d.themen) ? d.themen : []).slice(0, 20).map((t: any, i: number) => typeof t === 'string' ? (i + 1) + '. ' + kurz(t, 120)
+        : (i + 1) + '. ' + kurz(t.titel, 120) + (Array.isArray(t.fragen) && t.fragen.length ? ' – typische Fragen: ' + t.fragen.slice(0, 3).map((f: any) => kurz(f, 200)).join(' | ') : ''));
+      const thema = Math.max(0, Math.min(themen.length - 1, Number(d.thema) || 0));
+      // Textstellen aus den Dokumenten des Kunden zum aktuellen Thema: daraus darf der Auditor konkret nachfragen
+      let belege = '';
+      const geraet = auszuegeVomGeraet(d, 4);
+      if (geraet && geraet.treffer.length) belege = auszugText(geraet.treffer, geraet.titel);
+      else if (!geraet && themen.length) { const k = await auszuegeDesKunden(kundeId); const t = L.auszuegeSuchen(themen[thema], k.ausz, 4); if (t.length) belege = auszugText(t, k.titel); }
+      const system = 'Du spielst einen Zertifizierungsauditor (' + typ.name + ': ' + typ.text + ') in einem ÜBUNGSaudit Stufe ' + (d.stufe || 2) + ' nach ISO 9001 für eine kleine Firma. '
+        + 'Stelle immer nur EINE Frage, kurz (höchstens 2 Sätze), in der Sie-Form, gesprochene Sprache ohne Aufzählungen. '
+        + 'Wenn die Antwort keinen Nachweis nennt, frage nach dem Dokument oder einem echten Beispiel (höchstens einmal je Frage nachhaken). '
+        + 'Erfinde keine Fakten über die Firma; beziehe dich, wo es passt, auf die Auszüge aus ihren Dokumenten („In Ihrem Handbuch steht … – zeigen Sie mir …“). '
+        + 'Gehe die Themen des Auditplans der Reihe nach durch, zwei bis drei Fragen je Thema. Beginne die erste Frage zu einem Thema mit der Marke [THEMA:n] (n = Nummer). '
+        + 'Nach dem letzten Thema bedanke dich in einem Satz und schreibe [ENDE]. '
+        + 'Themen: ' + (themen.join(' / ') || 'Führung, Auftrag, Einkauf, Reklamationen') + '. Aktuelles Thema: ' + (thema + 1) + '.'
+        + (d.fallen ? ' Stolperfallen, die du nach und nach ansprechen darfst: ' + kurz(JSON.stringify(d.fallen), 1500) : '')
+        + (belege ? '\n\nAuszüge aus den Dokumenten der Firma:\n' + belege : '');
+      if (d.zum_schluss) { // kurze Rückmeldung zum Gespräch
         const fb = await claude('Du bist ein erfahrener ISO-Berater. Antworte nur mit JSON.', [{ role: 'user', content: 'Übungsgespräch zwischen Auditor und Kunde:\n'
           + verlauf.map((m: any) => (m.role === 'user' ? 'Kunde: ' : 'Auditor: ') + m.content).join('\n') + '\n\nGib eine kurze Rückmeldung an den Kunden nach der Formel „Was wir machen – wo es steht – ein Beispiel“. Format: {"gut":"ein Satz","ueben":"ein Satz","tipp":"ein Satz"}' }], 400);
         return antwort(L.kiJson(fb) || {});
       }
-      return antwort({ text: await claude(system, verlauf, 300) });
+      const roh = await claude(system, verlauf, 300);
+      const m = roh.match(/\[THEMA:(\d+)\]/);
+      return antwort({ text: roh.replace(/\[THEMA:\d+\]|\[ENDE\]/g, '').trim(), thema: m ? Number(m[1]) - 1 : null, ende: /\[ENDE\]/.test(roh) });
     }
 
     if (d.aktion === 'wissensfrage') { // "Frag Ihre Dokumente": Antwort NUR aus den eigenen Dokumenten, mit Quellen

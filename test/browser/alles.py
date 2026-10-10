@@ -159,11 +159,14 @@ async def main():
             await k.locator('.karte[data-r] input[type=radio]').first.check(); await k.wait_for_timeout(400)
             e = await k.locator('.karte[data-r] .erkl').first.is_visible(); assert vis and e; return 'Lernkarte umgedreht, Rollentausch bewertet'
         await pruefe('K14 Audit-Deutsch-Karten und Rollentausch', k_karten)
-        async def k_gespraech():
-            await k.click('#kg-start'); await k.wait_for_selector('#kg-text', timeout=30000); await k.fill('#kg-text', 'Wir bewerten unsere Lieferanten im Januar, steht im Handbuch Seite 14.')
-            await k.click('#kg-los'); await k.wait_for_selector('#kg-ende', timeout=30000); await k.click('#kg-ende'); await k.wait_for_selector('#kg-neu', timeout=30000)
-            return (await k.locator('#ki-gespraech').inner_text())[:120].replace('\n', ' ')
-        await pruefe('K15 Probegespräch mit dem KI-Auditor', k_gespraech)
+        async def k_gespraech():  # Probeaudit mit Server-KI (Auszüge aus der Datenbank)
+            await k.click('nav button[data-k=probeaudit]'); await k.wait_for_selector('#pa-start'); await k.click('#pa-start')
+            await k.wait_for_function("[...document.querySelectorAll('.pa-msg.au')].some(m => !m.innerText.includes('überlegt'))", timeout=30000)
+            await k.fill('#pa-text', 'Wir bewerten unsere Lieferanten im Januar, steht im Handbuch Seite 14.'); await k.click('#pa-los')
+            await k.wait_for_function("document.querySelectorAll('.pa-msg.au').length >= 2 && ![...document.querySelectorAll('.pa-msg.au')].some(m => m.innerText.includes('überlegt'))", timeout=30000)
+            await k.click('#pa-ende'); await k.wait_for_selector('#pa-auswertung .karte', timeout=30000)
+            return (await k.locator('#pa-auswertung').inner_text())[:120].replace('\n', ' ')
+        await pruefe('K15 Probeaudit mit dem KI-Auditor (Server)', k_gespraech)
         async def k_lektion():
             await k.click('nav button[data-k=heute]'); await k.wait_for_timeout(500); await k.click('#lektion'); await k.wait_for_timeout(600)
             assert await k.locator('#trainer-box').is_visible(); t = await k.locator('#trainer-box h2').first.text_content(); await k.click('#t-zu'); await k.wait_for_timeout(300); return t
@@ -375,6 +378,28 @@ async def main():
             assert 'Impressum' in fu and 'Datenschutz' in fu and vorher == 0 and nachher == 2 and 'writereview' in href
             return 'Fußzeile mit Impressum/Datenschutz · Karten vor/nach Ergebnis: ' + str(vorher) + '/' + str(nachher)
         await pruefe('M1 Fußzeile, Bewertungs- und Folgejahr-Karte erst nach dem Ergebnis', e_marke)
+
+        async def p_lokal():
+            d = await ctx.new_page(); d.on('pageerror', lambda x: fehler.append('Probeaudit: ' + str(x)))
+            await d.goto(B + '/kunde/?demo'); await d.wait_for_selector('#sel-ma'); await d.select_option('#sel-ma', index=1); await d.wait_for_timeout(500)
+            await d.click('[data-schnell=probeaudit]'); await d.wait_for_selector('#pa-start'); th = await d.locator('#pa-themen li').count()
+            await d.click('#pa-start'); await d.wait_for_selector('.pa-msg.au'); f1 = await d.locator('.pa-msg.au').last.inner_text()
+            await d.fill('#pa-text', 'Das machen wir so.'); await d.click('#pa-los'); await d.wait_for_timeout(400); nach = await d.locator('.pa-msg.au').last.inner_text()
+            await d.fill('#pa-text', 'Das steht im Handbuch Seite 11, zum Beispiel beim Auftrag 2026-118.'); await d.click('#pa-los'); await d.wait_for_timeout(900)
+            await d.click('#pa-was'); was = await d.locator('#pa-wasbox').inner_text()
+            await d.click('#pa-ende'); await d.wait_for_selector('#pa-auswertung .karte', timeout=8000); aw = await d.locator('#pa-auswertung').inner_text(); await shot(d, '40_probeaudit'); await d.close()
+            assert th >= 2 and 'zeigen' in nach and 'Auswertung' in aw, (th, nach, aw[:80])
+            return str(th) + ' Themen · 1. Frage: „' + f1.split('\n')[-1][:50] + '…“ · Nachhaken: „' + nach.split('\n')[-1][:40] + '“ · ' + aw.split('\n')[0]
+        await pruefe('P1 Probeaudit ohne KI: Themen, Nachhaken, Was meint er?, Auswertung', p_lokal)
+        async def p_ki():
+            k = S['e']
+            await k.click('nav button[data-k=probeaudit]'); await k.wait_for_selector('#pa-start'); await k.click('#pa-start'); await k.wait_for_selector('.pa-msg.au', timeout=20000)
+            await k.wait_for_function("[...document.querySelectorAll('.pa-msg.au')].some(m => !m.innerText.includes('überlegt'))", timeout=30000)
+            f1 = await k.locator('.pa-msg.au').first.inner_text(); await k.fill('#pa-text', 'Wir bewerten jährlich, siehe QM-Übersicht.'); await k.click('#pa-los')
+            await k.wait_for_function("document.querySelectorAll('.pa-msg.au').length >= 2 && ![...document.querySelectorAll('.pa-msg.au')].some(m => m.innerText.includes('überlegt'))", timeout=30000)
+            n = await k.locator('.pa-msg.au').count(); await k.click('#pa-ende'); await k.wait_for_selector('#pa-auswertung .karte', timeout=20000); aw = await k.locator('#pa-auswertung').inner_text()
+            assert n >= 2, n; return 'KI-Auditor: „' + f1.split('\n')[1][:60] + '“ · ' + str(n) + ' Fragen · ' + aw.split('\n')[0]
+        await pruefe('P2 Probeaudit mit KI (Ersatz-KI): Fragen und Rückmeldung', p_ki)
 
         ERG.append({'name': 'Keine Skriptfehler auf den Seiten', 'ok': not fehler, 'info': '; '.join(fehler)[:300]})
         json.dump(ERG, open(W + '/alles-bericht.json', 'w'), ensure_ascii=False, indent=1)

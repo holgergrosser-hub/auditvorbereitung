@@ -19,6 +19,13 @@ header .info{opacity:.9;font-size:.95rem}
 .teilen-leiste{position:fixed;left:0;right:0;bottom:0;z-index:20;padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))!important;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#B42318;color:#fff;padding:6px 16px;font-size:.92rem}.teilen-leiste .knopf{background:#fff;color:#B42318}
 .ki-antwort{border-left:4px solid #D9480F}.ki-antwort .eyebrow{color:#D9480F}.so-sagen{background:#FFF4E6;border-radius:8px;padding:6px 10px}
 .senden-leiste{border:2px solid var(--blau);background:#EEF4FF}
+.pa-raster{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:14px;align-items:start}@media (max-width:820px){.pa-raster{grid-template-columns:1fr}}
+.pa-log{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px}
+.pa-msg{max-width:85%;border-radius:12px;padding:8px 12px;background:var(--hell)}.pa-msg.ich{align-self:flex-end;background:#E3FAFC}.pa-msg.au{align-self:flex-start}
+.pa-wer{font-size:.78rem;font-weight:700;color:var(--grau);margin-bottom:2px}.pa-hoer{font-size:.8rem}
+#pa-text{width:100%;margin:8px 0}.pa-hilfen{margin-top:6px}#pa-mic.an{background:#C92A2A;color:#fff;border-color:#C92A2A}
+.pa-themen{margin:8px 0 0;padding-left:20px;font-size:.92rem}.pa-themen li{margin:4px 0;color:var(--grau)}.pa-themen li.jetzt{color:var(--text);font-weight:700}.pa-themen li.fertig{text-decoration:line-through}
+.pa-einst{flex-wrap:wrap;gap:14px}
 .fuss{max-width:1100px;margin:28px auto 96px;padding:0 16px;color:var(--grau);font-size:.85rem;text-align:center;line-height:1.7}.fuss a{color:inherit}
 .spick-fuss{margin-top:8px;font-size:.8rem;color:var(--grau);text-align:right}
 .karte.marke-karte{border-left:6px solid var(--f,#E0A800)}

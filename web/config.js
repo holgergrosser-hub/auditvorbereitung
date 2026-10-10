@@ -5,5 +5,5 @@ window.AV_CONFIG = {
   supabaseUrl: 'https://xpqcivhywtwfhkevybvd.supabase.co',   // Projekt "auditvorbereitung" (Frankfurt)
   // öffentlicher anon-Schlüssel (darf im Browser stehen, RLS schützt die Daten). Alternative: sb_publishable_idlPLt3Xkrm8GjVx8QB1hA_Istd-ZCP
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcWNpdmh5d3R3ZmhrZXZ5YnZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1ODMwNDksImV4cCI6MjEwNzE1OTA0OX0.TWh736tfmu6pMJkdkpAaG99XmqLfjkyGlTfSsK0JxRI',
-  ki: false          // true, sobald das Geheimnis ANTHROPIC_API_KEY in Supabase gesetzt ist (Edge Function "ki")
+  ki: true           // Geheimnis ANTHROPIC_API_KEY ist in Supabase gesetzt (Edge Function "ki")
 };

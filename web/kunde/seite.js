@@ -9,6 +9,7 @@ import { erstelleDemo } from './demo.js';
 import { lokaleApi } from './lokal.js';
 import * as E from './eigene.js';
 import { MARKE, fussHtml } from './marke.js';
+import { probeaudit } from './probeaudit.js';
 
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
@@ -163,7 +164,7 @@ function tabs() {
   const zwei = S.audit.stufe === 2, z = stand(), ok = ' <span class="ok">✓</span>';
   if (S.ruhe) return [['tag', 'Audit-Tag'], ['finden', 'Wo steht das?']];
   const t = [['heute', 'Heute'], ['technik', 'Technik' + (technikFertig() ? ok : '')], ['fakten', 'Faktencheck' + (faktenFertig() ? ok : '')],
-    ['fahrplan', (zwei ? 'Fragen üben' : 'Fahrplan') + ' <span class="zahl">' + (S.fragen.length - z.offen) + '/' + S.fragen.length + '</span>']];
+    ['fahrplan', (zwei ? 'Fragen üben' : 'Fahrplan') + ' <span class="zahl">' + (S.fragen.length - z.offen) + '/' + S.fragen.length + '</span>'], ['probeaudit', 'Probeaudit']];
   if (fallenFuerStufe().length) t.push(['fallen', 'Stolperfallen']);
   t.push(['finden', 'Wo steht das?'], ['lernen', 'Lernen']);
   if (zwei) t.push(['spur', 'Beispielauftrag'], ['rundgang', 'Rundgang']);
@@ -173,7 +174,7 @@ function tabs() {
 /* Bereiche mit eigener Farbe: Übersicht zuerst, dann ins Detail. Ampel-Farben (grün/gelb/rot) bleiben für den Stand reserviert. */
 const GRUPPEN = [
   { id: 'einrichten', name: 'Einrichten', nr: '1', farbe: '#6741D9', hell: '#F3F0FF', keys: ['technik', 'fakten'] },
-  { id: 'ueben', name: 'Üben', nr: '2', farbe: '#0B7285', hell: '#E3FAFC', keys: ['fahrplan', 'fallen', 'lernen', 'spur', 'rundgang'] },
+  { id: 'ueben', name: 'Üben', nr: '2', farbe: '#0B7285', hell: '#E3FAFC', keys: ['fahrplan', 'probeaudit', 'fallen', 'lernen', 'spur', 'rundgang'] },
   { id: 'audit', name: 'Audit-Tag', nr: '3', farbe: '#1F4E79', hell: '#E7F0FA', keys: ['tag', 'danach'] },
   { id: 'finden', name: 'Nachschlagen', nr: '', farbe: '#D9480F', hell: '#FFF4E6', keys: ['finden'] }
 ];
@@ -181,6 +182,7 @@ const KACHEL = {
   technik: ['💻', 'Technik-Check', 'Laptop, Chrome, Dokumente öffnen, Bildschirm teilen'],
   fakten: ['✔️', 'Faktencheck', 'Stimmen Namen, Rollen und Zahlen in Ihren Dokumenten?'],
   fahrplan: ['🧭', 'Fahrplan', 'Auditplan durchgehen und zu jeder Frage das Dokument zeigen'],
+  probeaudit: ['🎙️', 'Probeaudit', 'Der Auditor fragt laut – Sie antworten mit Stimme'],
   fallen: ['⚠️', 'Stolperfallen', 'Nachfragen, die aus Ihren eigenen Dokumenten kommen'],
   lernen: ['🎓', 'Lernen', 'Abläufe erklären, Audit-Deutsch, Rollentausch'],
   spur: ['📦', 'Beispielauftrag', 'Ein Auftrag von Anfrage bis Rechnung mit Belegen'],
@@ -203,6 +205,7 @@ function kachelStatus(k) {
   if (k === 'fakten') { const f = S.start.faktencheck, d = f.filter(x => x.antwort).length, korr = f.filter(x => x.antwort === 'stimmt_nicht').length; return { text: f.length ? d + ' von ' + f.length + ' geprüft' + (korr ? ' · ' + korr + ' korrigiert' : '') : 'nichts zu prüfen', anteil: f.length ? d / f.length : 1 }; }
   if (k === 'fahrplan') return { text: (n - z.offen) + ' von ' + n + ' geübt' + (z.rot ? ' · ' + z.rot + ' schwer' : ''), anteil: n ? (n - z.offen) / n : 0, ampel: z };
   if (k === 'fallen') { const f = fallenFuerStufe(), d = f.filter(x => eintrag('falle', x.id)).length; return { text: d + ' von ' + f.length + ' durchgespielt', anteil: f.length ? d / f.length : 1 }; }
+  if (k === 'probeaudit') { const d = S.eintraege.filter(e => e.art === 'lernen' && /^probeaudit:/.test(e.schluessel)).length; return { text: d ? d + (d === 1 ? ' Probeaudit' : ' Probeaudits') + ' gemacht' : 'noch nicht begonnen', anteil: null }; }
   if (k === 'lernen') { const d = S.eintraege.filter(e => e.art === 'lernen' && /^azubi:/.test(e.schluessel)).length; return { text: d ? d + (d === 1 ? ' Ablauf' : ' Abläufe') + ' erklärt' : 'noch nicht begonnen', anteil: null }; }
   if (k === 'spur') { const sp = L.spurPruefen(L.SPUR_STATIONEN.map(x => Object.assign({ k: x.k }, (eintrag('spur', x.k) || {}).daten || {})).filter(x => Object.keys(x).length > 1)); return { text: sp.fertig + ' von ' + sp.von + ' Stationen', anteil: sp.von ? sp.fertig / sp.von : 0 }; }
   if (k === 'rundgang') { const it = S.start.rundgang || L.RUNDGANG_STANDARD, d = it.filter(x => eintrag('rundgang', x.k)).length; return { text: d + ' von ' + it.length + ' erfasst', anteil: it.length ? d / it.length : 0 }; }
@@ -256,7 +259,7 @@ function zeichneNav() {
   zeichneUnten();
 }
 const ANSICHT = {};
-function zeige(k) { S.ansicht = k; farbeSetzen(k); $('#main').classList.toggle('breit', k === 'heute'); brotkrume(k); zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); }
+function zeige(k) { if (S.paStopp) { S.paStopp(); S.paStopp = null; } S.ansicht = k; farbeSetzen(k); $('#main').classList.toggle('breit', k === 'heute'); brotkrume(k); zeichneNav(); (ANSICHT[k] || ANSICHT.heute)(); window.scrollTo(0, 0); }
 function brauchtMa(titel) { if (S.ma) return false; $('#main').innerHTML = '<h2>' + titel + '</h2><div class="hinweis">Bitte oben bei „Wer übt?“ Ihren Namen wählen.</div>'; return true; }
 
 /* ------------------------------------------------ Heute (Tageslektion, Aufgaben, Reife) */
@@ -293,6 +296,7 @@ ANSICHT.heute = () => {
     + '<nav class="schnell" aria-label="Schnellzugriff">'
     + '<button data-schnell="ueben"><span class="rund">🎯</span>Frage üben</button>'
     + '<button data-schnell="finden"><span class="rund">🔎</span>Wo steht das?</button>'
+    + '<button data-schnell="probeaudit"><span class="rund">🎙️</span>Probeaudit</button>'
     + (kiAn() ? '<button data-schnell="ki"><span class="rund">🤖</span>KI fragen</button>' : '<button data-schnell="tag"><span class="rund">📋</span>Spickzettel</button>')
     + (!S.start.demo && !S.start.eigen ? '<button data-schnell="senden" title="An ' + esc(bn('akk')) + ' senden"><span class="rund">✉</span>Senden</button>' : '')
     + '</nav>'
@@ -602,6 +606,12 @@ ANSICHT.finden = async () => {
   $('#suchen').onclick = () => los(false); if ($('#ki-fragen')) $('#ki-fragen').onclick = () => los(true);
   $('#suche').onkeydown = (e) => { if (e.key === 'Enter') los(false); };
   diktat($('#sprich'), (t) => { $('#suche').value = t; los(); });
+};
+/* Probeaudit mit Stimme (web/kunde/probeaudit.js) */
+ANSICHT.probeaudit = () => {
+  if (brauchtMa('Probeaudit')) return;
+  const hilfe = (f) => '<div><b>Wo steht das?</b> ' + esc(f.hilfe || 'Keine Fundstelle hinterlegt.') + '</div><div class="doks">' + (f.dokumente || []).map(d => stelleKnopf(d.id, (L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0] ? 'Seite ' + String((L.orteJeDokument(f.hilfe, S.start.dokumente)[d.id] || [])[0]).replace(/^S\. /, '') : '', esc(d.titel) + ' öffnen')).join('') + '</div>';
+  S.paStopp = probeaudit({ L, S, esc, main: $('#main'), ki, kiAn, api, speichereEintrag, eintrag, fallen: fallenFuerStufe, hilfe, eigeneAuszuege, oeffneHilfe: dokKnoepfe });
 };
 /* Probegespräch mit dem KI-Auditor (Edge Function "ki", Aktion gespraech): eine Frage nach der anderen */
 function kiGespraech() {
@@ -1009,7 +1019,7 @@ ANSICHT.lernen = () => {
   const gekonnt = (i) => { const e = eintrag('lernen', 'deutsch:' + i); return e && e.daten.kann; };
   $('#main').innerHTML = '<h2>Lernen</h2>'
     + '<p class="grau">' + (kiAn() ? 'Vier' : 'Drei') + ' Übungen, jede dauert ein paar Minuten. Sie helfen vor allem für <b>Stufe 2</b>, wenn der Auditor fragt „Wie machen Sie das?“.</p>'
-    + (kiAn() ? '<h3>Probegespräch mit dem KI-Auditor</h3><p class="erkl-kurz"><b>Was ist das?</b> Ein Übungsauditor stellt Ihnen Fragen wie im echten Audit – zu den Themen Ihres Auditplans und den Stolperfallen. Antworten Sie nach der Formel: <b>Was wir machen – wo es steht – ein Beispiel</b>. Am Ende bekommen Sie eine kurze Rückmeldung. Nur zum Üben, nicht im echten Audit.</p><div class="karte" id="ki-gespraech"></div>' : '')
+    + '<div class="karte zeile" style="justify-content:space-between"><span>🎙️ <b>Probeaudit:</b> Der Auditor fragt laut, Sie antworten mit Stimme – wie im echten Audit.</span><button class="knopf" data-schnell="probeaudit">Zum Probeaudit</button></div>'
     + '<h3>Erklär es dem Azubi</h3><p class="erkl-kurz"><b>Was ist das?</b> Sie erklären einen Ablauf aus Ihrem Handbuch so, als käme morgen ein neuer Mitarbeiter. Wer es einem Azubi in eigenen Worten erklären kann, kann es auch dem Auditor erklären. Wenn Sie nicht weiterwissen: <b>Musterlösung</b> ansehen.</p><div class="karte" id="azubi"></div>'
     + '<h3>Audit-Deutsch: Was heißt das eigentlich?</h3><p class="erkl-kurz"><b>Was ist das?</b> Lernkarten für Fachwörter, die Auditoren benutzen. Vorne das Fachwort, hinten die Bedeutung in Alltagssprache. Begriff anklicken, dann „Kann ich“ oder „Nochmal“.</p><div class="karten">'
     + karten.map((k, i) => '<div class="lernkarte ' + (gekonnt(i) ? 'kann' : '') + '" data-i="' + i + '"><div class="vorne">' + esc(k[0]) + '</div><div class="hinten" hidden>' + esc(k[1]) + '<div class="zeile"><button class="knopf klein gruen" data-k="1">Kann ich</button><button class="knopf klein zweit" data-k="0">Nochmal</button></div></div></div>').join('') + '</div>'
@@ -1018,7 +1028,7 @@ ANSICHT.lernen = () => {
       + Object.entries(r.optionen).map(([k, t]) => '<label class="option"><input type="radio" name="r' + i + '" value="' + k + '" ' + (e && e.daten.wahl === k ? 'checked' : '') + '> ' + esc(t) + '</label>').join('')
       + '<div class="erkl" ' + (e ? '' : 'hidden') + '>' + (e ? (e.daten.wahl === r.richtig ? '✓ Richtig. ' : '✗ Nicht ganz. ') : '') + esc(r.erklaerung) + '</div></div>'; }).join('');
   azubi();
-  if (kiAn()) kiGespraech();
+  $$('[data-schnell=probeaudit]').forEach(b => b.onclick = () => zeige('probeaudit'));
   $$('.lernkarte').forEach(k => { $('.vorne', k).onclick = () => { $('.hinten', k).hidden = !$('.hinten', k).hidden; };
     $$('[data-k]', k).forEach(b => b.onclick = async () => { await speichereEintrag('lernen', 'deutsch:' + k.dataset.i, { kann: b.dataset.k === '1' }); k.classList.toggle('kann', b.dataset.k === '1'); $('.hinten', k).hidden = true; }); });
   $$('.karte[data-r]').forEach(k => $$('input', k).forEach(inp => inp.onchange = async () => {
