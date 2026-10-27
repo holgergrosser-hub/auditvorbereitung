@@ -1,7 +1,11 @@
 // Übernimmt echte Audit-Nachfragen aus Holgers QM-Wissensbasis in die App (E-A39).
-// Aufruf: node scripts/nachfragen_import.mjs <datei>
-//   a) Blatt „Branchenmuster“ als TSV (Datei → Herunterladen → .tsv), lokal unter daten/ ablegen – NIE in Git
-//   b) Export des Apps-Scripts (apps-script/nachfragen_export.gs) als CSV mit Spalten Branche,Nachfrage
+// Aufruf: node scripts/nachfragen_import.mjs <quelle>
+//   a) --supabase  : liest die anonymisierte Tabelle wissen_oeffentlich_nachfragen (Frage, Nachweis, Hauptbranche)
+//                    über die Supabase-REST-Schnittstelle. Umgebungsvariablen SUPABASE_URL und SUPABASE_PUBLISHABLE_KEY.
+//                    Der Publishable Key darf nur die öffentliche, geschwärzte Schicht lesen – kein Secret Key nötig.
+//   b) <datei.json>: dieselben Zeilen als JSON-Liste [{hauptbranche, frage, nachweis}] (z. B. Export aus dem SQL-Editor)
+//   c) <datei.tsv|csv>: alter Weg – Blatt „Branchenmuster“ als TSV oder Export von apps-script/nachfragen_export.gs
+//   Dateien lokal unter daten/ ablegen – NIE in Git.
 // Eine Nachfrage lautet „Frage → erwarteter Nachweis“. Übernommen werden nur Frage, Nachweis und eine grobe Branche.
 // Prüfung, bevor etwas ins öffentliche Repo kommt: Firmenformen, Mail, Webseite, Telefon, „Herr/Frau Name“, Bankennamen
 // und – falls vorhanden – Namen aus daten/sperrliste.txt (eine Zeile je Name, liegt nur lokal).
@@ -9,7 +13,21 @@
 import fs from 'node:fs';
 
 const datei = process.argv[2];
-if (!datei) { console.error('Aufruf: node scripts/nachfragen_import.mjs <datei.tsv|datei.csv>'); process.exit(1); }
+if (!datei) { console.error('Aufruf: node scripts/nachfragen_import.mjs --supabase | <datei.json|tsv|csv>'); process.exit(1); }
+
+// Supabase: seitenweise lesen (PostgREST liefert höchstens 1000 Zeilen je Anfrage)
+async function ausSupabase() {
+  const base = (process.env.SUPABASE_URL || '').replace(/\/+$/, ''), key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!base || !key) { console.error('SUPABASE_URL und SUPABASE_PUBLISHABLE_KEY setzen'); process.exit(1); }
+  const alle = [];
+  for (let offset = 0; ; offset += 1000) {
+    const res = await fetch(`${base}/rest/v1/wissen_oeffentlich_nachfragen?select=hauptbranche,frage,nachweis&order=id&limit=1000&offset=${offset}`,
+      { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+    if (!res.ok) { console.error('Supabase HTTP ' + res.status + ': ' + (await res.text()).slice(0, 200)); process.exit(1); }
+    const z = await res.json(); alle.push(...z); if (z.length < 1000) break;
+  }
+  return alle;
+}
 
 function tabelle(text, trenner) { // CSV/TSV-Leser mit Anführungszeichen und Zeilenumbrüchen in Zellen
   const zeilen = []; let z = [], f = '', q = false;
@@ -30,13 +48,18 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const sperr = sperrWoerter.map(w => ({ w, rx: new RegExp('(^|[^a-zäöüß])' + esc(w) + '([^a-zäöüß]|$)') })); // nur ganze Wörter
 const grob = (b) => { const t = String(b || '').split('(')[0].replace(/\s*\/\s*/g, ' / ').trim(); return t.length <= 45 ? t : t.slice(0, 45).replace(/\s+\S*$/, ''); };
 
+const roh = [];
+if (datei === '--supabase' || datei.endsWith('.json')) {
+  const zeilen = datei === '--supabase' ? await ausSupabase() : JSON.parse(fs.readFileSync(datei, 'utf8'));
+  console.log(zeilen.length + ' Nachfragen aus ' + (datei === '--supabase' ? 'Supabase (wissen_oeffentlich_nachfragen)' : datei));
+  for (const r of zeilen) roh.push({ branche: grob(r.hauptbranche === 'Unbekannt' ? 'Sonstige' : r.hauptbranche), frage: String(r.frage || '').trim(), nachweis: String(r.nachweis || '').trim() });
+} else {
 const text = fs.readFileSync(datei, 'utf8');
 const tsv = /\t/.test(text.split('\n')[0]);
 const z = tabelle(text, tsv ? '\t' : ',');
 const kopf = z[0].map(x => x.toLowerCase());
 const spN = Math.max(0, kopf.findIndex(k => /nachfrage/.test(k)));
 const spB = Math.max(0, kopf.findIndex(k => /branche/.test(k)));
-const roh = [];
 for (const zeile of z.slice(1)) {
   const zelle = String(zeile[spN] || '').trim(); if (!zelle) continue;
   const teile = zelle.split(/\n/).map(t => t.replace(/^\s*[-–*•\d.)]+\s*/, '').trim()).filter(Boolean);
@@ -46,6 +69,7 @@ for (const zeile of z.slice(1)) {
     const [frage, nachweis = ''] = t.split(/\s*→\s*/);
     roh.push({ branche: grob(zeile[spB]), frage: frage.trim(), nachweis: nachweis.trim() });
   });
+}
 }
 const raus = [], gut = [], gesehen = new Set(), treffer = {};
 for (const n of roh) {
